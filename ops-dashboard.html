@@ -138,52 +138,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .ticker-sep{color:rgba(255,255,255,0.4);font-size:16px;}
 @keyframes ticker{from{transform:translateX(0);}to{transform:translateX(-50%);}}
 
-/* SETUP MODAL */
-.setup-modal{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;display:flex;align-items:center;justify-content:center;}
-.setup-box{background:var(--surface);border-radius:16px;padding:32px;width:500px;border:1px solid var(--border);box-shadow:0 8px 40px rgba(0,0,0,0.12);}
-.setup-box h2{font-size:20px;font-weight:700;margin-bottom:6px;}
-.setup-box p{font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.6;}
-.setup-field{margin-bottom:16px;}
-.setup-field label{font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;}
-.setup-field input{width:100%;padding:10px 14px;background:#F4F4F2;border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:14px;outline:none;}
-.setup-field input:focus{border-color:var(--red);}
-.setup-btn{width:100%;padding:13px;background:var(--red);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;}
-.setup-note{font-size:12px;color:var(--text3);margin-top:12px;line-height:1.7;}
-</style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-</head>
-<body>
 
-<!-- SETUP MODAL (first time) -->
-<div class="setup-modal" id="setup-modal">
-  <div class="setup-box">
-    <h2>Ops Dashboard Setup</h2>
-    <p>Connect this dashboard to your Google Sheet so it can pull live data. You only need to do this once.</p>
-    <div class="setup-field">
-      <label>Google Sheet ID</label>
-      <input type="text" id="setup-sheet-id" placeholder="Paste your Google Sheet ID here">
-    </div>
-    <div class="setup-field">
-      <label>Google Apps Script Web App URL</label>
-      <input type="text" id="setup-script-url" placeholder="Paste your Apps Script URL here" value="https://script.google.com/macros/s/AKfycbwDjSa6vzu6x2PG4T_WzWgbwlTKI6ipjGjtpzTA5HNWqu9EXi4Ls1nlQYxNAEDQnOnDcw/exec">
-    </div>
-    <div class="setup-field">
-      <label>WhatsApp Alert Number (with country code, no + or spaces)</label>
-      <input type="text" id="setup-wa-num" placeholder="e.g. 263771234567">
-    </div>
-    <div class="setup-field">
-      <label>CallMeBot API Key <span style="font-weight:400;color:var(--text3);">(get free key at callmebot.com)</span></label>
-      <input type="text" id="setup-wa-key" placeholder="Your CallMeBot API key">
-    </div>
-    <button class="setup-btn" onclick="saveSetup()"><i class="ti ti-check"></i> Launch dashboard</button>
-    <div class="setup-note">
-      <strong>To get your Sheet ID:</strong> Open your Google Sheet → copy the long string from the URL between /d/ and /edit<br>
-      <strong>For WhatsApp alerts:</strong> Send "I allow callmebot to send me messages" to +34 644 98 27 44 on WhatsApp, then visit callmebot.com/blog/free-whatsapp-message-api to get your API key
-    </div>
-  </div>
-</div>
-
-<!-- NEW ORDER ALERT -->
+<!-- NEW ORDER!-- NEW ORDER ALERT -->
 <div class="new-order-alert" id="new-order-alert">
   <i class="ti ti-bell-ringing"></i>
   <span id="alert-text">New order received!</span>
@@ -336,27 +292,13 @@ let waKey = localStorage.getItem('ops_wa_key') || '';
 let isFirstLoad = true;
 
 // SETUP
-function saveSetup() {
-  const sheetId = document.getElementById('setup-sheet-id').value.trim();
-  const scriptUrl = document.getElementById('setup-script-url').value.trim();
-  const num = document.getElementById('setup-wa-num').value.trim();
-  const key = document.getElementById('setup-wa-key').value.trim();
-  if (!scriptUrl) { alert('Please enter your Apps Script URL'); return; }
-  localStorage.setItem('ops_script_url', scriptUrl);
-  localStorage.setItem('ops_sheet_id', sheetId);
-  localStorage.setItem('ops_wa_num', num);
-  localStorage.setItem('ops_wa_key', key);
-  waNum = num; waKey = key;
-  document.getElementById('setup-modal').style.display = 'none';
-  startDashboard();
-}
 
+function saveSetup(){startDashboard();}
 function checkSetup() {
   // Skip setup entirely - URL hardcoded
   localStorage.setItem('ops_script_url', 'https://script.google.com/macros/s/AKfycbwDjSa6vzu6x2PG4T_WzWgbwlTKI6ipjGjtpzTA5HNWqu9EXi4Ls1nlQYxNAEDQnOnDcw/exec');
   localStorage.setItem('ops_wa_num', waNum);
   localStorage.setItem('ops_wa_key', waKey);
-  const modal = document.getElementById('setup-modal');
   if (modal) modal.style.display = 'none';
   startDashboard();
 }
@@ -531,7 +473,6 @@ function safeSet(id, html) {
 }
 
 function renderAll() {
-  try {
   const today = new Date(); today.setHours(0,0,0,0);
   const todayStr = today.getFullYear() + '-' + 
     String(today.getMonth()+1).padStart(2,'0') + '-' + 
