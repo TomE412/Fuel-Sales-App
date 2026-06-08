@@ -522,7 +522,13 @@ function renderYearChart() {
   });
 }
 
+function safeSet(id, html) {
+  const el = document.getElementById(id);
+  if (el) el.innerHTML = html;
+}
+
 function renderAll() {
+  try {
   const today = new Date(); today.setHours(0,0,0,0);
   const todayStr = today.getFullYear() + '-' + 
     String(today.getMonth()+1).padStart(2,'0') + '-' + 
@@ -554,8 +560,8 @@ function renderAll() {
 
   document.getElementById('stat-today-litres').textContent = todayL.toLocaleString();
   document.getElementById('stat-today-value').textContent = '$' + todayV.toLocaleString(undefined,{maximumFractionDigits:0});
-  document.getElementById('stat-month-litres').textContent = monthL.toLocaleString();
-  document.getElementById('stat-month-value').textContent = '$' + monthV.toLocaleString(undefined,{maximumFractionDigits:0});
+  safeSet('stat-month-litres', monthL.toLocaleString());
+  safeSet('stat-month-value', '$' + monthV.toLocaleString(undefined,{maximumFractionDigits:0}));
   // count badge removed with today panel
 
   // Today's orders list
@@ -726,7 +732,7 @@ function renderAll() {
   checkNewOrders();
 
   // Update last sync
-  document.getElementById('last-sync-time').textContent = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  const lsEl = document.getElementById('last-sync-time'); if(lsEl) lsEl.textContent = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
 }
 
 function checkNewOrders() {
