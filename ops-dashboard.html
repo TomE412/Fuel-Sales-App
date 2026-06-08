@@ -352,9 +352,12 @@ function saveSetup() {
 }
 
 function checkSetup() {
-  // Auto-set the script URL and skip setup
+  // Skip setup entirely - URL hardcoded
   localStorage.setItem('ops_script_url', 'https://script.google.com/macros/s/AKfycbwDjSa6vzu6x2PG4T_WzWgbwlTKI6ipjGjtpzTA5HNWqu9EXi4Ls1nlQYxNAEDQnOnDcw/exec');
-  document.getElementById('setup-modal').style.display = 'none';
+  localStorage.setItem('ops_wa_num', waNum);
+  localStorage.setItem('ops_wa_key', waKey);
+  const modal = document.getElementById('setup-modal');
+  if (modal) modal.style.display = 'none';
   startDashboard();
 }
 
@@ -372,7 +375,7 @@ updateClock();
 
 // FETCH LIVE DATA from Apps Script
 async function fetchData() {
-  const url = localStorage.getItem('ops_script_url') || 'https://script.google.com/macros/s/AKfycbwDjSa6vzu6x2PG4T_WzWgbwlTKI6ipjGjtpzTA5HNWqu9EXi4Ls1nlQYxNAEDQnOnDcw/exec';
+  const url = SHEETS_URL;
   try {
     const fetchUrl = new URL(url);
     fetchUrl.searchParams.set('action', 'getDashboard');
