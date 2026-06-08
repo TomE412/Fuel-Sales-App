@@ -441,8 +441,10 @@ function renderAll() {
   const todayOrders = allSales.filter(s => {
     if (s.delivered === true || s.delivered === 'true' || 
         (s.status||'').toLowerCase() === 'delivered') return false;
+    // Try matching on sale date OR delivery date for today
     const sDate = (s.date || '').toString().trim().split('T')[0];
-    return sDate === todayStr;
+    const dDate = (s.deliveryDate || s.confirmedDelivery || '').toString().trim().split('T')[0];
+    return sDate === todayStr || dDate === todayStr;
   });
   const todayL = todayOrders.reduce((a,s) => a+s.litres, 0);
   const todayV = todayOrders.reduce((a,s) => a+(s.litres*s.price), 0);
@@ -472,7 +474,7 @@ function renderAll() {
         <div class="order-dot" style="background:${s.paymentTerm==='COD'?'#1D9E75':'#EF9F27'};"></div>
         <div class="order-info">
           <div class="order-customer">${s.customer}</div>
-          <div class="order-meta">${s.location} · ${s.paymentTerm}</div>
+          <div class="order-meta">${s.location} · ${s.paymentTerm}${s.fuelType?' · <strong style="color:'+(s.fuelType==='Petrol'?'#D4180A':'#185FA5')+'">'+s.fuelType+'</strong>':''}</div>
           <div><span class="order-rep">${s.rep}</span></div>
         </div>
         <div class="order-right">
@@ -505,7 +507,11 @@ function renderAll() {
       future.setDate(future.getDate() + 7);
       return d <= future;
     })
-    .sort((a,b) => new Date(a.confirmedDelivery||a.deliveryDate) - new Date(b.confirmedDelivery||b.deliveryDate));
+    .sort((a,b) => {
+      const da = new Date((a.confirmedDelivery||a.deliveryDate||'').split('T')[0]+'T00:00:00');
+      const db = new Date((b.confirmedDelivery||b.deliveryDate||'').split('T')[0]+'T00:00:00');
+      return da - db; // Soonest first
+    });
   document.getElementById('del-count-badge').textContent = deliveries.length;
   const delEl = document.getElementById('deliveries-list');
   if (deliveries.length) {
