@@ -37,7 +37,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .last-sync{font-size:12px;color:var(--text3);}
 
 /* MAIN GRID */
-.main{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto 1fr 1fr;gap:12px;padding:12px;height:calc(100vh - 70px);}
+.main{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto 1fr 1fr 1fr;gap:12px;padding:12px;height:calc(100vh - 70px);}
 
 /* PANELS */
 .panel{background:var(--surface);border-radius:14px;border:1px solid var(--border);box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;flex-direction:column;overflow:hidden;position:relative;}
@@ -150,6 +150,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .setup-btn{width:100%;padding:13px;background:var(--red);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;}
 .setup-note{font-size:12px;color:var(--text3);margin-top:12px;line-height:1.7;}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 </head>
 <body>
 
@@ -257,7 +258,20 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     </div>
   </div>
 
-  <!-- BOTTOM LEFT: Rep leaderboard -->
+  <!-- BOTTOM LEFT: Yearly performance chart -->
+  <div class="panel span2">
+    <div class="panel-header">
+      <div class="panel-title" style="color:var(--blue);"><i class="ti ti-chart-bar"></i> Company performance — litres sold by month</div>
+      <span id="year-label" style="font-size:11px;font-weight:700;color:var(--text3);"></span>
+    </div>
+    <div class="panel-body" style="padding:12px;">
+      <div style="position:relative;width:100%;height:100%;min-height:140px;">
+        <canvas id="yearChart" role="img" aria-label="Monthly litres sold this year"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM: Rep leaderboard -->
   <div class="panel">
     <div class="panel-header">
       <div class="panel-title" style="color:var(--amber);"><i class="ti ti-trophy"></i> Rep performance — this month</div>
@@ -421,6 +435,91 @@ function loadDemoData() {
   ];
 
   renderAll();
+}
+
+let yearChartInstance = null;
+
+function renderYearChart() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  
+  const yearLabel = document.getElementById('year-label');
+  if (yearLabel) yearLabel.textContent = y;
+
+  // Build monthly totals
+  const monthlyLitres = Array(12).fill(0);
+  const monthlyValue = Array(12).fill(0);
+
+  allSales.forEach(s => {
+    const ds = (s.date||'').toString().split('T')[0];
+    if (!ds) return;
+    const d = new Date(ds + 'T00:00:00');
+    if (d.getFullYear() !== y) return;
+    const m = d.getMonth();
+    monthlyLitres[m] += parseFloat(s.litres) || 0;
+    monthlyValue[m] += (parseFloat(s.litres)||0) * (parseFloat(s.price)||0);
+  });
+
+  const canvas = document.getElementById('yearChart');
+  if (!canvas) return;
+
+  if (yearChartInstance) { yearChartInstance.destroy(); yearChartInstance = null; }
+
+  // Colour bars — current month red, past months blue, future months light grey
+  const barColors = monthlyLitres.map((v,i) => {
+    if (i === currentMonth) return '#D4180A';
+    if (i < currentMonth) return '#185FA5';
+    return '#E0E0DE';
+  });
+  const borderColors = monthlyLitres.map((v,i) => {
+    if (i === currentMonth) return '#A32D2D';
+    if (i < currentMonth) return '#0C447C';
+    return '#C0C0C0';
+  });
+
+  yearChartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: MN,
+      datasets: [{
+        label: 'Litres',
+        data: monthlyLitres,
+        backgroundColor: barColors,
+        borderColor: borderColors,
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: c => `${c.parsed.y.toLocaleString()} L`,
+            afterLabel: c => `$${monthlyValue[c.dataIndex].toLocaleString(undefined,{maximumFractionDigits:0})}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 11 }, color: '#888780' }
+        },
+        y: {
+          grid: { color: 'rgba(136,135,128,0.12)' },
+          ticks: {
+            font: { size: 11 },
+            color: '#888780',
+            callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v
+          }
+        }
+      }
+    }
+  });
 }
 
 function renderAll() {
