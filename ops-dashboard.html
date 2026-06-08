@@ -37,7 +37,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .last-sync{font-size:12px;color:var(--text3);}
 
 /* MAIN GRID */
-.main{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;gap:12px;padding:12px;height:calc(100vh - 70px);}
+.main{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto 1fr 1fr;gap:12px;padding:12px;height:calc(100vh - 70px);}
 
 /* PANELS */
 .panel{background:var(--surface);border-radius:14px;border:1px solid var(--border);box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;flex-direction:column;overflow:hidden;position:relative;}
@@ -224,13 +224,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 <!-- MAIN GRID -->
 <div class="main" style="padding-bottom:44px;">
 
-  <!-- TOP LEFT: Today's new orders + stats -->
-  <div class="panel">
-    <div class="panel-header">
-      <div class="panel-title" style="color:var(--red);"><i class="ti ti-bell-ringing"></i> New orders today</div>
-      <span class="panel-count" id="today-count-badge" style="background:var(--red-light);color:var(--red);">0</span>
-    </div>
-    <div class="stat-row">
+  <!-- TOP: Full width stats strip -->
+  <div class="panel" style="grid-column:span 3;max-height:80px;">
+    <div class="stat-row" style="padding:8px 12px;">
       <div class="stat-mini">
         <div class="stat-mini-label">Today litres</div>
         <div class="stat-mini-value green" id="stat-today-litres">0</div>
@@ -248,15 +244,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <div class="stat-mini-value blue" id="stat-month-value">$0</div>
       </div>
     </div>
-    <div class="panel-body" id="today-orders">
-      <div class="empty-panel"><i class="ti ti-clock"></i><p>No orders yet today</p></div>
-    </div>
   </div>
 
-  <!-- TOP MIDDLE + RIGHT: Deliveries this week -->
+  <!-- DELIVERIES: Full width expanded -->
   <div class="panel span2">
     <div class="panel-header">
-      <div class="panel-title" style="color:var(--green);"><i class="ti ti-truck"></i> Deliveries scheduled — next 7 days</div>
+      <div class="panel-title" style="color:var(--green);"><i class="ti ti-truck"></i> Delivery schedule — newest first</div>
       <span class="panel-count" id="del-count-badge" style="background:var(--green-light);color:var(--green);">0</span>
     </div>
     <div class="panel-body" id="deliveries-list">
@@ -464,7 +457,7 @@ function renderAll() {
   document.getElementById('stat-today-value').textContent = '$' + todayV.toLocaleString(undefined,{maximumFractionDigits:0});
   document.getElementById('stat-month-litres').textContent = monthL.toLocaleString();
   document.getElementById('stat-month-value').textContent = '$' + monthV.toLocaleString(undefined,{maximumFractionDigits:0});
-  document.getElementById('today-count-badge').textContent = todayOrders.length;
+  // count badge removed with today panel
 
   // Today's orders list
   const toEl = document.getElementById('today-orders');
@@ -510,7 +503,7 @@ function renderAll() {
     .sort((a,b) => {
       const da = new Date((a.confirmedDelivery||a.deliveryDate||'').split('T')[0]+'T00:00:00');
       const db = new Date((b.confirmedDelivery||b.deliveryDate||'').split('T')[0]+'T00:00:00');
-      return da - db; // Soonest first
+      return db - da; // Newest/latest first
     });
   document.getElementById('del-count-badge').textContent = deliveries.length;
   const delEl = document.getElementById('deliveries-list');
