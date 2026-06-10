@@ -37,7 +37,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .last-sync{font-size:12px;color:var(--text3);}
 
 /* MAIN GRID */
-.main{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto 1fr 1fr 1fr;gap:12px;padding:12px;height:calc(100vh - 70px);}
+.main{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;gap:12px;padding:12px;height:calc(100vh - 70px);}
 
 /* PANELS */
 .panel{background:var(--surface);border-radius:14px;border:1px solid var(--border);box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;flex-direction:column;overflow:hidden;position:relative;}
@@ -50,7 +50,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .panel-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
 
 /* NEW ORDER ALERT */
-.new-order-alert{position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#D4180A;color:#fff;border-radius:16px;padding:20px 40px;font-size:22px;font-weight:700;z-index:100;display:none;align-items:center;gap:14px;box-shadow:0 8px 60px rgba(212,24,10,0.6);animation:slideDown 0.4s ease;white-space:nowrap;border:3px solid #fff;}
+.new-order-alert{position:fixed;top:80px;left:50%;transform:translateX(-50%);background:var(--red);color:#fff;border-radius:12px;padding:16px 32px;font-size:18px;font-weight:700;z-index:100;display:none;align-items:center;gap:12px;box-shadow:0 8px 40px rgba(212,24,10,0.5);animation:slideDown 0.4s ease;}
 .new-order-alert.show{display:flex;}
 @keyframes slideDown{from{opacity:0;transform:translateX(-50%) translateY(-20px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
 
@@ -150,7 +150,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .setup-btn{width:100%;padding:13px;background:var(--red);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;}
 .setup-note{font-size:12px;color:var(--text3);margin-top:12px;line-height:1.7;}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 </head>
 <body>
 
@@ -225,9 +224,13 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 <!-- MAIN GRID -->
 <div class="main" style="padding-bottom:44px;">
 
-  <!-- TOP: Full width stats strip -->
-  <div class="panel" style="grid-column:span 3;max-height:80px;">
-    <div class="stat-row" style="padding:8px 12px;">
+  <!-- TOP LEFT: Today's new orders + stats -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title" style="color:var(--red);"><i class="ti ti-bell-ringing"></i> New orders today</div>
+      <span class="panel-count" id="today-count-badge" style="background:var(--red-light);color:var(--red);">0</span>
+    </div>
+    <div class="stat-row">
       <div class="stat-mini">
         <div class="stat-mini-label">Today litres</div>
         <div class="stat-mini-value green" id="stat-today-litres">0</div>
@@ -245,12 +248,15 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <div class="stat-mini-value blue" id="stat-month-value">$0</div>
       </div>
     </div>
+    <div class="panel-body" id="today-orders">
+      <div class="empty-panel"><i class="ti ti-clock"></i><p>No orders yet today</p></div>
+    </div>
   </div>
 
-  <!-- DELIVERIES: Full width expanded -->
+  <!-- TOP MIDDLE + RIGHT: Deliveries this week -->
   <div class="panel span2">
     <div class="panel-header">
-      <div class="panel-title" style="color:var(--green);"><i class="ti ti-truck"></i> Delivery schedule — newest first</div>
+      <div class="panel-title" style="color:var(--green);"><i class="ti ti-truck"></i> Deliveries scheduled — next 7 days</div>
       <span class="panel-count" id="del-count-badge" style="background:var(--green-light);color:var(--green);">0</span>
     </div>
     <div class="panel-body" id="deliveries-list">
@@ -258,20 +264,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     </div>
   </div>
 
-  <!-- BOTTOM LEFT: Yearly performance chart -->
-  <div class="panel span2">
-    <div class="panel-header">
-      <div class="panel-title" style="color:var(--blue);"><i class="ti ti-chart-bar"></i> Company performance — litres sold by month</div>
-      <span id="year-label" style="font-size:11px;font-weight:700;color:var(--text3);"></span>
-    </div>
-    <div class="panel-body" style="padding:12px;">
-      <div style="position:relative;width:100%;height:100%;min-height:140px;">
-        <canvas id="yearChart" role="img" aria-label="Monthly litres sold this year"></canvas>
-      </div>
-    </div>
-  </div>
-
-  <!-- BOTTOM: Rep leaderboard -->
+  <!-- BOTTOM LEFT: Rep leaderboard -->
   <div class="panel">
     <div class="panel-header">
       <div class="panel-title" style="color:var(--amber);"><i class="ti ti-trophy"></i> Rep performance — this month</div>
@@ -318,19 +311,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 const SHEETS_URL = localStorage.getItem('ops_script_url') || '';
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const fmt = ds => {
-  if (!ds) return '—';
-  const d = new Date((ds+'').trim().split('T')[0] + 'T00:00:00');
-  return String(d.getDate()).padStart(2,'0') + '/' + 
-         String(d.getMonth()+1).padStart(2,'0') + '/' + 
-         d.getFullYear();
-};
 const DAYS_FULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
 let allSales = [];
 let liveFleet = [];
 let liveStock = {};
-let lastKnownIds = new Set(JSON.parse(localStorage.getItem('ops_known_ids') || '[]').map(String));
+let lastKnownIds = new Set(JSON.parse(localStorage.getItem('ops_known_ids') || '[]'));
 let waNum = localStorage.getItem('ops_wa_num') || '';
 let waKey = localStorage.getItem('ops_wa_key') || '';
 let isFirstLoad = true;
@@ -352,12 +338,9 @@ function saveSetup() {
 }
 
 function checkSetup() {
-  // Skip setup entirely - URL hardcoded
+  // Auto-set the script URL and skip setup
   localStorage.setItem('ops_script_url', 'https://script.google.com/macros/s/AKfycbwDjSa6vzu6x2PG4T_WzWgbwlTKI6ipjGjtpzTA5HNWqu9EXi4Ls1nlQYxNAEDQnOnDcw/exec');
-  localStorage.setItem('ops_wa_num', waNum);
-  localStorage.setItem('ops_wa_key', waKey);
-  const modal = document.getElementById('setup-modal');
-  if (modal) modal.style.display = 'none';
+  document.getElementById('setup-modal').style.display = 'none';
   startDashboard();
 }
 
@@ -365,17 +348,14 @@ function checkSetup() {
 function updateClock() {
   const now = new Date();
   document.getElementById('clock').textContent = now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
-  document.getElementById('date-display').textContent = DAYS_FULL[now.getDay()] + ' · ' + 
-    String(now.getDate()).padStart(2,'0') + '/' + 
-    String(now.getMonth()+1).padStart(2,'0') + '/' + 
-    now.getFullYear();
+  document.getElementById('date-display').textContent = DAYS_FULL[now.getDay()] + ' · ' + now.getDate() + ' ' + MONTHS[now.getMonth()] + ' ' + now.getFullYear();
 }
 setInterval(updateClock, 1000);
 updateClock();
 
 // FETCH LIVE DATA from Apps Script
 async function fetchData() {
-  const url = SHEETS_URL;
+  const url = localStorage.getItem('ops_script_url') || 'https://script.google.com/macros/s/AKfycbwDjSa6vzu6x2PG4T_WzWgbwlTKI6ipjGjtpzTA5HNWqu9EXi4Ls1nlQYxNAEDQnOnDcw/exec';
   try {
     const fetchUrl = new URL(url);
     fetchUrl.searchParams.set('action', 'getDashboard');
@@ -414,8 +394,7 @@ async function fetchData() {
 // WHATSAPP ALERT via CallMeBot
 function sendWhatsApp(message) {
   if (!waNum || !waKey) return;
-  // message may already be encoded
-  const encoded = message.includes('%') ? message : encodeURIComponent(message);
+  const encoded = encodeURIComponent(message);
   const waUrl = `https://api.callmebot.com/whatsapp.php?phone=${waNum}&text=${encoded}&apikey=${waKey}`;
   fetch(waUrl).catch(e => console.log('WA alert failed:', e));
 }
@@ -440,132 +419,27 @@ function loadDemoData() {
   renderAll();
 }
 
-let yearChartInstance = null;
-
-function renderYearChart() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const currentMonth = now.getMonth();
-  const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  
-  const yearLabel = document.getElementById('year-label');
-  if (yearLabel) yearLabel.textContent = y;
-
-  // Build monthly totals
-  const monthlyLitres = Array(12).fill(0);
-  const monthlyValue = Array(12).fill(0);
-
-  allSales.forEach(s => {
-    const ds = (s.date||'').toString().split('T')[0];
-    if (!ds) return;
-    const d = new Date(ds + 'T00:00:00');
-    if (d.getFullYear() !== y) return;
-    const m = d.getMonth();
-    monthlyLitres[m] += parseFloat(s.litres) || 0;
-    monthlyValue[m] += (parseFloat(s.litres)||0) * (parseFloat(s.price)||0);
-  });
-
-  const canvas = document.getElementById('yearChart');
-  if (!canvas) return;
-
-  if (yearChartInstance) { yearChartInstance.destroy(); yearChartInstance = null; }
-
-  // Colour bars — current month red, past months blue, future months light grey
-  const barColors = monthlyLitres.map((v,i) => {
-    if (i === currentMonth) return '#D4180A';
-    if (i < currentMonth) return '#185FA5';
-    return '#E0E0DE';
-  });
-  const borderColors = monthlyLitres.map((v,i) => {
-    if (i === currentMonth) return '#A32D2D';
-    if (i < currentMonth) return '#0C447C';
-    return '#C0C0C0';
-  });
-
-  yearChartInstance = new Chart(canvas.getContext('2d'), {
-    type: 'bar',
-    data: {
-      labels: MN,
-      datasets: [{
-        label: 'Litres',
-        data: monthlyLitres,
-        backgroundColor: barColors,
-        borderColor: borderColors,
-        borderWidth: 1,
-        borderRadius: 4
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: c => `${c.parsed.y.toLocaleString()} L`,
-            afterLabel: c => `$${monthlyValue[c.dataIndex].toLocaleString(undefined,{maximumFractionDigits:0})}`
-          }
-        }
-      },
-      scales: {
-        x: {
-          grid: { display: false },
-          ticks: { font: { size: 11 }, color: '#888780' }
-        },
-        y: {
-          grid: { color: 'rgba(136,135,128,0.12)' },
-          ticks: {
-            font: { size: 11 },
-            color: '#888780',
-            callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v
-          }
-        }
-      }
-    }
-  });
-}
-
-function safeSet(id, html) {
-  const el = document.getElementById(id);
-  if (el) el.innerHTML = html;
-}
-
 function renderAll() {
-  try {
   const today = new Date(); today.setHours(0,0,0,0);
-  const todayStr = today.getFullYear() + '-' + 
-    String(today.getMonth()+1).padStart(2,'0') + '-' + 
-    String(today.getDate()).padStart(2,'0');
+  const todayStr = today.toISOString().split('T')[0];
   const in7 = new Date(today); in7.setDate(in7.getDate()+7);
 
-  // Today's orders — match against both date and deliveryDate
-  const todayOrders = allSales.filter(s => {
-    if (s.delivered === true || s.delivered === 'true' || 
-        (s.status||'').toLowerCase() === 'delivered') return false;
-    // Try matching on sale date OR delivery date for today
-    const sDate = (s.date || '').toString().trim().split('T')[0];
-    const dDate = (s.deliveryDate || s.confirmedDelivery || '').toString().trim().split('T')[0];
-    return sDate === todayStr || dDate === todayStr;
-  });
+  // Today's orders
+  const todayOrders = allSales.filter(s => s.date === todayStr);
   const todayL = todayOrders.reduce((a,s) => a+s.litres, 0);
   const todayV = todayOrders.reduce((a,s) => a+(s.litres*s.price), 0);
 
   // Month stats
   const m = today.getMonth(), y = today.getFullYear();
-  const monthSales = allSales.filter(s => {
-    const ds = (s.date||'').toString().trim().split('T')[0];
-    if (!ds) return false;
-    const d = new Date(ds + 'T00:00:00');
-    return d.getMonth()===m && d.getFullYear()===y;
-  });
+  const monthSales = allSales.filter(s => {const d=new Date(s.date);return d.getMonth()===m&&d.getFullYear()===y;});
   const monthL = monthSales.reduce((a,s) => a+s.litres, 0);
   const monthV = monthSales.reduce((a,s) => a+(s.litres*s.price), 0);
 
   document.getElementById('stat-today-litres').textContent = todayL.toLocaleString();
   document.getElementById('stat-today-value').textContent = '$' + todayV.toLocaleString(undefined,{maximumFractionDigits:0});
-  safeSet('stat-month-litres', monthL.toLocaleString());
-  safeSet('stat-month-value', '$' + monthV.toLocaleString(undefined,{maximumFractionDigits:0}));
-  // count badge removed with today panel
+  document.getElementById('stat-month-litres').textContent = monthL.toLocaleString();
+  document.getElementById('stat-month-value').textContent = '$' + monthV.toLocaleString(undefined,{maximumFractionDigits:0});
+  document.getElementById('today-count-badge').textContent = todayOrders.length;
 
   // Today's orders list
   const toEl = document.getElementById('today-orders');
@@ -575,7 +449,7 @@ function renderAll() {
         <div class="order-dot" style="background:${s.paymentTerm==='COD'?'#1D9E75':'#EF9F27'};"></div>
         <div class="order-info">
           <div class="order-customer">${s.customer}</div>
-          <div class="order-meta">${s.location} · ${s.paymentTerm}${s.fuelType?' · <strong style="color:'+(s.fuelType==='Petrol'?'#D4180A':'#185FA5')+'">'+s.fuelType+'</strong>':''}</div>
+          <div class="order-meta">${s.location} · ${s.paymentTerm}</div>
           <div><span class="order-rep">${s.rep}</span></div>
         </div>
         <div class="order-right">
@@ -589,30 +463,8 @@ function renderAll() {
 
   // Deliveries next 7 days
   const deliveries = allSales
-    .filter(s => {
-      // Skip if marked as delivered
-      if (s.delivered === true || s.delivered === 'true' || 
-          (s.status||'').toLowerCase() === 'delivered') return false;
-      
-      const dd = (s.confirmedDelivery || s.deliveryDate || '').toString().trim().split('T')[0];
-      if (!dd) return false;
-      const d = new Date(dd + 'T00:00:00');
-      
-      // 7-day failsafe — auto remove 7 days after delivery date
-      const cutoff = new Date(d);
-      cutoff.setDate(cutoff.getDate() + 7);
-      if (today > cutoff) return false;
-      
-      // Show deliveries up to 7 days ahead
-      const future = new Date(today);
-      future.setDate(future.getDate() + 7);
-      return d <= future;
-    })
-    .sort((a,b) => {
-      const da = new Date((a.confirmedDelivery||a.deliveryDate||'').split('T')[0]+'T00:00:00');
-      const db = new Date((b.confirmedDelivery||b.deliveryDate||'').split('T')[0]+'T00:00:00');
-      return db - da; // Newest/latest first
-    });
+    .filter(s => s.deliveryDate && new Date(s.deliveryDate) >= today && new Date(s.deliveryDate) <= in7)
+    .sort((a,b) => new Date(a.deliveryDate)-new Date(b.deliveryDate));
   document.getElementById('del-count-badge').textContent = deliveries.length;
   const delEl = document.getElementById('deliveries-list');
   if (deliveries.length) {
@@ -673,8 +525,7 @@ function renderAll() {
   }
 
   // Credit outstanding
-  const credit = allSales.filter(s => s.paymentTerm !== 'COD' && !s.paid && 
-    (s.status||'').toLowerCase() !== 'delivered')
+  const credit = allSales.filter(s => s.paymentTerm !== 'COD' && !s.paid)
     .sort((a,b) => new Date(a.paymentDue)-new Date(b.paymentDue));
   const totalCredit = credit.reduce((a,s) => a+(s.litres*s.price), 0);
   document.getElementById('cr-count-badge').textContent = '$' + totalCredit.toLocaleString(undefined,{maximumFractionDigits:0});
@@ -699,9 +550,7 @@ function renderAll() {
   }
 
   // Overdue
-  const overdue = allSales.filter(s => s.paymentTerm !== 'COD' && !s.paid && 
-    new Date(s.paymentDue) < today &&
-    (s.status||'').toLowerCase() !== 'delivered')
+  const overdue = allSales.filter(s => s.paymentTerm !== 'COD' && !s.paid && new Date(s.paymentDue) < today)
     .sort((a,b) => new Date(a.paymentDue)-new Date(b.paymentDue));
   const totalOv = overdue.reduce((a,s) => a+(s.litres*s.price), 0);
   document.getElementById('ov-count-badge').textContent = '$' + totalOv.toLocaleString(undefined,{maximumFractionDigits:0});
@@ -735,55 +584,33 @@ function renderAll() {
   checkNewOrders();
 
   // Update last sync
-  const lsEl = document.getElementById('last-sync-time'); if(lsEl) lsEl.textContent = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('last-sync-time').textContent = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
 }
 
 function checkNewOrders() {
-  const newOrders = allSales.filter(s => !lastKnownIds.has(String(s.id)));
-
   if (isFirstLoad) {
-    allSales.forEach(s => lastKnownIds.add(String(s.id)));
+    // On first load, just record all current IDs as known
+    allSales.forEach(s => lastKnownIds.add(s.id));
     localStorage.setItem('ops_known_ids', JSON.stringify([...lastKnownIds]));
     isFirstLoad = false;
     return;
   }
 
+  const newOrders = allSales.filter(s => !lastKnownIds.has(s.id));
   if (newOrders.length > 0) {
     newOrders.forEach(s => {
-      // Big visual alert
+      // Show visual alert
       const alertEl = document.getElementById('new-order-alert');
       document.getElementById('alert-text').textContent =
-        `🛢 New order! ${s.rep} → ${s.customer} · ${(s.litres||0).toLocaleString()} L · $${((s.litres||0)*(s.price||0)).toFixed(2)}`;
+        `🛢 New order! ${s.rep} → ${s.customer} · ${s.litres.toLocaleString()} L · $${(s.litres*s.price).toFixed(2)}`;
       alertEl.classList.add('show');
-      setTimeout(() => alertEl.classList.remove('show'), 10000);
+      setTimeout(() => alertEl.classList.remove('show'), 8000);
 
-      // Sound alert
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        [880,660,880].forEach((freq,i) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain); gain.connect(ctx.destination);
-          osc.frequency.value = freq;
-          gain.gain.setValueAtTime(0.3, ctx.currentTime + i*0.15);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i*0.15 + 0.12);
-          osc.start(ctx.currentTime + i*0.15);
-          osc.stop(ctx.currentTime + i*0.15 + 0.12);
-        });
-      } catch(e) {}
-
-      // WhatsApp alert
-      const msg = encodeURIComponent(`🛢 NEW FUEL ORDER
-Rep: ${s.rep}
-Customer: ${s.customer}
-Location: ${s.location||''}
-Litres: ${(s.litres||0).toLocaleString()} L
-Value: $${((s.litres||0)*(s.price||0)).toFixed(2)}
-Delivery: ${s.deliveryDate?fmt(s.deliveryDate):'TBC'}
-Terms: ${s.paymentTerm||''}`);
+      // Send WhatsApp alert
+      const msg = `🛢 NEW FUEL ORDER\nRep: ${s.rep}\nCustomer: ${s.customer}\nLocation: ${s.location}\nLitres: ${s.litres.toLocaleString()} L\nValue: $${(s.litres*s.price).toFixed(2)}\nDelivery: ${s.deliveryDate||'TBC'}\nTerms: ${s.paymentTerm}`;
       sendWhatsApp(msg);
 
-      lastKnownIds.add(String(s.id));
+      lastKnownIds.add(s.id);
     });
     localStorage.setItem('ops_known_ids', JSON.stringify([...lastKnownIds]));
   }
@@ -792,7 +619,7 @@ Terms: ${s.paymentTerm||''}`);
 function startDashboard() {
   loadDemoData(); // Show demo immediately while fetching
   fetchData();    // Try live data straight away
-  setInterval(fetchData, 30000); // Refresh every 30 seconds // Then every 60 seconds
+  setInterval(fetchData, 60000); // Then every 60 seconds
 }
 
 // Reset setup
