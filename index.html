@@ -213,6 +213,21 @@ textarea{resize:vertical;min-height:60px;}
 .pin-key:active{background:var(--gray-border);}
 .pin-err{color:var(--red);font-size:13px;margin-top:8px;min-height:18px;}
 
+/* PIN LOCK SCREEN */
+.lock-screen{position:fixed;inset:0;background:#F7F7F5;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;}
+.lock-logo{margin-bottom:32px;text-align:center;}
+.lock-logo svg{width:64px;height:64px;}
+.lock-title{font-size:22px;font-weight:700;color:var(--text);margin-bottom:6px;text-align:center;}
+.lock-sub{font-size:14px;color:var(--text3);margin-bottom:32px;text-align:center;}
+.lock-dots{display:flex;justify-content:center;gap:14px;margin-bottom:28px;}
+.lock-dot{width:16px;height:16px;border-radius:50%;background:var(--gray-border);transition:background 0.15s;}
+.lock-dot.filled{background:var(--red);}
+.lock-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:280px;}
+.lock-key{padding:18px;border:1px solid var(--gray-border);border-radius:12px;font-size:22px;font-weight:600;background:#fff;cursor:pointer;font-family:var(--mono);text-align:center;transition:background 0.1s;}
+.lock-key:active{background:var(--gray-border);}
+.lock-err{color:var(--red);font-size:13px;text-align:center;margin-top:12px;min-height:20px;font-weight:500;}
+.lock-timer{color:var(--amber);font-size:13px;text-align:center;margin-top:12px;font-weight:600;}
+
 /* EDIT SHEET */
 .sheet-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.48);z-index:55;display:none;align-items:flex-end;justify-content:center;}
 .sheet-overlay.show{display:flex;}
@@ -233,6 +248,46 @@ textarea{resize:vertical;min-height:60px;}
   <div id="offline-bar" style="display:none;position:fixed;top:0;left:0;right:0;background:#1a1a18;color:#fff;padding:8px 16px;font-size:13px;font-weight:500;z-index:100;align-items:center;justify-content:center;gap:8px;text-align:center;">
     <i class="ti ti-wifi-off"></i> You're offline — your sales are saved and will sync when reconnected
   </div>
+
+<!-- PIN LOCK SCREEN -->
+<div class="lock-screen" id="lock-screen" style="display:none;">
+  <div class="lock-logo">
+    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+      <rect width="200" height="200" rx="44" fill="#fff" stroke="#E8E8E6" stroke-width="2"/>
+      <g transform="translate(74,82) rotate(130)">
+        <rect x="-34" y="-26" width="68" height="52" rx="10" fill="#fff" stroke="#e0e0e0" stroke-width="1.5"/>
+        <rect x="-34" y="-4" width="68" height="34" rx="10" fill="#D4180A"/>
+        <rect x="-34" y="4" width="68" height="12" fill="#fff"/>
+        <rect x="-34" y="-34" width="68" height="12" rx="6" fill="#D4180A"/>
+      </g>
+      <text font-family="'Courier New',monospace" font-weight="900"><tspan x="124" y="114" font-size="26" fill="#D4180A">$</tspan></text>
+    </svg>
+  </div>
+  <div class="lock-title">Fuel Sales</div>
+  <div class="lock-sub">Enter your PIN to continue</div>
+  <div class="lock-dots">
+    <div class="lock-dot" id="ld0"></div>
+    <div class="lock-dot" id="ld1"></div>
+    <div class="lock-dot" id="ld2"></div>
+    <div class="lock-dot" id="ld3"></div>
+  </div>
+  <div class="lock-grid">
+    <button class="lock-key" onclick="lockKey('1')">1</button>
+    <button class="lock-key" onclick="lockKey('2')">2</button>
+    <button class="lock-key" onclick="lockKey('3')">3</button>
+    <button class="lock-key" onclick="lockKey('4')">4</button>
+    <button class="lock-key" onclick="lockKey('5')">5</button>
+    <button class="lock-key" onclick="lockKey('6')">6</button>
+    <button class="lock-key" onclick="lockKey('7')">7</button>
+    <button class="lock-key" onclick="lockKey('8')">8</button>
+    <button class="lock-key" onclick="lockKey('9')">9</button>
+    <button class="lock-key" onclick="lockKey('clr')" style="font-size:13px;color:var(--text2);">CLR</button>
+    <button class="lock-key" onclick="lockKey('0')">0</button>
+    <button class="lock-key" onclick="lockKey('del')">⌫</button>
+  </div>
+  <div class="lock-err" id="lock-err"></div>
+  <div class="lock-timer" id="lock-timer"></div>
+</div>
 
 <!-- ONBOARDING -->
 <div class="onboard" id="onboard">
@@ -301,6 +356,20 @@ textarea{resize:vertical;min-height:60px;}
     <div class="field"><label>Litres</label><input type="number" id="e-litres" inputmode="decimal"></div>
     <div class="field"><label>Price per litre (USD)</label><input type="number" id="e-price" step="0.001" inputmode="decimal"></div>
     <div class="field"><label>Delivery date</label><input type="date" id="e-delivery"></div>
+    <div class="field">
+      <label>Follow up <span style="font-weight:400;color:var(--text3);">(days after delivery)</span></label>
+      <div class="terms-grid" id="e-followup-grid">
+        <button class="term-btn" onclick="selEditFollowup('7',this)">7 days</button>
+        <button class="term-btn" onclick="selEditFollowup('14',this)">14 days</button>
+        <button class="term-btn" onclick="selEditFollowup('21',this)">21 days</button>
+        <button class="term-btn" onclick="selEditFollowup('30',this)">30 days</button>
+        <button class="term-btn" onclick="selEditFollowup('none',this)">None</button>
+        <button class="term-btn" onclick="selEditFollowup('other',this)">Other</button>
+      </div>
+      <div id="e-followup-other-wrap" style="display:none;margin-top:8px;">
+        <input type="number" id="e-followup-other-days" placeholder="Days after delivery" inputmode="numeric">
+      </div>
+    </div>
     <div class="field"><label>Payment terms</label>
       <div class="terms-grid" id="e-terms-grid">
         <button class="term-btn selected" onclick="selEditTerm('COD',this)">COD</button>
@@ -381,6 +450,20 @@ textarea{resize:vertical;min-height:60px;}
             <button class="term-btn" onclick="selTerm('other',this)">Other</button>
           </div>
           <div id="other-wrap" style="display:none;margin-top:8px;"><input type="number" id="other-days" placeholder="Number of days" inputmode="numeric"></div>
+        </div>
+        <div class="field">
+          <label>Follow up <span style="font-weight:400;color:var(--text3);">(days after delivery)</span></label>
+          <div class="terms-grid" id="followup-grid">
+            <button class="term-btn" onclick="selFollowup('7',this)">7 days</button>
+            <button class="term-btn" onclick="selFollowup('14',this)">14 days</button>
+            <button class="term-btn" onclick="selFollowup('21',this)">21 days</button>
+            <button class="term-btn" onclick="selFollowup('30',this)">30 days</button>
+            <button class="term-btn" onclick="selFollowup('none',this)">None</button>
+            <button class="term-btn" onclick="selFollowup('other',this)">Other</button>
+          </div>
+          <div id="followup-other-wrap" style="display:none;margin-top:8px;">
+            <input type="number" id="followup-other-days" placeholder="Days after delivery" inputmode="numeric">
+          </div>
         </div>
         <div class="field"><label>Notes</label><textarea id="s-notes" placeholder="Delivery or customer notes..."></textarea></div>
         <button class="btn-primary" onclick="recordSale()" style="margin-top:4px;"><i class="ti ti-check"></i> Save sale</button>
@@ -663,12 +746,21 @@ const getLitres=(y,m)=>sales.filter(s=>{const d=new Date(s.date);return d.getFul
 function boot(){
   const n=localStorage.getItem('fst_rep_name'),s=localStorage.getItem('fst_sales');
   if(s){try{sales=JSON.parse(s);}catch(e){sales=[];}}
-  if(n){repName=n;$('onboard').style.display='none';launch();}
-  else $('onboard').style.display='flex';
+  if(n){
+    repName=n;
+    $('onboard').style.display='none';
+    // Initialise app first, then show lock screen on top
+    launch();
+    showLockScreen();
+    checkLockout();
+  } else {
+    $('onboard').style.display='flex';
+  }
 }
 function saveRepName(){
   const v=$('onboard-name').value.trim();if(!v){alert('Please enter your name.');return;}
-  repName=v;localStorage.setItem('fst_rep_name',repName);$('onboard').style.display='none';launch();
+  repName=v;localStorage.setItem('fst_rep_name',repName);$('onboard').style.display='none';
+  launch(); // No lock on first setup
 }
 function changeRepName(){const n=prompt('Update your name:',repName);if(n&&n.trim()){repName=n.trim();localStorage.setItem('fst_rep_name',repName);updateRepUI();}}
 function updateRepUI(){
@@ -754,6 +846,14 @@ function changePin(){
 
 // TERMS
 let curFuel='Diesel';
+let curFollowup='none';
+
+function selFollowup(val, btn) {
+  curFollowup = val;
+  document.querySelectorAll('#followup-grid .term-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('followup-other-wrap').style.display = val === 'other' ? 'block' : 'none';
+}
 function selectFuel(val,btn){
   curFuel=val;
   document.querySelectorAll('#fuel-diesel,#fuel-petrol').forEach(b=>b.classList.remove('selected'));
@@ -761,6 +861,15 @@ function selectFuel(val,btn){
 }
 
 function selTerm(val,btn){curTerm=val;document.querySelectorAll('#screen-record .term-btn').forEach(b=>b.classList.remove('selected'));btn.classList.add('selected');$('other-wrap').style.display=val==='other'?'block':'none';}
+let editFollowup='none';
+
+function selEditFollowup(val, btn) {
+  editFollowup = val;
+  document.querySelectorAll('#e-followup-grid .term-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('e-followup-other-wrap').style.display = val === 'other' ? 'block' : 'none';
+}
+
 function selEditTerm(val,btn){editTerm=val;document.querySelectorAll('#e-terms-grid .term-btn').forEach(b=>b.classList.remove('selected'));btn.classList.add('selected');$('e-other-wrap').style.display=val==='other'?'block':'none';}
 
 // RECORD
@@ -772,10 +881,21 @@ function recordSale(){
   if(curTerm==='other'&&!od){alert('Please enter credit days.');return;}
   const tLabel=curTerm==='COD'?'COD':curTerm==='other'?`${od} days`:`${curTerm} days`;
   const pDays=curTerm==='COD'?0:curTerm==='other'?parseInt(od):parseInt(curTerm);
+  // Payment due calculated from DELIVERY date, not order date
+  const baseDate = delivery || date; // Use delivery date if set, else order date
+  const followupDays = curFollowup === 'none' ? null : 
+    curFollowup === 'other' ? parseInt($('followup-other-days').value) : 
+    parseInt(curFollowup);
+  const nextDelivery = followupDays && delivery ? addDays(delivery, followupDays) : null;
+  
   const sale={id:Date.now(),rep:repName,date,customer,location,litres,price,notes,
     fuelType:curFuel,
-    deliveryDate:delivery||'',nextDelivery:addDays(date,30),
-    paymentTerm:tLabel,paymentDue:addDays(date,pDays),paid:curTerm==='COD',synced:false};
+    deliveryDate:delivery||'',
+    followupDays:followupDays,
+    nextDelivery:nextDelivery||'',
+    paymentTerm:tLabel,
+    paymentDue:pDays>0?addDays(baseDate,pDays):addDays(baseDate,0),
+    paid:curTerm==='COD',synced:false};
   sales.unshift(sale);
   ['s-customer','s-location','s-litres','s-price','s-notes','s-delivery','other-days'].forEach(id=>$(id).value='');
   $('s-date').value=now.toISOString().split('T')[0];
@@ -793,7 +913,18 @@ function openEdit(id){
     $('edit-title').textContent='Edit — '+s.customer;
     $('e-date').value=s.date;$('e-customer').value=s.customer;$('e-location').value=s.location||'';
     $('e-litres').value=s.litres;$('e-price').value=s.price;
-    $('e-delivery').value=s.deliveryDate||'';$('e-notes').value=s.notes||'';
+    $('e-delivery').value=s.deliveryDate||'';
+    // Populate follow up
+    editFollowup = s.followupDays ? String(s.followupDays) : 'none';
+    const stdFollowups = ['7','14','21','30'];
+    document.querySelectorAll('#e-followup-grid .term-btn').forEach(b => {
+      const bv = b.textContent.trim().replace(' days','');
+      const isOther = editFollowup !== 'none' && !stdFollowups.includes(editFollowup);
+      const isNone = editFollowup === 'none' && b.textContent === 'None';
+      b.classList.toggle('selected', isNone || bv === editFollowup || (isOther && b.textContent === 'Other'));
+    });
+    $('e-followup-other-wrap').style.display = editFollowup !== 'none' && !stdFollowups.includes(editFollowup) ? 'block' : 'none';
+    if(s.followupDays && !stdFollowups.includes(String(s.followupDays))) $('e-followup-other-days').value = s.followupDays;$('e-notes').value=s.notes||'';
     const stdTerms=['COD','7','14','21','30'];
     const tv=s.paymentTerm==='COD'?'COD':s.paymentTerm.replace(' days','');
     const isOther=!stdTerms.includes(tv);
@@ -815,10 +946,17 @@ function saveEdit(){
   const tLabel=editTerm==='COD'?'COD':editTerm==='other'?`${od} days`:`${editTerm} days`;
   const pDays=editTerm==='COD'?0:editTerm==='other'?parseInt(od):parseInt(editTerm);
   const date=$('e-date').value;
+  const eDelivery=$('e-delivery').value;
+  const eBaseDate=eDelivery||date;
+  const eFollowupOther=$('e-followup-other-days').value;
+  const eFollowupDays=editFollowup==='none'?null:editFollowup==='other'?parseInt(eFollowupOther):parseInt(editFollowup);
+  const eNextDelivery=eFollowupDays&&eDelivery?addDays(eDelivery,eFollowupDays):'';
   sales[i]={...sales[i],date,customer:$('e-customer').value.trim(),location:$('e-location').value.trim(),
     litres:parseFloat($('e-litres').value),price:parseFloat($('e-price').value),
-    deliveryDate:$('e-delivery').value,notes:$('e-notes').value.trim(),
-    paymentTerm:tLabel,paymentDue:addDays(date,pDays),nextDelivery:addDays(date,30),
+    deliveryDate:eDelivery,notes:$('e-notes').value.trim(),
+    followupDays:eFollowupDays,
+    paymentTerm:tLabel,paymentDue:addDays(eBaseDate,pDays),
+    nextDelivery:eNextDelivery,
     paid:editTerm==='COD',synced:false};
   saveSales();closeEdit();renderDash();renderCalendar();renderCredit();renderSalesList();updateCreditDot();
   if(online)doSync([sales[i]]);
@@ -1168,6 +1306,105 @@ window.addEventListener('appinstalled', () => {
   deferredPrompt = null;
 });
 
+// PIN LOCK SCREEN
+let lockBuf = '';
+let lockAttempts = 0;
+let lockTimerInterval = null;
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_SECS = 30;
+
+function showLockScreen() {
+  document.getElementById('lock-screen').style.display = 'flex';
+  lockBuf = '';
+  updateLockDots();
+  document.getElementById('lock-err').textContent = '';
+  document.getElementById('lock-timer').textContent = '';
+}
+
+function hideLockScreen() {
+  document.getElementById('lock-screen').style.display = 'none';
+}
+
+function updateLockDots() {
+  for(let i = 0; i < 4; i++) {
+    document.getElementById('ld'+i).classList.toggle('filled', i < lockBuf.length);
+  }
+}
+
+function lockKey(k) {
+  // Check if locked out
+  const lockedUntil = parseInt(localStorage.getItem('lock_until') || '0');
+  if(Date.now() < lockedUntil) return;
+
+  if(k === 'clr') { lockBuf = ''; updateLockDots(); document.getElementById('lock-err').textContent = ''; return; }
+  if(k === 'del') { lockBuf = lockBuf.slice(0,-1); updateLockDots(); return; }
+  if(lockBuf.length >= 4) return;
+
+  lockBuf += k;
+  updateLockDots();
+
+  if(lockBuf.length === 4) {
+    setTimeout(() => checkLockPin(), 100);
+  }
+}
+
+function checkLockPin() {
+  if(lockBuf === getPin()) {
+    lockAttempts = 0;
+    localStorage.removeItem('lock_until');
+    localStorage.removeItem('lock_attempts');
+    hideLockScreen();
+    // Refresh dashboard data after unlock
+    renderDash();
+  } else {
+    lockAttempts++;
+    localStorage.setItem('lock_attempts', lockAttempts);
+    lockBuf = '';
+    updateLockDots();
+
+    if(lockAttempts >= MAX_ATTEMPTS) {
+      const until = Date.now() + LOCKOUT_SECS * 1000;
+      localStorage.setItem('lock_until', until);
+      localStorage.setItem('lock_attempts', '0');
+      lockAttempts = 0;
+      startLockTimer(until);
+      document.getElementById('lock-err').textContent = '';
+    } else {
+      const remaining = MAX_ATTEMPTS - lockAttempts;
+      document.getElementById('lock-err').textContent = `Incorrect PIN — ${remaining} attempt${remaining!==1?'s':''} remaining`;
+    }
+  }
+}
+
+function startLockTimer(until) {
+  if(lockTimerInterval) clearInterval(lockTimerInterval);
+  const timerEl = document.getElementById('lock-timer');
+  const errEl = document.getElementById('lock-err');
+
+  // Disable all keys
+  document.querySelectorAll('.lock-key').forEach(b => b.style.opacity = '0.4');
+
+  lockTimerInterval = setInterval(() => {
+    const remaining = Math.ceil((until - Date.now()) / 1000);
+    if(remaining <= 0) {
+      clearInterval(lockTimerInterval);
+      timerEl.textContent = '';
+      errEl.textContent = '';
+      document.querySelectorAll('.lock-key').forEach(b => b.style.opacity = '1');
+    } else {
+      timerEl.textContent = `Too many attempts — try again in ${remaining}s`;
+    }
+  }, 500);
+}
+
+function checkLockout() {
+  const lockedUntil = parseInt(localStorage.getItem('lock_until') || '0');
+  if(Date.now() < lockedUntil) {
+    startLockTimer(lockedUntil);
+  }
+  lockAttempts = parseInt(localStorage.getItem('lock_attempts') || '0');
+}
+
 function markDelivered(id) {
   if (!confirm('Mark this delivery as completed?')) return;
   const i = sales.findIndex(s => s.id === id);
@@ -1176,9 +1413,17 @@ function markDelivered(id) {
   sales[i].deliveredAt = new Date().toISOString();
   sales[i].synced = false;
   saveSales();
-  renderSales();
-  renderDash();
-  // Sync the update to Google Sheets
+  // Instant visual feedback on button before re-render
+  const btn = document.querySelector(`button[onclick="event.stopPropagation();markDelivered(${id})"]`);
+  if(btn){
+    btn.style.background='#1D9E75';
+    btn.innerHTML='<i class="ti ti-circle-check"></i> Delivered ✓';
+    btn.disabled=true;
+  }
+  setTimeout(()=>{
+    renderSalesList();
+    renderDash();
+  }, 600);
   if (online) doSync([sales[i]]);
 }
 
