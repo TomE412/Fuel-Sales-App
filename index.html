@@ -1435,7 +1435,7 @@ boot();
 // Service worker registration - graceful degradation if sw.js not present
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+    navigator.serviceWorker.register('./sw.js')
       .then(r => console.log('SW registered - full offline support active'))
       .catch(e => console.log('SW not found - data still saved locally'));
   });
