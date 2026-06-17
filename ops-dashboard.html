@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light only">
 <title>Skelsee Trading — Fuel Ops Dashboard</title>
+<link rel="manifest" href="./dash-manifest.json">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Fuel Ops">
+<meta name="mobile-web-app-capable" content="yes">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -288,10 +293,52 @@ async function fetchData(){
         date:(o.date||'').toString().split('T')[0],
         deliveryDate:(o.confirmedDelivery||o.deliveryDate||'').toString().split('T')[0],
       }));
+      // Save last loaded data for offline use
+      try{
+        localStorage.setItem('dash_cache',JSON.stringify(allSales));
+        localStorage.setItem('dash_cache_time',new Date().toISOString());
+      }catch(err){}
       document.getElementById('last-sync').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      hideOfflineNote();
       renderAll();
     }
-  }catch(e){console.log('Fetch error:',e);}
+  }catch(e){
+    console.log('Fetch error - loading cached data:',e);
+    loadCachedData();
+  }
+}
+
+function loadCachedData(){
+  try{
+    const cached=localStorage.getItem('dash_cache');
+    if(cached){
+      allSales=JSON.parse(cached);
+      const t=localStorage.getItem('dash_cache_time');
+      if(t){
+        const d=new Date(t);
+        document.getElementById('last-sync').textContent=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+' (offline)';
+      }
+      showOfflineNote();
+      renderAll();
+    }
+  }catch(err){console.log('No cached data');}
+}
+
+function showOfflineNote(){
+  let note=document.getElementById('offline-note');
+  if(!note){
+    note=document.createElement('div');
+    note.id='offline-note';
+    note.style.cssText='position:fixed;bottom:34px;left:0;right:0;background:#BA7517;color:#fff;text-align:center;padding:5px;font-size:12px;font-weight:600;z-index:50;';
+    note.textContent='⚠ Offline — showing last loaded data';
+    document.body.appendChild(note);
+  }
+  note.style.display='block';
+}
+
+function hideOfflineNote(){
+  const note=document.getElementById('offline-note');
+  if(note)note.style.display='none';
 }
 
 function renderAll(){
@@ -506,8 +553,15 @@ function checkNewOrders(){
   }
 }
 
+// Load cached data instantly on open, then fetch fresh
+loadCachedData();
 fetchData();
 setInterval(fetchData,30000);
+
+// Register service worker for offline + installable
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
 </script>
 </body>
 </html>
