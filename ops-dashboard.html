@@ -290,8 +290,10 @@ async function fetchData(){
         ...o,
         litres:parseFloat(o.litres)||0,
         price:parseFloat(o.price)||0,
-        date:(o.date||'').toString().split('T')[0],
-        deliveryDate:(o.confirmedDelivery||o.deliveryDate||'').toString().split('T')[0],
+        date:parseDate(o.date||''),
+        deliveryDate:parseDate(o.confirmedDelivery||o.deliveryDate||''),
+        nextDelivery:parseDate(o.nextDelivery||''),
+        paymentDue:parseDate(o.paymentDue||''),
       }));
       // Save last loaded data for offline use
       try{
@@ -400,11 +402,17 @@ function renderAll(){
   function parseDate(raw){
     if(!raw)return '';
     raw=String(raw).trim();
-    if(raw.includes('-')) return raw.split('T')[0];
+    // DD/MM/YYYY format (our standard)
     if(raw.includes('/')){
       const p=raw.split('/');
-      if(p.length===3) return p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0');
+      if(p.length===3){
+        const d=new Date(p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0')+'T00:00:00');
+        if(!isNaN(d)) return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      }
     }
+    // YYYY-MM-DD format
+    if(raw.includes('-')) return raw.split('T')[0];
+    // Try native parse
     const d=new Date(raw);
     if(!isNaN(d)) return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
     return '';
