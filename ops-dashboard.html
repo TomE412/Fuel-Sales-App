@@ -434,8 +434,17 @@ function renderAll(){
   const weekEl=document.getElementById('week-list');
   if(weekSales.length){
     weekEl.innerHTML=weekSales.map(s=>{
-      const sd=(s.date||'').split('T')[0];
-      const dd=new Date(sd+'T00:00:00');
+      let sd=(s.date||'').split('T')[0];
+      let dd=sd?new Date(sd+'T00:00:00'):null;
+      // Fallback to Sale ID timestamp if date is missing/invalid
+      if(!dd||isNaN(dd)){
+        const idNum=parseInt(s.id);
+        if(!isNaN(idNum)&&idNum>1000000000000){
+          dd=new Date(idNum);
+          sd=dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')+'-'+String(dd.getDate()).padStart(2,'0');
+        }
+      }
+      const validDate=dd&&!isNaN(dd);
       const isToday=sd===today;
       const delivered=isDel(s);
       const isNew=!lastKnownIds.has(String(s.id))&&!isFirstLoad;
@@ -445,8 +454,8 @@ function renderAll(){
       const ts=fmtDateTime(s.id);
       return `<div class="order-row${delivered?' delivered':''}">
         <div class="date-box${isToday?' today':''}">
-          <div class="date-num">${String(dd.getDate()).padStart(2,'0')}</div>
-          <div class="date-mon">${MN[dd.getMonth()]}</div>
+          <div class="date-num">${validDate?String(dd.getDate()).padStart(2,'0'):'—'}</div>
+          <div class="date-mon">${validDate?MN[dd.getMonth()]:''}</div>
         </div>
         <div style="flex:1;min-width:0;">
           <div class="order-name${delivered?' delivered':''}">${s.customer}${newPill}${fuelPill}${delPill}</div>
