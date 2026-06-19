@@ -363,6 +363,20 @@ textarea:focus{border-color:var(--red);background:#fff;}
       <div style="font-size:10px;color:var(--text3);margin-top:8px;">HRE = from Harare · MUT = from Mutare · all distances in km</div>
     </div>
 
+    <div class="card">
+      <div class="card-title">🔑 Change password</div>
+      <div class="field">
+        <label>New password</label>
+        <input type="password" id="new-pw" placeholder="Enter new password" autocomplete="new-password">
+      </div>
+      <div class="field">
+        <label>Confirm new password</label>
+        <input type="password" id="confirm-pw" placeholder="Confirm new password" autocomplete="new-password">
+      </div>
+      <button class="submit-btn" onclick="changePassword()" style="font-size:14px;padding:12px;">Update password</button>
+      <div id="pw-msg" style="font-size:13px;text-align:center;margin-top:8px;min-height:18px;"></div>
+    </div>
+
     <button class="logout-btn" onclick="signOut()">Sign out</button>
   </div>
 </div>
@@ -509,6 +523,43 @@ function calcDelivery() {
 
   // Save cost per km setting
   localStorage.setItem('calc_cpkm', cpkm);
+}
+
+async function changePassword() {
+  const newPw = document.getElementById('new-pw').value;
+  const confirmPw = document.getElementById('confirm-pw').value;
+  const msg = document.getElementById('pw-msg');
+
+  if (!newPw || !confirmPw) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Please fill in both fields.';
+    return;
+  }
+  if (newPw.length < 6) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Password must be at least 6 characters.';
+    return;
+  }
+  if (newPw !== confirmPw) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Passwords do not match.';
+    return;
+  }
+
+  msg.style.color = 'var(--text3)';
+  msg.textContent = 'Updating...';
+
+  const { error } = await sb.auth.updateUser({ password: newPw });
+
+  if (error) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = error.message;
+  } else {
+    msg.style.color = 'var(--green-dark)';
+    msg.textContent = '✓ Password updated successfully';
+    document.getElementById('new-pw').value = '';
+    document.getElementById('confirm-pw').value = '';
+  }
 }
 
 async function signOut() {
