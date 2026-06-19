@@ -1,4 +1,4 @@
-const CACHE='fuel-v7';
+const CACHE='fuel-v8';
 const CORE=['./','index.html','ops-dashboard.html','manifest.json','dash-manifest.json','icon-192.png','icon-512.png','apple-touch-icon.png'];
 
 self.addEventListener('install',e=>{
@@ -13,11 +13,20 @@ self.addEventListener('activate',e=>{
 });
 
 self.addEventListener('fetch',e=>{
-  const url=e.request.url;
-  // External services always go to network (never cache the live data calls)
-  if(url.includes('script.google.com')||url.includes('googleapis')||url.includes('jsdelivr')||url.includes('cdnjs'))return;
+  const url = e.request.url;
 
-  // NETWORK-FIRST for HTML so app updates always appear when online
+  // NEVER intercept these — let them go straight to network
+  if(url.includes('supabase.co') ||
+     url.includes('script.google.com') ||
+     url.includes('googleapis') ||
+     url.includes('jsdelivr') ||
+     url.includes('cdnjs') ||
+     url.includes('fonts.googleapis') ||
+     url.includes('fonts.gstatic')) {
+    return; // Don't call e.respondWith — browser handles it normally
+  }
+
+  // NETWORK-FIRST for HTML pages
   if(e.request.mode==='navigate'||e.request.destination==='document'||url.endsWith('.html')||url.endsWith('/')){
     e.respondWith(
       fetch(e.request).then(r=>{
@@ -28,10 +37,13 @@ self.addEventListener('fetch',e=>{
     return;
   }
 
-  // CACHE-FIRST for static assets (icons, manifest)
+  // CACHE-FIRST for static assets
   e.respondWith(
     caches.match(e.request).then(c=>c||fetch(e.request).then(r=>{
-      if(r&&r.status===200&&e.request.method==='GET'){const cl=r.clone();caches.open(CACHE).then(ca=>ca.put(e.request,cl));}
+      if(r&&r.status===200&&e.request.method==='GET'){
+        const cl=r.clone();
+        caches.open(CACHE).then(ca=>ca.put(e.request,cl));
+      }
       return r;
     }))
   );
