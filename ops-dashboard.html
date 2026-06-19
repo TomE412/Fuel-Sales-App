@@ -266,7 +266,7 @@ async function dashSignIn() {
 async function fetchData() {
   try {
     const { data, error } = await sb.from('sales')
-      .select('*, profiles(full_name)')
+      .select('*')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -275,14 +275,14 @@ async function fetchData() {
       ...s,
       litres: parseFloat(s.litres) || 0,
       price: parseFloat(s.price_per_litre) || 0,
-      date: s.sale_date,
-      deliveryDate: s.delivery_date || '',
+      date: (s.sale_date || '').split('T')[0],
+      deliveryDate: (s.delivery_date || '').split('T')[0],
       customer: s.customer,
-      location: s.location,
-      fuelType: s.fuel_type,
-      rep: s.rep_name,
+      location: s.location || '',
+      fuelType: s.fuel_type || '',
+      rep: s.rep_name || '',
       delivered: s.status === 'delivered',
-      paymentTerm: s.payment_term
+      paymentTerm: s.payment_term || 'COD'
     }));
 
     // Cache for offline
