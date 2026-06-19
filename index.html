@@ -140,10 +140,11 @@ textarea:focus{border-color:var(--red);background:#fff;}
     </div>
     <div id="sync-badge" class="sync-badge">Ready</div>
   </div>
-  <div class="tabs">
+  <div class="tabs" style="grid-template-columns:repeat(5,1fr);">
     <div class="tab active" onclick="showTab('record',this)">📝 Record</div>
     <div class="tab" onclick="showTab('sales',this)">📋 Sales</div>
     <div class="tab" onclick="showTab('dash',this)">📊 Dash</div>
+    <div class="tab" onclick="showTab('cal',this)">📅 Cal</div>
     <div class="tab" onclick="showTab('more',this)">⚙️ More</div>
   </div>
 
@@ -227,6 +228,15 @@ textarea:focus{border-color:var(--red);background:#fff;}
 
   <!-- DASH TAB -->
   <div class="tab-content" id="tab-dash">
+    <div id="year-chart-wrap" style="background:#fff;border-radius:12px;border:1px solid var(--border);padding:14px;margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">📈 My litres — <span id="chart-year"></span></div>
+      <div style="display:flex;align-items:flex-end;gap:3px;height:80px;" id="rep-year-chart"></div>
+      <div style="display:flex;gap:8px;margin-top:6px;font-size:9px;font-weight:600;">
+        <span style="color:var(--red);">■ This month</span>
+        <span style="color:var(--blue);">■ Past</span>
+        <span style="color:#D3D1C7;">■ Future</span>
+      </div>
+    </div>
     <div class="stat-grid">
       <div class="stat-box"><div class="stat-label">This month</div><div class="stat-value" id="d-month-l" style="color:var(--blue);">0</div><div style="font-size:11px;color:var(--text3);">litres</div></div>
       <div class="stat-box"><div class="stat-label">This month</div><div class="stat-value" id="d-month-v" style="color:var(--green-dark);">$0</div><div style="font-size:11px;color:var(--text3);">value</div></div>
@@ -239,6 +249,31 @@ textarea:focus{border-color:var(--red);background:#fff;}
     </div>
   </div>
 
+  <!-- CALENDAR TAB -->
+  <div class="tab-content" id="tab-cal">
+    <div id="cal-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <button onclick="calNav(-1)" style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;">‹</button>
+      <div id="cal-title" style="font-size:16px;font-weight:700;"></div>
+      <button onclick="calNav(1)" style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;">›</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px;">
+      <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:4px;">Su</div>
+      <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:4px;">Mo</div>
+      <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:4px;">Tu</div>
+      <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:4px;">We</div>
+      <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:4px;">Th</div>
+      <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:4px;">Fr</div>
+      <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:4px;">Sa</div>
+    </div>
+    <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;"></div>
+    <div style="display:flex;gap:12px;margin-top:12px;padding:10px;background:#fff;border-radius:8px;border:1px solid var(--border);">
+      <span style="font-size:11px;font-weight:600;">🟢 Delivery</span>
+      <span style="font-size:11px;font-weight:600;">🟡 Follow up</span>
+      <span style="font-size:11px;font-weight:600;">🔴 Payment due</span>
+    </div>
+    <div id="cal-detail" style="margin-top:10px;"></div>
+  </div>
+
   <!-- MORE TAB -->
   <div class="tab-content" id="tab-more">
     <div class="card">
@@ -247,6 +282,83 @@ textarea:focus{border-color:var(--red);background:#fff;}
       <div style="font-size:12px;color:var(--text3);" id="more-email">—</div>
       <div style="font-size:12px;color:var(--text3);margin-top:2px;" id="more-role">—</div>
     </div>
+
+    <div class="card">
+      <div class="card-title">⛽ Delivery cost calculator</div>
+      <div class="field">
+        <label>Distance to client (km)</label>
+        <input type="number" id="calc-dist" placeholder="e.g. 120" inputmode="decimal">
+      </div>
+      <div class="field">
+        <label>Litres to deliver</label>
+        <input type="number" id="calc-litres" placeholder="e.g. 5000" inputmode="decimal">
+      </div>
+      <div class="field">
+        <label>Depot price per litre ($)</label>
+        <input type="number" id="calc-depot" placeholder="e.g. 1.94" inputmode="decimal" step="0.001">
+      </div>
+      <div class="field">
+        <label>Markup per litre ($)</label>
+        <input type="number" id="calc-markup" placeholder="e.g. 0.05" inputmode="decimal" step="0.001">
+      </div>
+      <div class="field">
+        <label>Cost per km ($) <span style="font-weight:400;color:var(--text3);">— adjustable</span></label>
+        <input type="number" id="calc-cpkm" placeholder="e.g. 2.20" inputmode="decimal" step="0.01" value="2.20">
+      </div>
+      <button class="submit-btn" onclick="calcDelivery()" style="margin-top:8px;">Calculate</button>
+      <div id="calc-result" style="margin-top:12px;display:none;">
+        <div style="background:var(--green-light);border-radius:8px;padding:14px;">
+          <div style="font-size:12px;font-weight:700;color:var(--green-dark);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Result</div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:13px;color:var(--text2);">Transport cost/L</span>
+            <span style="font-size:13px;font-weight:700;font-family:var(--mono);" id="r-transport">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:13px;color:var(--text2);">Depot price/L</span>
+            <span style="font-size:13px;font-weight:700;font-family:var(--mono);" id="r-depot">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:13px;color:var(--text2);">Markup/L</span>
+            <span style="font-size:13px;font-weight:700;font-family:var(--mono);" id="r-markup">—</span>
+          </div>
+          <div style="border-top:1px solid var(--green);margin:8px 0;"></div>
+          <div style="display:flex;justify-content:space-between;">
+            <span style="font-size:15px;font-weight:700;color:var(--green-dark);">Delivered price/L</span>
+            <span style="font-size:15px;font-weight:700;font-family:var(--mono);color:var(--green-dark);" id="r-total">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:6px;">
+            <span style="font-size:13px;color:var(--text2);">Total order value</span>
+            <span style="font-size:13px;font-weight:700;font-family:var(--mono);" id="r-value">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📍 Distance reference — from Harare</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">Use these to estimate distance when client doesn't provide one</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:12px;">
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Mutare</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">265 km</div>
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Bulawayo</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">440 km</div>
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Gweru</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">275 km</div>
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Masvingo</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">292 km</div>
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Chinhoyi</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">116 km</div>
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Bindura</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">88 km</div>
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Marondera</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">72 km</div>
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Kadoma</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">141 km</div>
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Chegutu</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">107 km</div>
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Kwekwe</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">195 km</div>
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Zvishavane</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">340 km</div>
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Nyanga</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">268 km</div>
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Kariba</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">365 km</div>
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Victoria Falls</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">880 km</div>
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Ruwa</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">25 km</div>
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Norton</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">40 km</div>
+        <div style="padding:5px 0;border-bottom:1px solid var(--border);">Chitungwiza</div><div style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:600;font-family:var(--mono);">25 km</div>
+        <div style="padding:5px 0;">Hwange</div><div style="padding:5px 0;font-weight:600;font-family:var(--mono);">790 km</div>
+      </div>
+    </div>
+
     <button class="logout-btn" onclick="signOut()">Sign out</button>
   </div>
 </div>
@@ -297,6 +409,104 @@ async function loadUser(user) {
   await loadSales();
 }
 
+// ---- CALENDAR ----
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+
+function calNav(dir) {
+  calMonth += dir;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  renderCal();
+}
+
+function renderCal() {
+  const MN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('cal-title').textContent = MN[calMonth] + ' ' + calYear;
+
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const today = new Date().toISOString().split('T')[0];
+
+  // Build event map
+  const events = {};
+  allSales.forEach(s => {
+    const addEvent = (dateStr, type) => {
+      if (!dateStr) return;
+      const d = dateStr.split('T')[0];
+      if (!events[d]) events[d] = [];
+      events[d].push(type);
+    };
+    addEvent(s.delivery_date, 'delivery');
+    addEvent(s.followup_date, 'followup');
+    addEvent(s.payment_due, 'payment');
+  });
+
+  let html = '';
+  for (let i = 0; i < firstDay; i++) html += '<div></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    const evs = events[dateStr] || [];
+    const isToday = dateStr === today;
+    const dots = evs.map(e => `<div style="width:6px;height:6px;border-radius:50%;background:${e==='delivery'?'#1D9E75':e==='followup'?'#BA7517':'#D4180A'};margin:0 1px;"></div>`).join('');
+    html += `<div onclick="showCalDay('${dateStr}')" style="min-height:44px;background:${isToday?'var(--red-light)':'#fff'};border:1px solid ${isToday?'var(--red)':'var(--border)'};border-radius:6px;padding:4px;cursor:pointer;text-align:center;">
+      <div style="font-size:12px;font-weight:${isToday?'700':'500'};color:${isToday?'var(--red)':'var(--text)'};">${d}</div>
+      <div style="display:flex;justify-content:center;flex-wrap:wrap;margin-top:2px;">${dots}</div>
+    </div>`;
+  }
+  document.getElementById('cal-grid').innerHTML = html;
+  document.getElementById('cal-detail').innerHTML = '';
+}
+
+function showCalDay(dateStr) {
+  const dayEvents = [];
+  allSales.forEach(s => {
+    if ((s.delivery_date||'').split('T')[0] === dateStr) dayEvents.push({type:'delivery', sale:s});
+    if ((s.followup_date||'').split('T')[0] === dateStr) dayEvents.push({type:'followup', sale:s});
+    if ((s.payment_due||'').split('T')[0] === dateStr) dayEvents.push({type:'payment', sale:s});
+  });
+  const el = document.getElementById('cal-detail');
+  if (!dayEvents.length) { el.innerHTML = ''; return; }
+  const icons = {delivery:'🟢',followup:'🟡',payment:'🔴'};
+  const labels = {delivery:'Delivery',followup:'Follow up',payment:'Payment due'};
+  el.innerHTML = `<div class="card" style="margin-top:0;">
+    <div class="card-title">${dateStr.split('-').reverse().join('/')}</div>
+    ${dayEvents.map(e => `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:16px;">${icons[e.type]}</span>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;">${e.sale.customer}</div>
+        <div style="font-size:11px;color:var(--text3);">${labels[e.type]} · ${(e.sale.litres||0).toLocaleString()} L</div>
+      </div>
+    </div>`).join('')}
+  </div>`;
+}
+
+// ---- CALCULATOR ----
+function calcDelivery() {
+  const dist = parseFloat(document.getElementById('calc-dist').value) || 0;
+  const litres = parseFloat(document.getElementById('calc-litres').value) || 0;
+  const depot = parseFloat(document.getElementById('calc-depot').value) || 0;
+  const markup = parseFloat(document.getElementById('calc-markup').value) || 0;
+  const cpkm = parseFloat(document.getElementById('calc-cpkm').value) || 2.20;
+
+  if (!dist || !litres || !depot) { alert('Please fill in distance, litres and depot price.'); return; }
+
+  // (Distance × 2 × cost per km) ÷ Litres + Depot price + Markup = Delivered price
+  const transport = (dist * 2 * cpkm) / litres;
+  const delivered = transport + depot + markup;
+  const totalValue = delivered * litres;
+
+  document.getElementById('r-transport').textContent = '$' + transport.toFixed(4);
+  document.getElementById('r-depot').textContent = '$' + depot.toFixed(4);
+  document.getElementById('r-markup').textContent = '$' + markup.toFixed(4);
+  document.getElementById('r-total').textContent = '$' + delivered.toFixed(4);
+  document.getElementById('r-value').textContent = '$' + totalValue.toFixed(2);
+  document.getElementById('calc-result').style.display = 'block';
+
+  // Save cost per km setting
+  localStorage.setItem('calc_cpkm', cpkm);
+}
+
 async function signOut() {
   await sb.auth.signOut();
   currentUser = null;
@@ -308,6 +518,12 @@ async function signOut() {
 }
 
 // ---- SALES ----
+async function markPaid(id) {
+  if (!confirm('Mark this sale as paid?')) return;
+  const { error } = await sb.from('sales').update({ paid: true }).eq('id', id);
+  if (!error) await loadSales();
+}
+
 async function loadSales() {
   setSyncBadge('loading');
   const { data, error } = await sb.from('sales')
@@ -457,6 +673,28 @@ function renderDash() {
   document.getElementById('d-pending').textContent = pending;
   document.getElementById('d-credit').textContent = '$' + credit.toLocaleString(undefined,{maximumFractionDigits:0});
 
+  // Year chart
+  const chartYear = now.getFullYear();
+  const curM2 = now.getMonth();
+  document.getElementById('chart-year').textContent = chartYear;
+  const MNS = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+  const monthly = Array(12).fill(0);
+  allSales.forEach(s => {
+    const d = new Date((s.sale_date||'')+'T00:00:00');
+    if (d.getFullYear()===chartYear) monthly[d.getMonth()] += s.litres||0;
+  });
+  const maxM = Math.max(...monthly,1);
+  document.getElementById('rep-year-chart').innerHTML = MNS.map((m,i) => {
+    const h = Math.max(Math.round((monthly[i]/maxM)*70),monthly[i]>0?3:2);
+    const col = i===curM2?'var(--red)':i<curM2&&monthly[i]>0?'var(--blue)':'#D3D1C7';
+    const val = monthly[i]>=1000?(monthly[i]/1000).toFixed(0)+'k':'';
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+      <div style="font-size:7px;font-weight:700;color:${col};height:10px;">${val}</div>
+      <div style="width:100%;height:${h}px;background:${col};border-radius:2px 2px 0 0;"></div>
+      <div style="font-size:7px;font-weight:600;color:${i===curM2?'var(--red)':'var(--text3)'};">${m}</div>
+    </div>`;
+  }).join('');
+
   const upcoming = allSales.filter(s => s.delivery_date && s.status!=='delivered')
     .sort((a,b) => new Date(a.delivery_date)-new Date(b.delivery_date))
     .slice(0,5);
@@ -482,6 +720,12 @@ function showTab(id, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   if (btn) btn.classList.add('active');
+  if (id === 'cal') renderCal();
+  if (id === 'more') {
+    // Restore saved cost per km
+    const saved = localStorage.getItem('calc_cpkm');
+    if (saved) document.getElementById('calc-cpkm').value = saved;
+  }
 }
 
 function selectFuel(val, btn) {
