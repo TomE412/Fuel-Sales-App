@@ -96,11 +96,67 @@ textarea:focus{border-color:var(--red);background:#fff;}
 .empty{text-align:center;padding:40px 20px;color:var(--text3);}
 .empty-icon{font-size:36px;margin-bottom:10px;opacity:0.4;}
 
+/* PIN LOCK SCREEN */
+.lock-screen{position:fixed;inset:0;background:var(--bg);z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center;padding:32px;}
+.lock-screen.active{display:flex;}
+.lock-logo{margin-bottom:24px;}
+.lock-title{font-size:20px;font-weight:700;margin-bottom:4px;text-align:center;}
+.lock-sub{font-size:13px;color:var(--text3);margin-bottom:28px;text-align:center;}
+.lock-dots{display:flex;justify-content:center;gap:14px;margin-bottom:28px;}
+.lock-dot{width:16px;height:16px;border-radius:50%;background:var(--border);transition:background 0.15s;}
+.lock-dot.filled{background:var(--red);}
+.lock-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:280px;}
+.lock-key{padding:18px;border:1px solid var(--border);border-radius:12px;font-size:22px;font-weight:600;background:#fff;cursor:pointer;font-family:var(--mono);text-align:center;transition:background 0.1s;}
+.lock-key:active{background:var(--border);}
+.lock-err{color:var(--red);font-size:13px;text-align:center;margin-top:12px;min-height:20px;font-weight:500;}
+.lock-timer{color:var(--amber);font-size:13px;text-align:center;margin-top:8px;font-weight:600;}
+.lock-signout{margin-top:20px;padding:8px 16px;background:transparent;border:none;color:var(--text3);font-size:12px;cursor:pointer;text-decoration:underline;}
+
 /* LOGOUT */
 .logout-btn{width:100%;padding:13px;background:var(--gray);color:var(--text2);border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;margin-top:12px;}
 </style>
 </head>
 <body>
+
+<!-- PIN LOCK SCREEN -->
+<div class="lock-screen" id="lock-screen">
+  <div class="lock-logo">
+    <svg width="120" height="46" viewBox="0 0 240 92" xmlns="http://www.w3.org/2000/svg">
+      <text x="2" y="52" font-family="Arial Black,Arial" font-weight="900" font-size="54" fill="#1a1a18">SKELSEE</text>
+      <rect x="2" y="58" width="236" height="30" rx="3" fill="#D4180A"/>
+      <text x="46" y="80" font-family="Arial Black,Arial" font-weight="900" font-size="22" fill="#fff" letter-spacing="3">TRADING</text>
+      <ellipse cx="22" cy="73" rx="9" ry="11" fill="#F5C400"/>
+      <polygon points="22,56 17,64 27,64" fill="#F5C400"/>
+    </svg>
+  </div>
+  <div class="lock-title">Fuel Sales</div>
+  <div class="lock-sub" id="lock-user">Enter your PIN to continue</div>
+  <div class="lock-dots">
+    <div class="lock-dot" id="ld0"></div>
+    <div class="lock-dot" id="ld1"></div>
+    <div class="lock-dot" id="ld2"></div>
+    <div class="lock-dot" id="ld3"></div>
+    <div class="lock-dot" id="ld4"></div>
+    <div class="lock-dot" id="ld5"></div>
+  </div>
+  <div class="lock-grid">
+    <button class="lock-key" onclick="lockKey('1')">1</button>
+    <button class="lock-key" onclick="lockKey('2')">2</button>
+    <button class="lock-key" onclick="lockKey('3')">3</button>
+    <button class="lock-key" onclick="lockKey('4')">4</button>
+    <button class="lock-key" onclick="lockKey('5')">5</button>
+    <button class="lock-key" onclick="lockKey('6')">6</button>
+    <button class="lock-key" onclick="lockKey('7')">7</button>
+    <button class="lock-key" onclick="lockKey('8')">8</button>
+    <button class="lock-key" onclick="lockKey('9')">9</button>
+    <button class="lock-key" onclick="lockKey('clr')" style="font-size:13px;color:var(--text2);">CLR</button>
+    <button class="lock-key" onclick="lockKey('0')">0</button>
+    <button class="lock-key" onclick="lockKey('del')">⌫</button>
+  </div>
+  <div class="lock-err" id="lock-err"></div>
+  <div class="lock-timer" id="lock-timer"></div>
+  <button class="lock-signout" onclick="signOutFromLock()">Sign in with email instead</button>
+</div>
 
 <!-- AUTH SCREEN -->
 <div class="screen active" id="screen-auth">
@@ -364,6 +420,21 @@ textarea:focus{border-color:var(--red);background:#fff;}
     </div>
 
     <div class="card">
+      <div class="card-title">🔒 Change PIN</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px;">6 digit PIN used to unlock the app offline</div>
+      <div class="field">
+        <label>New PIN (6 digits)</label>
+        <input type="password" id="new-pin" placeholder="••••••" inputmode="numeric" maxlength="6" pattern="[0-9]{6}">
+      </div>
+      <div class="field">
+        <label>Confirm new PIN</label>
+        <input type="password" id="confirm-pin" placeholder="••••••" inputmode="numeric" maxlength="6" pattern="[0-9]{6}">
+      </div>
+      <button class="submit-btn" onclick="changePin()" style="font-size:14px;padding:12px;">Update PIN</button>
+      <div id="pin-msg" style="font-size:13px;text-align:center;margin-top:8px;min-height:18px;"></div>
+    </div>
+
+    <div class="card">
       <div class="card-title">🔑 Change password</div>
       <div class="field">
         <label>New password</label>
@@ -393,6 +464,141 @@ let curFuel = 'Diesel';
 let curTerm = 'COD';
 let curFollowup = 'none';
 
+// ---- PIN LOCK ----
+let lockBuf = '';
+let lockAttempts = 0;
+let lockTimerInterval = null;
+const DEFAULT_PIN = '123456';
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_SECS = 30;
+
+function getPinKey(userId) {
+  return 'pin_' + userId;
+}
+
+function getStoredPin() {
+  if (!currentUser) return DEFAULT_PIN;
+  return localStorage.getItem(getPinKey(currentUser.id)) || DEFAULT_PIN;
+}
+
+function showLockScreen() {
+  document.getElementById('lock-screen').classList.add('active');
+  document.getElementById('screen-app').classList.remove('active');
+  document.getElementById('screen-auth').classList.remove('active');
+  lockBuf = '';
+  updateLockDots();
+  document.getElementById('lock-err').textContent = '';
+  document.getElementById('lock-timer').textContent = '';
+  // Show which user
+  if (currentProfile) {
+    document.getElementById('lock-user').textContent = 'Hi ' + currentProfile.full_name + ', enter your PIN';
+  }
+  checkLockout();
+}
+
+function hideLockScreen() {
+  document.getElementById('lock-screen').classList.remove('active');
+  document.getElementById('screen-app').classList.add('active');
+}
+
+function updateLockDots() {
+  for (let i = 0; i < 6; i++) {
+    document.getElementById('ld' + i).classList.toggle('filled', i < lockBuf.length);
+  }
+}
+
+function lockKey(k) {
+  const lockedUntil = parseInt(localStorage.getItem('lock_until') || '0');
+  if (Date.now() < lockedUntil) return;
+
+  if (k === 'clr') {
+    lockBuf = '';
+    updateLockDots();
+    document.getElementById('lock-err').textContent = '';
+    return;
+  }
+  if (k === 'del') {
+    lockBuf = lockBuf.slice(0, -1);
+    updateLockDots();
+    return;
+  }
+  if (lockBuf.length >= 6) return;
+
+  lockBuf += k;
+  updateLockDots();
+
+  if (lockBuf.length === 6) {
+    setTimeout(() => checkLockPin(), 100);
+  }
+}
+
+function checkLockPin() {
+  if (lockBuf === getStoredPin()) {
+    lockAttempts = 0;
+    localStorage.removeItem('lock_until');
+    localStorage.removeItem('lock_attempts');
+    hideLockScreen();
+    renderSales();
+    renderDash();
+  } else {
+    lockAttempts++;
+    localStorage.setItem('lock_attempts', lockAttempts);
+    lockBuf = '';
+    updateLockDots();
+
+    if (lockAttempts >= MAX_ATTEMPTS) {
+      const until = Date.now() + LOCKOUT_SECS * 1000;
+      localStorage.setItem('lock_until', until);
+      localStorage.setItem('lock_attempts', '0');
+      lockAttempts = 0;
+      startLockTimer(until);
+      document.getElementById('lock-err').textContent = '';
+    } else {
+      const remaining = MAX_ATTEMPTS - lockAttempts;
+      document.getElementById('lock-err').textContent = 'Incorrect PIN - ' + remaining + ' attempt' + (remaining !== 1 ? 's' : '') + ' remaining';
+    }
+  }
+}
+
+function startLockTimer(until) {
+  if (lockTimerInterval) clearInterval(lockTimerInterval);
+  const timerEl = document.getElementById('lock-timer');
+  document.querySelectorAll('.lock-key').forEach(b => b.style.opacity = '0.4');
+
+  lockTimerInterval = setInterval(() => {
+    const remaining = Math.ceil((until - Date.now()) / 1000);
+    if (remaining <= 0) {
+      clearInterval(lockTimerInterval);
+      timerEl.textContent = '';
+      document.getElementById('lock-err').textContent = '';
+      document.querySelectorAll('.lock-key').forEach(b => b.style.opacity = '1');
+    } else {
+      timerEl.textContent = 'Too many attempts - try again in ' + remaining + 's';
+    }
+  }, 500);
+}
+
+function checkLockout() {
+  const lockedUntil = parseInt(localStorage.getItem('lock_until') || '0');
+  if (Date.now() < lockedUntil) {
+    startLockTimer(lockedUntil);
+  }
+  lockAttempts = parseInt(localStorage.getItem('lock_attempts') || '0');
+}
+
+async function signOutFromLock() {
+  if (!confirm('Sign out completely? You will need internet to sign back in.')) return;
+  // Clear PIN for this user so they must email/password again
+  if (currentUser) localStorage.removeItem(getPinKey(currentUser.id));
+  await sb.auth.signOut();
+  currentUser = null;
+  currentProfile = null;
+  allSales = [];
+  document.getElementById('lock-screen').classList.remove('active');
+  document.getElementById('screen-app').classList.remove('active');
+  document.getElementById('screen-auth').classList.add('active');
+}
+
 // ---- AUTH ----
 async function signIn() {
   const email = document.getElementById('auth-email').value.trim();
@@ -405,10 +611,16 @@ async function signIn() {
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if (error) { errEl.textContent = error.message; return; }
 
-  await loadUser(data.user);
+  // Cache user for offline PIN access
+  localStorage.setItem('cached_user_id', data.user.id);
+  const { data: profile } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
+  if (profile) localStorage.setItem('cached_profile', JSON.stringify(profile));
+
+  // After email/password login, no need for PIN this session
+  await loadUser(data.user, false);
 }
 
-async function loadUser(user) {
+async function loadUser(user, showLock = false) {
   currentUser = user;
   const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
   currentProfile = profile;
@@ -419,12 +631,23 @@ async function loadUser(user) {
   document.getElementById('more-role').textContent = 'Role: ' + (profile?.role || 'rep');
 
   document.getElementById('screen-auth').classList.remove('active');
-  document.getElementById('screen-app').classList.add('active');
 
   // Set today's date
   document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
 
-  await loadSales();
+  // Store default PIN if not set for this user
+  if (!localStorage.getItem(getPinKey(user.id))) {
+    localStorage.setItem(getPinKey(user.id), DEFAULT_PIN);
+  }
+
+  if (showLock) {
+    showLockScreen();
+    // Load sales in background so they're ready when unlocked
+    loadSales();
+  } else {
+    document.getElementById('screen-app').classList.add('active');
+    await loadSales();
+  }
 }
 
 // ---- CALENDAR ----
@@ -523,6 +746,34 @@ function calcDelivery() {
 
   // Save cost per km setting
   localStorage.setItem('calc_cpkm', cpkm);
+}
+
+function changePin() {
+  const newPin = document.getElementById('new-pin').value;
+  const confirmPin = document.getElementById('confirm-pin').value;
+  const msg = document.getElementById('pin-msg');
+
+  if (!newPin || !confirmPin) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Please fill in both fields.';
+    return;
+  }
+  if (!/^[0-9]{6}$/.test(newPin)) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'PIN must be exactly 6 digits.';
+    return;
+  }
+  if (newPin !== confirmPin) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'PINs do not match.';
+    return;
+  }
+
+  localStorage.setItem(getPinKey(currentUser.id), newPin);
+  msg.style.color = 'var(--green-dark)';
+  msg.textContent = '✓ PIN updated successfully';
+  document.getElementById('new-pin').value = '';
+  document.getElementById('confirm-pin').value = '';
 }
 
 async function changePassword() {
@@ -827,7 +1078,20 @@ function setSyncBadge(state) {
 // Check for existing session on load
 sb.auth.getSession().then(async ({ data }) => {
   if (data.session?.user) {
-    await loadUser(data.session.user);
+    // Show PIN lock screen instead of going straight to app
+    await loadUser(data.session.user, true);
+  }
+}).catch(() => {
+  // If offline and no session, try to work with cached PIN
+  const cachedUserId = localStorage.getItem('cached_user_id');
+  const cachedProfile = localStorage.getItem('cached_profile');
+  if (cachedUserId && cachedProfile) {
+    currentUser = { id: cachedUserId };
+    currentProfile = JSON.parse(cachedProfile);
+    document.getElementById('user-name-display').textContent = currentProfile.full_name;
+    document.getElementById('more-name').textContent = currentProfile.full_name;
+    document.getElementById('more-role').textContent = 'Role: ' + currentProfile.role;
+    showLockScreen();
   }
 });
 
