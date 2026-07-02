@@ -176,12 +176,22 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
         </div>
         <div class="panel-body" id="today-list"><div class="empty-msg">No deliveries scheduled for today</div></div>
       </div>
-      <div class="panel scroll">
-        <div class="ph">
-          <div class="ph-title" style="color:var(--blue);">📅 Orders this week — newest first</div>
-          <span class="ph-count" id="week-count" style="background:var(--blue-light);color:var(--blue-dark);">0</span>
+      <!-- SPLIT: Upcoming and Delivered side by side -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:1;min-height:0;">
+        <div class="panel scroll" style="min-height:0;">
+          <div class="ph">
+            <div class="ph-title" style="color:var(--blue);">📅 Upcoming deliveries</div>
+            <span class="ph-count" id="week-count" style="background:var(--blue-light);color:var(--blue-dark);">0</span>
+          </div>
+          <div class="panel-body" id="week-list"><div class="empty-msg">No upcoming deliveries</div></div>
         </div>
-        <div class="panel-body" id="week-list"><div class="empty-msg">No orders this week yet</div></div>
+        <div class="panel scroll" style="min-height:0;">
+          <div class="ph">
+            <div class="ph-title" style="color:var(--green-dark);">✓ Delivered</div>
+            <span class="ph-count" id="delivered-count" style="background:var(--green-light);color:var(--green-dark);">0</span>
+          </div>
+          <div class="panel-body" id="delivered-list"><div class="empty-msg">No completed deliveries yet</div></div>
+        </div>
       </div>
     </div>
     <div class="col-right">
@@ -197,6 +207,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
           <span style="color:#D3D1C7;">■ Future</span>
         </div>
       </div>
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title" style="color:var(--amber);">💰 Payments to chase this week</div>
+          <span class="ph-count" id="pay-count" style="background:var(--amber-light);color:var(--amber);">0</span>
+        </div>
+        <div id="pay-list"><div class="empty-msg">No payments due this week</div></div>
+      </div>
+
       <div class="panel">
         <div class="ph">
           <div class="ph-title" style="color:var(--amber);">🏆 Rep leaderboard — this month</div>
@@ -349,27 +367,32 @@ function renderAll() {
     toEl.innerHTML = '<div class="empty-msg">No deliveries scheduled for today</div>';
   }
 
-  // ORDERS THIS WEEK
-  const weekSales = allSales.filter(s => {
+  // Split into UPCOMING and DELIVERED
+  const upcomingSales = allSales.filter(s => {
+    if (s.delivered) return false;
     const sd = (s.date||'').split('T')[0];
     if (!sd || sd < weekAgo) return false;
-    if (s.delivered) {
-      const dd = (s.deliveryDate||'').split('T')[0];
-      if (dd) {
-        const days = Math.round((now - new Date(dd+'T00:00:00'))/86400000);
-        if (days > 7) return false;
-      }
-    }
     return true;
   });
 
-  document.getElementById('week-count').textContent = weekSales.length;
+  const deliveredSales = allSales.filter(s => {
+    if (!s.delivered) return false;
+    const dd = (s.deliveryDate||'').split('T')[0];
+    if (!dd) return false;
+    const days = Math.round((now - new Date(dd+'T00:00:00'))/86400000);
+    return days <= 7 && days >= -7;
+  });
+
+  document.getElementById('week-count').textContent = upcomingSales.length;
+  document.getElementById('delivered-count').textContent = deliveredSales.length;
+
   const weekEl = document.getElementById('week-list');
-  if (weekSales.length) {
-    weekEl.innerHTML = weekSales.map(s => {
+  if (upcomingSales.length) {
+    weekEl.innerHTML = upcomingSales.map(s => {
       const sd = (s.date||'').split('T')[0];
-      const dd = new Date(sd+'T00:00:00');
-      const isToday = sd === today;
+      const deldate = (s.deliveryDate||'').split('T')[0];
+      const dd = deldate ? new Date(deldate+'T00:00:00') : new Date(sd+'T00:00:00');
+      const isToday = deldate === today;
       const isNew = !lastKnownIds.has(String(s.id)) && !isFirstLoad;
       const fp = s.fuelType ? `<span class="pill ${s.fuelType==='Petrol'?'p-petrol':'p-diesel'}">${s.fuelType}</span>` : '';
       const dp = s.delivered ? `<span class="pill p-del">✓ Delivered</span>` : '';
@@ -384,12 +407,36 @@ function renderAll() {
           <div class="order-name${s.delivered?' delivered':''}">${s.customer}${np}${fp}${dp}</div>
           <div class="order-meta">${s.location||'—'} · Del: ${fmtDate(s.deliveryDate)} · ${s.rep}</div>
           ${ts?`<div class="order-time">Received: ${ts}</div>`:''}
+          ${s.notes?`<div style="font-size:11px;color:var(--text2);margin-top:3px;background:var(--gray-light);padding:4px 6px;border-radius:4px;border-left:2px solid var(--amber);">📝 ${s.notes}</div>`:''}
         </div>
         <div class="order-litres">${(s.litres||0).toLocaleString()} L</div>
       </div>`;
     }).join('');
   } else {
-    weekEl.innerHTML = '<div class="empty-msg">No orders this week yet</div>';
+    weekEl.innerHTML = '<div class="empty-msg">No upcoming deliveries</div>';
+  }
+
+  // DELIVERED LIST
+  const delEl = document.getElementById('delivered-list');
+  if (deliveredSales.length) {
+    delEl.innerHTML = deliveredSales.map(s => {
+      const dd = (s.deliveryDate||'').split('T')[0];
+      const d = dd ? new Date(dd+'T00:00:00') : null;
+      const fp = s.fuelType ? `<span class="pill ${s.fuelType==='Petrol'?'p-petrol':'p-diesel'}">${s.fuelType}</span>` : '';
+      return `<div class="order-row" style="opacity:0.6;">
+        <div class="date-box" style="background:var(--green-light);border-color:var(--green);">
+          <div class="date-num" style="color:var(--green-dark);">${d?String(d.getDate()).padStart(2,'0'):'—'}</div>
+          <div class="date-mon" style="color:var(--green-dark);">${d?MN[d.getMonth()]:''}</div>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="order-name delivered">${s.customer}${fp}</div>
+          <div class="order-meta">${s.location||'—'} · ${s.rep}</div>
+        </div>
+        <div class="order-litres" style="color:var(--gray-text);">${(s.litres||0).toLocaleString()} L</div>
+      </div>`;
+    }).join('');
+  } else {
+    delEl.innerHTML = '<div class="empty-msg">No completed deliveries yet</div>';
   }
 
   // YEAR CHART
@@ -447,9 +494,46 @@ function renderAll() {
     repEl.innerHTML = '<div class="empty-msg">No sales this month yet</div>';
   }
 
-  // TICKER
-  const items = allSales.slice(0,12).map(s =>
-    `<span class="ticker-item">🛢 ${s.rep} → ${s.customer} · ${(s.litres||0).toLocaleString()} L · ${s.location||'—'} · ${fmtDate(s.deliveryDate)}</span><span style="color:rgba(255,255,255,0.4);font-size:14px;"> | </span>`
+  // PAYMENTS DUE THIS WEEK
+  const in7 = new Date(now.getTime() + 7*86400000);
+  const in7Str = in7.toISOString().split('T')[0];
+  const paymentsDue = allSales.filter(s => {
+    if (s.paid) return false;
+    if (!s.payment_due) return false;
+    if (s.payment_term === 'COD') return false;
+    const pd = (s.payment_due||'').split('T')[0];
+    if (!pd) return false;
+    // Only upcoming, not overdue
+    return pd >= today && pd <= in7Str;
+  }).sort((a,b) => (a.payment_due||'').localeCompare(b.payment_due||''));
+
+  document.getElementById('pay-count').textContent = paymentsDue.length;
+  const payEl = document.getElementById('pay-list');
+  if (paymentsDue.length) {
+    payEl.innerHTML = paymentsDue.map(s => {
+      const pd = (s.payment_due||'').split('T')[0];
+      const d = pd ? new Date(pd+'T00:00:00') : null;
+      const daysUntil = d ? Math.round((d - now)/86400000) : 0;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--gray-light);">
+        <div style="min-width:40px;text-align:center;">
+          <div style="font-size:11px;font-weight:700;color:var(--amber);">${daysUntil}d</div>
+          <div style="font-size:9px;color:var(--gray-text);">${d?String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'):'—'}</div>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;font-weight:700;">${s.customer}</div>
+          <div style="font-size:10px;color:var(--gray-text);">${s.rep}</div>
+        </div>
+        <div style="font-size:11px;font-weight:700;font-family:var(--mono);color:var(--amber);">${(s.litres||0).toLocaleString()} L</div>
+      </div>`;
+    }).join('');
+  } else {
+    payEl.innerHTML = '<div class="empty-msg">No payments due this week</div>';
+  }
+
+  // TICKER — only upcoming (not delivered)
+  const tickerSales = allSales.filter(s => !s.delivered).slice(0,12);
+  const items = tickerSales.map(s =>
+    `<span class="ticker-item">🛢 ${s.rep} → ${s.customer} · ${(s.litres||0).toLocaleString()} L · ${s.location||'—'} · Del: ${fmtDate(s.deliveryDate)}</span><span style="color:rgba(255,255,255,0.4);font-size:14px;"> | </span>`
   ).join('');
   const track = document.getElementById('ticker-track');
   if (items) track.innerHTML = items + items;
