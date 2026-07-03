@@ -945,16 +945,19 @@ function renderSales() {
     const delivered = s.status === 'delivered';
     const fuelPill = s.fuel_type ? `<span class="pill ${s.fuel_type==='Petrol'?'p-petrol':'p-diesel'}">${s.fuel_type}</span>` : '';
     const delPill = delivered ? `<span class="pill p-del">✓ Delivered</span>` : '';
+    const paidPill = s.paid ? `<span class="pill p-del">✓ Paid</span>` : '';
     const delBtn = !delivered && s.delivery_date ?
       `<button class="del-btn" onclick="markDelivered(${s.id})">🚛 Mark as delivered</button>` : '';
-    return `<div class="sale-row" style="opacity:${delivered?'0.6':'1'}">
+    const paidBtn = !s.paid && s.payment_term !== 'COD' ?
+      `<button class="del-btn" style="background:var(--amber);margin-top:6px;" onclick="markPaid(${s.id})">💰 Mark as paid</button>` : '';
+    return `<div class="sale-row" style="opacity:${delivered?'0.7':'1'}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-        <div class="sale-customer" style="${delivered?'text-decoration:line-through;color:var(--text3);':''}">${s.customer}${fuelPill}${delPill}</div>
+        <div class="sale-customer" style="${delivered?'text-decoration:line-through;color:var(--text3);':''}">${s.customer}${fuelPill}${delPill}${paidPill}</div>
         <div class="sale-litres">${(s.litres||0).toLocaleString()} L</div>
       </div>
       <div class="sale-meta">${s.location||'—'} · ${fmtDate(s.sale_date)} · ${s.payment_term}</div>
       <div class="sale-meta">Del: ${fmtDate(s.delivery_date)} · Pay due: ${fmtDate(s.payment_due)}</div>
-      ${delBtn}
+      ${delBtn}${paidBtn}
     </div>`;
   }).join('');
 }
