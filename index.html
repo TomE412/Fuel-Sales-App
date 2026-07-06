@@ -1173,6 +1173,22 @@ function setSyncBadge(state) {
 }
 
 // ---- INIT ----
+// SAFETY: force-dismiss loading screen after 3 seconds no matter what
+setTimeout(() => {
+  const loading = document.getElementById('screen-loading');
+  if (loading && loading.classList.contains('active')) {
+    loading.classList.remove('active');
+    loading.style.display = 'none';
+    // If no other screen is showing, show the login
+    const app = document.getElementById('screen-app');
+    const auth = document.getElementById('screen-auth');
+    const lock = document.getElementById('lock-screen');
+    if (!app.classList.contains('active') && !auth.classList.contains('active') && !lock.classList.contains('active')) {
+      auth.classList.add('active');
+    }
+  }
+}, 3000);
+
 // Check for existing session on load
 sb.auth.getSession().then(async ({ data }) => {
   // Hide loading screen
