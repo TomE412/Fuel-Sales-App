@@ -310,24 +310,53 @@ async function dashSignIn() {
 // FETCH from Supabase
 async function fetchData() {
   try {
+    // SECURITY: Only fetch fields needed for dashboard, limit to last 90 days
+    const daysBack = 90;
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - daysBack);
+
     const { data, error } = await sb.from('sales')
-      .select('*')
+      .select(`
+        id,
+        sale_date,
+        delivery_date,
+        payment_due,
+        payment_term,
+        followup_date,
+        created_at,
+        customer,
+        location,
+        litres,
+        fuel_type,
+        rep_name,
+        status,
+        paid,
+        notes
+      `)
+      .gte('sale_date', fromDate.toISOString().split('T')[0])
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
     allSales = (data || []).map(s => ({
-      ...s,
+      id: s.id,
       litres: parseFloat(s.litres) || 0,
-      price: parseFloat(s.price_per_litre) || 0,
       date: (s.sale_date || '').split('T')[0],
       deliveryDate: (s.delivery_date || '').split('T')[0],
+      payment_due: s.payment_due,
+      payment_term: s.payment_term || 'COD',
+      paymentTerm: s.payment_term || 'COD',
+      followup_date: s.followup_date,
       customer: s.customer,
       location: s.location || '',
       fuelType: s.fuel_type || '',
       rep: s.rep_name || '',
+      rep_name: s.rep_name || '',
       delivered: s.status === 'delivered',
-      paymentTerm: s.payment_term || 'COD'
+      status: s.status,
+      paid: s.paid,
+      notes: s.notes || '',
+      created_at: s.created_at
     }));
 
     // Cache for offline

@@ -900,8 +900,7 @@ async function recordSale() {
   setSyncBadge('loading');
 
   const { error } = await sb.from('sales').insert({
-    rep_id: currentUser.id,
-    rep_name: currentProfile?.full_name || currentUser.email,
+    rep_id: currentUser.id, // rep_name is set automatically by database trigger
     sale_date: date,
     customer,
     location,
