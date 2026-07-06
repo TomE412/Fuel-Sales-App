@@ -303,6 +303,11 @@ textarea:focus{border-color:var(--red);background:#fff;}
       <div class="card-title">Upcoming deliveries</div>
       <div id="d-deliveries"><div class="empty" style="padding:16px;"><p style="font-size:13px;">No upcoming deliveries</p></div></div>
     </div>
+    <div class="card">
+      <div class="card-title">💰 Payments outstanding</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Tap "Mark as paid" once payment is received</div>
+      <div id="d-payments"><div class="empty" style="padding:16px;"><p style="font-size:13px;">No outstanding payments</p></div></div>
+    </div>
   </div>
 
   <!-- CALENDAR TAB -->
@@ -830,6 +835,24 @@ async function markPaid(id) {
   if (!error) await loadSales();
 }
 
+async function markPaidFromDash(id) {
+  const sale = allSales.find(s => s.id === id);
+  if (!sale) return;
+  if (!confirm('Mark ' + sale.customer + ' as paid?')) return;
+  const { error } = await sb.from('sales').update({ paid: true }).eq('id', id);
+  if (error) { alert('Error: ' + error.message); return; }
+  await loadSales();
+}
+
+async function cancelSale(id) {
+  const sale = allSales.find(s => s.id === id);
+  if (!sale) return;
+  if (!confirm('Cancel this sale for ' + sale.customer + '?\n\nThis will remove it from all totals and graphs but keep it in the database for records.')) return;
+  const { error } = await sb.from('sales').update({ status: 'cancelled' }).eq('id', id);
+  if (error) { alert('Error: ' + error.message); return; }
+  await loadSales();
+}
+
 async function loadSales() {
   setSyncBadge('loading');
   const { data, error } = await sb.from('sales')
@@ -946,18 +969,22 @@ function renderSales() {
     const fuelPill = s.fuel_type ? `<span class="pill ${s.fuel_type==='Petrol'?'p-petrol':'p-diesel'}">${s.fuel_type}</span>` : '';
     const delPill = delivered ? `<span class="pill p-del">✓ Delivered</span>` : '';
     const paidPill = s.paid ? `<span class="pill p-del">✓ Paid</span>` : '';
-    const delBtn = !delivered && s.delivery_date ?
+    const cancelledPill = s.status === 'cancelled' ? `<span class="pill" style="background:#F0F0EE;color:#5a5a57;">✗ Cancelled</span>` : '';
+    const isCancelled = s.status === 'cancelled';
+    const delBtn = !delivered && !isCancelled && s.delivery_date ?
       `<button class="del-btn" onclick="markDelivered(${s.id})">🚛 Mark as delivered</button>` : '';
-    const paidBtn = !s.paid && s.payment_term !== 'COD' ?
+    const paidBtn = !s.paid && !isCancelled && s.payment_term !== 'COD' ?
       `<button class="del-btn" style="background:var(--amber);margin-top:6px;" onclick="markPaid(${s.id})">💰 Mark as paid</button>` : '';
-    return `<div class="sale-row" style="opacity:${delivered?'0.7':'1'}">
+    const cancelBtn = !isCancelled && !delivered ?
+      `<button class="del-btn" style="background:transparent;color:var(--red);border:1px solid var(--red);margin-top:6px;" onclick="cancelSale(${s.id})">✗ Cancel sale</button>` : '';
+    return `<div class="sale-row" style="opacity:${(delivered||isCancelled)?'0.6':'1'}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-        <div class="sale-customer" style="${delivered?'text-decoration:line-through;color:var(--text3);':''}">${s.customer}${fuelPill}${delPill}${paidPill}</div>
+        <div class="sale-customer" style="${(delivered||isCancelled)?'text-decoration:line-through;color:var(--text3);':''}">${s.customer}${fuelPill}${delPill}${paidPill}${cancelledPill}</div>
         <div class="sale-litres">${(s.litres||0).toLocaleString()} L</div>
       </div>
       <div class="sale-meta">${s.location||'—'} · ${fmtDate(s.sale_date)} · ${s.payment_term}</div>
       <div class="sale-meta">Del: ${fmtDate(s.delivery_date)} · Pay due: ${fmtDate(s.payment_due)}</div>
-      ${delBtn}${paidBtn}
+      ${delBtn}${paidBtn}${cancelBtn}
     </div>`;
   }).join('');
 }
@@ -966,15 +993,18 @@ function renderDash() {
   const now = new Date();
   const m = now.getMonth(), y = now.getFullYear();
 
-  const monthSales = allSales.filter(s => {
+  // Exclude cancelled sales from all stats and graphs
+  const activeSales = allSales.filter(s => s.status !== 'cancelled');
+
+  const monthSales = activeSales.filter(s => {
     const d = new Date(s.sale_date);
     return d.getMonth()===m && d.getFullYear()===y;
   });
 
   const monthL = monthSales.reduce((a,s) => a + (s.litres||0), 0);
   const monthV = monthSales.reduce((a,s) => a + (s.litres||0)*(s.price_per_litre||0), 0);
-  const pending = allSales.filter(s => s.status==='pending' && s.delivery_date).length;
-  const credit = allSales.filter(s => !s.paid && s.payment_term!=='COD')
+  const pending = activeSales.filter(s => s.status==='pending' && s.delivery_date).length;
+  const credit = activeSales.filter(s => !s.paid && s.payment_term!=='COD')
     .reduce((a,s) => a + (s.litres||0)*(s.price_per_litre||0), 0);
 
   document.getElementById('d-month-l').textContent = monthL.toLocaleString();
@@ -982,13 +1012,46 @@ function renderDash() {
   document.getElementById('d-pending').textContent = pending;
   document.getElementById('d-credit').textContent = '$' + credit.toLocaleString(undefined,{maximumFractionDigits:0});
 
+  // PAYMENTS OUTSTANDING
+  const outstanding = allSales.filter(s => 
+    !s.paid && s.payment_term !== 'COD' && s.status !== 'cancelled'
+  ).sort((a,b) => {
+    const da = a.payment_due || '9999-99-99';
+    const db = b.payment_due || '9999-99-99';
+    return da.localeCompare(db);
+  });
+
+  const payEl = document.getElementById('d-payments');
+  if (outstanding.length) {
+    payEl.innerHTML = outstanding.map(s => {
+      const pd = (s.payment_due||'').split('T')[0];
+      const d = pd ? new Date(pd+'T00:00:00') : null;
+      const daysUntil = d ? Math.round((d - now)/86400000) : null;
+      const overdue = daysUntil !== null && daysUntil < 0;
+      const dueLabel = daysUntil === null ? 'No due date' :
+        overdue ? Math.abs(daysUntil) + 'd overdue' :
+        daysUntil === 0 ? 'Due today' :
+        'Due in ' + daysUntil + 'd';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:700;">${s.customer}</div>
+          <div style="font-size:11px;color:var(--text3);">${s.payment_term} · ${(s.litres||0).toLocaleString()} L · $${((s.litres||0)*(s.price_per_litre||0)).toFixed(2)}</div>
+          <div style="font-size:11px;font-weight:600;color:${overdue?'var(--red)':daysUntil<=3?'var(--amber)':'var(--text3)'};margin-top:2px;">${dueLabel}</div>
+        </div>
+        <button onclick="markPaidFromDash(${s.id})" style="padding:8px 12px;background:var(--amber);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">💰 Mark paid</button>
+      </div>`;
+    }).join('');
+  } else {
+    payEl.innerHTML = '<div class="empty" style="padding:16px;"><p style="font-size:13px;">✓ All payments up to date</p></div>';
+  }
+
   // Year chart
   const chartYear = now.getFullYear();
   const curM2 = now.getMonth();
   document.getElementById('chart-year').textContent = chartYear;
   const MNS = ['J','F','M','A','M','J','J','A','S','O','N','D'];
   const monthly = Array(12).fill(0);
-  allSales.forEach(s => {
+  activeSales.forEach(s => {
     const d = new Date((s.sale_date||'')+'T00:00:00');
     if (d.getFullYear()===chartYear) monthly[d.getMonth()] += s.litres||0;
   });
@@ -1004,7 +1067,7 @@ function renderDash() {
     </div>`;
   }).join('');
 
-  const upcoming = allSales.filter(s => s.delivery_date && s.status!=='delivered')
+  const upcoming = activeSales.filter(s => s.delivery_date && s.status!=='delivered')
     .sort((a,b) => new Date(a.delivery_date)-new Date(b.delivery_date))
     .slice(0,5);
 

@@ -239,6 +239,33 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// 14 distinct colours for date grouping
+const DATE_COLOURS = [
+  {bg:'#FCEBEB', border:'#D4180A', text:'#A32D2D'}, // red
+  {bg:'#E6F1FB', border:'#185FA5', text:'#0C447C'}, // blue
+  {bg:'#EAF3DE', border:'#1D9E75', text:'#3B6D11'}, // green
+  {bg:'#FAEEDA', border:'#BA7517', text:'#633806'}, // amber
+  {bg:'#F0E6FF', border:'#7B4BB5', text:'#4B2BB5'}, // purple
+  {bg:'#DEF3F0', border:'#0E9488', text:'#0B6E63'}, // teal
+  {bg:'#FDE7F0', border:'#C33777', text:'#7B1F4B'}, // pink
+  {bg:'#EEF0DE', border:'#7A8B24', text:'#4A5A15'}, // olive
+  {bg:'#DDE7F5', border:'#4A5CC3', text:'#2A3B85'}, // indigo
+  {bg:'#FFEBD6', border:'#D96A00', text:'#A03D00'}, // orange
+  {bg:'#DFF2F7', border:'#268CAC', text:'#155F76'}, // sky
+  {bg:'#F5E6D3', border:'#8B5A2B', text:'#5A3819'}, // brown
+  {bg:'#E6F5EA', border:'#2E8B57', text:'#1B5638'}, // seagreen
+  {bg:'#F7D9E4', border:'#B23A6D', text:'#7A1E48'}, // rose
+  {bg:'#E4E4F5', border:'#5C5CB8', text:'#38387A'}, // slate
+];
+
+function colourForDate(dateStr, dateList) {
+  if (!dateStr || !dateList) return DATE_COLOURS[0];
+  const uniqueDates = [...new Set(dateList)].sort();
+  const idx = uniqueDates.indexOf(dateStr);
+  if (idx < 0) return DATE_COLOURS[0];
+  return DATE_COLOURS[idx % DATE_COLOURS.length];
+}
 const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const AV_COLORS = [['#FCEBEB','#A32D2D'],['#EAF3DE','#3B6D11'],['#FAEEDA','#633806'],['#E6F1FB','#0C447C']];
 const RANK_COLS = ['#F5C400','#C0C0C0','#CD7F32'];
@@ -339,6 +366,8 @@ function fmtTime(ts) {
 }
 
 function renderAll() {
+  // Exclude cancelled sales from all views
+  const activeSales = allSales.filter(s => s.status !== 'cancelled');
   const today = todayStr();
   const now = new Date(); now.setHours(0,0,0,0);
   const weekAgo = new Date(now.getTime()-7*86400000).toISOString().split('T')[0];
@@ -346,7 +375,7 @@ function renderAll() {
   const curM = now.getMonth();
 
   // TODAY DELIVERIES
-  const todayDels = allSales.filter(s => (s.deliveryDate||'').split('T')[0] === today);
+  const todayDels = activeSales.filter(s => (s.deliveryDate||'').split('T')[0] === today);
   const pending = todayDels.filter(s => !s.delivered).length;
   document.getElementById('today-count').textContent = pending;
   const toEl = document.getElementById('today-list');
@@ -368,14 +397,14 @@ function renderAll() {
   }
 
   // Split into UPCOMING and DELIVERED
-  const upcomingSales = allSales.filter(s => {
+  const upcomingSales = activeSales.filter(s => {
     if (s.delivered) return false;
     const sd = (s.date||'').split('T')[0];
     if (!sd || sd < weekAgo) return false;
     return true;
   });
 
-  const deliveredSales = allSales.filter(s => {
+  const deliveredSales = activeSales.filter(s => {
     if (!s.delivered) return false;
     const dd = (s.deliveryDate||'').split('T')[0];
     if (!dd) return false;
@@ -393,15 +422,18 @@ function renderAll() {
       const deldate = (s.deliveryDate||'').split('T')[0];
       const dd = deldate ? new Date(deldate+'T00:00:00') : new Date(sd+'T00:00:00');
       const isToday = deldate === today;
+      // Get colour for this delivery date
+      const allDelDates = upcomingSales.map(x => (x.deliveryDate||'').split('T')[0]).filter(Boolean);
+      const dateColour = colourForDate(deldate, allDelDates);
       const isNew = !lastKnownIds.has(String(s.id)) && !isFirstLoad;
       const fp = s.fuelType ? `<span class="pill ${s.fuelType==='Petrol'?'p-petrol':'p-diesel'}">${s.fuelType}</span>` : '';
       const dp = s.delivered ? `<span class="pill p-del">✓ Delivered</span>` : '';
       const np = isNew ? `<span class="pill p-new">NEW</span>` : '';
       const ts = fmtTime(s.created_at);
       return `<div class="order-row${s.delivered?' delivered':''}">
-        <div class="date-box${isToday?' today':''}">
-          <div class="date-num">${!isNaN(dd)?String(dd.getDate()).padStart(2,'0'):'—'}</div>
-          <div class="date-mon">${!isNaN(dd)?MN[dd.getMonth()]:''}</div>
+        <div class="date-box" style="background:${dateColour.bg};border-color:${dateColour.border};">
+          <div class="date-num" style="color:${dateColour.text};">${!isNaN(dd)?String(dd.getDate()).padStart(2,'0'):'—'}</div>
+          <div class="date-mon" style="color:${dateColour.text};">${!isNaN(dd)?MN[dd.getMonth()]:''}</div>
         </div>
         <div style="flex:1;min-width:0;">
           <div class="order-name${s.delivered?' delivered':''}">${s.customer}${np}${fp}${dp}</div>
@@ -442,7 +474,7 @@ function renderAll() {
   // YEAR CHART
   document.getElementById('year-label').textContent = y;
   const monthly = Array(12).fill(0);
-  allSales.forEach(s => {
+  activeSales.forEach(s => {
     const d = new Date((s.date||'')+'T00:00:00');
     if (d.getFullYear()===y) monthly[d.getMonth()] += s.litres||0;
   });
@@ -462,7 +494,7 @@ function renderAll() {
 
   // REP LEADERBOARD
   const repMap = {};
-  allSales.filter(s => {
+  activeSales.filter(s => {
     const d = new Date((s.date||'')+'T00:00:00');
     return d.getMonth()===curM && d.getFullYear()===y;
   }).forEach(s => {
@@ -497,7 +529,7 @@ function renderAll() {
   // PAYMENTS DUE THIS WEEK
   const in7 = new Date(now.getTime() + 7*86400000);
   const in7Str = in7.toISOString().split('T')[0];
-  const paymentsDue = allSales.filter(s => {
+  const paymentsDue = activeSales.filter(s => {
     if (s.paid) return false;
     if (!s.payment_due) return false;
     if (s.payment_term === 'COD') return false;
@@ -531,7 +563,7 @@ function renderAll() {
   }
 
   // TICKER — only upcoming (not delivered)
-  const tickerSales = allSales.filter(s => !s.delivered).slice(0,12);
+  const tickerSales = activeSales.filter(s => !s.delivered).slice(0,12);
   const items = tickerSales.map(s =>
     `<span class="ticker-item">🛢 ${s.rep} → ${s.customer} · ${(s.litres||0).toLocaleString()} L · ${s.location||'—'} · Del: ${fmtDate(s.deliveryDate)}</span><span style="color:rgba(255,255,255,0.4);font-size:14px;"> | </span>`
   ).join('');
