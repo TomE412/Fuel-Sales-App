@@ -118,39 +118,6 @@ textarea:focus{border-color:var(--red);background:#fff;}
 </head>
 <body>
 
-<!-- LOADING SCREEN — animated fuel pump filling up -->
-<div class="screen active" id="screen-loading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);">
-  <svg width="140" height="55" viewBox="0 0 240 92" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:36px;">
-    <text x="2" y="52" font-family="Arial Black,Arial" font-weight="900" font-size="54" fill="#1a1a18">SKELSEE</text>
-    <rect x="2" y="58" width="236" height="30" rx="3" fill="#D4180A"/>
-    <text x="46" y="80" font-family="Arial Black,Arial" font-weight="900" font-size="22" fill="#fff" letter-spacing="3">TRADING</text>
-    <ellipse cx="22" cy="73" rx="9" ry="11" fill="#F5C400"/>
-    <polygon points="22,56 17,64 27,64" fill="#F5C400"/>
-  </svg>
-
-  <svg width="90" height="120" viewBox="0 0 90 120" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <clipPath id="pump-clip">
-        <rect x="18" y="30" width="44" height="60" rx="4"/>
-      </clipPath>
-    </defs>
-    <rect x="18" y="30" width="44" height="60" rx="4" fill="#fff" stroke="#1a1a18" stroke-width="2.5"/>
-    <rect x="18" y="90" width="44" height="0" fill="#D4180A" clip-path="url(#pump-clip)">
-      <animate attributeName="y" values="90;30;30;90" dur="2.5s" repeatCount="indefinite" keyTimes="0;0.6;0.9;1"/>
-      <animate attributeName="height" values="0;60;60;0" dur="2.5s" repeatCount="indefinite" keyTimes="0;0.6;0.9;1"/>
-    </rect>
-    <rect x="26" y="40" width="28" height="16" rx="2" fill="none" stroke="#1a1a18" stroke-width="1.5"/>
-    <line x1="26" y1="46" x2="54" y2="46" stroke="#1a1a18" stroke-width="1" opacity="0.3"/>
-    <line x1="26" y1="50" x2="54" y2="50" stroke="#1a1a18" stroke-width="1" opacity="0.3"/>
-    <path d="M 62 40 Q 78 42 78 55 L 78 78 Q 78 88 68 88 L 62 88" fill="none" stroke="#1a1a18" stroke-width="2.5" stroke-linecap="round"/>
-    <rect x="72" y="52" width="10" height="8" rx="1" fill="#1a1a18"/>
-    <rect x="14" y="88" width="52" height="6" rx="1" fill="#1a1a18"/>
-    <rect x="18" y="94" width="44" height="4" fill="#1a1a18" opacity="0.6"/>
-  </svg>
-
-  <div style="font-size:13px;color:var(--text3);margin-top:24px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;">Loading</div>
-</div>
-
 <!-- PIN LOCK SCREEN -->
 <div class="lock-screen" id="lock-screen">
   <div class="lock-logo">
@@ -192,7 +159,7 @@ textarea:focus{border-color:var(--red);background:#fff;}
 </div>
 
 <!-- AUTH SCREEN -->
-<div class="screen" id="screen-auth">
+<div class="screen active" id="screen-auth">
   <div class="auth-wrap">
     <div class="auth-logo">
       <svg width="80" height="32" viewBox="0 0 240 92" xmlns="http://www.w3.org/2000/svg">
@@ -1173,35 +1140,12 @@ function setSyncBadge(state) {
 }
 
 // ---- INIT ----
-// SAFETY: force-dismiss loading screen after 3 seconds no matter what
-setTimeout(() => {
-  const loading = document.getElementById('screen-loading');
-  if (loading && loading.classList.contains('active')) {
-    loading.classList.remove('active');
-    loading.style.display = 'none';
-    // If no other screen is showing, show the login
-    const app = document.getElementById('screen-app');
-    const auth = document.getElementById('screen-auth');
-    const lock = document.getElementById('lock-screen');
-    if (!app.classList.contains('active') && !auth.classList.contains('active') && !lock.classList.contains('active')) {
-      auth.classList.add('active');
-    }
-  }
-}, 3000);
-
 // Check for existing session on load
 sb.auth.getSession().then(async ({ data }) => {
-  // Hide loading screen
-  document.getElementById('screen-loading').classList.remove('active');
   if (data.session?.user) {
-    // Show PIN lock screen instead of going straight to app
     await loadUser(data.session.user, true);
-  } else {
-    // No session — show email/password login
-    document.getElementById('screen-auth').classList.add('active');
   }
 }).catch(() => {
-  document.getElementById('screen-loading').classList.remove('active');
   // If offline and no session, try to work with cached PIN
   const cachedUserId = localStorage.getItem('cached_user_id');
   const cachedProfile = localStorage.getItem('cached_profile');
