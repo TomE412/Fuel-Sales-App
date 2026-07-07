@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-title" content="Fuel Sales">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -38,6 +39,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .field label{font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em;}
 .field input{width:100%;padding:13px 14px;background:var(--gray);border:1.5px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);font-size:15px;outline:none;transition:border-color 0.15s;}
 .field input:focus{border-color:var(--red);background:#fff;}
+.field select{width:100%;padding:13px 14px;background:var(--gray);border:1.5px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);font-size:15px;outline:none;}
+.field select:focus{border-color:var(--red);background:#fff;}
 .btn-primary{width:100%;padding:14px;background:var(--red);color:#fff;border:none;border-radius:var(--radius-sm);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;margin-top:6px;}
 .btn-primary:active{opacity:0.85;}
 .auth-err{color:var(--red);font-size:13px;text-align:center;margin-top:10px;min-height:18px;}
@@ -342,6 +345,31 @@ textarea:focus{border-color:var(--red);background:#fff;}
       <div style="font-size:14px;color:var(--text2);margin-bottom:4px;" id="more-name">—</div>
       <div style="font-size:12px;color:var(--text3);" id="more-email">—</div>
       <div style="font-size:12px;color:var(--text3);margin-top:2px;" id="more-role">—</div>
+    </div>
+
+    <div class="card" id="report-card" style="display:none;">
+      <div class="card-title">📄 Generate commission report</div>
+      <div class="field">
+        <label>Sales rep</label>
+        <select id="rep-select"></select>
+      </div>
+      <div class="field">
+        <label>Timeframe</label>
+        <select id="tf-mode">
+          <option value="month">Whole month</option>
+          <option value="range">Custom date range</option>
+        </select>
+      </div>
+      <div class="field-row" id="tf-month-row">
+        <select id="tf-month"></select>
+        <select id="tf-year"></select>
+      </div>
+      <div class="field-row" id="tf-range-row" style="display:none;">
+        <div class="field" style="margin-bottom:0;"><label>From</label><input type="date" id="tf-start"></div>
+        <div class="field" style="margin-bottom:0;"><label>To</label><input type="date" id="tf-end"></div>
+      </div>
+      <button class="btn-primary" id="report-btn" onclick="runCommissionReport()">Generate Excel for Niel</button>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center;">Cost price is left blank for Niel to fill in.</div>
     </div>
 
     <div class="card">
@@ -1096,6 +1124,7 @@ function showTab(id, btn) {
     // Restore saved cost per km
     const saved = localStorage.getItem('calc_cpkm');
     if (saved) document.getElementById('calc-cpkm').value = saved;
+    setupReportCard();
   }
 }
 
@@ -1138,6 +1167,162 @@ function setSyncBadge(state) {
   else if (state==='synced') { el.textContent='Synced ✓'; el.className='sync-badge'; }
   else if (state==='error') { el.textContent='Sync error'; el.className='sync-badge error'; }
 }
+
+// ---- COMMISSION REPORT (admin only) ----
+(function(){
+  // ---- editable settings ----
+  const REPS = ["Carrie"];              // add more rep_name values here as you take them on
+  const PRICE_PER_KM = 2.2;             // haulage $/km (round trip auto-applied)
+  const LOSS_FLOOR   = 0.005;           // $/L paid on loss deals (confirm with Niel)
+  const RETAINER     = 1200;            // monthly retainer $
+  const REP_ROLE     = "rep";           // anyone whose role isn't this sees the report card
+  // One-way distance (km) per location. Transport auto-doubles for round trip.
+  // KEEP CURRENT — a location missing here silently gets distance 0.
+  const DISTANCE_BY_LOCATION = {
+    "Mapinga": 90, "Norton": 66, "Chikurubi Prison Farm": 10, "Arcturus rd": 10,
+    "Mhangura": 210, "Sengwa": 352, "Bindura": 112, "Harare": 10, "Silobela": 0
+  };
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+  const col = n => { let s=""; while(n>0){ s=String.fromCharCode(65+(n-1)%26)+s; n=Math.floor((n-1)/26);} return s; };
+  const addr = (r,c) => col(c)+r;
+  const isReportAdmin = () => !!(currentProfile && currentProfile.role !== REP_ROLE);
+
+  function buildAndDownload(sales, { repName, monthLabel, fileTag }) {
+    const ws = {};
+    const set = (r,c,cell) => { ws[addr(r,c)] = cell; };
+    const S = v => ({ t:"s", v:String(v) });
+    const N = (v,z) => ({ t:"n", v:v, ...(z?{z}:{}) });
+    const F = (f,z) => ({ t:"n", f:f, ...(z?{z}:{}) });
+
+    set(1,1,S(repName.toUpperCase()+" — MONTHLY COMMISSION  |  Niel's structure (eff. 1 June 2026)  |  "+monthLabel));
+    set(2,1,S("From Supabase. Niel fills ONLY the yellow Cost Price. Loss deals auto-pay the half-cent floor. All sales included."));
+    set(3,1,S("Price per km ($):")); set(3,2,N(PRICE_PER_KM,"0.00"));
+    set(3,4,S("Loss floor ($/L):")); set(3,5,N(LOSS_FLOOR,"0.0000"));
+    set(3,6,S("Monthly retainer ($):")); set(3,8,N(RETAINER,"$#,##0"));
+
+    const headers = ["Date","Customer","Volume","Cost Price","Distance","Transport","Total Cost",
+      "Selling Price","Margin","Company GP Cent1 (60%)","Company Value Cent1","Carrie GP Cent1 (40%)",
+      "Carrie Value Cent1","Company GP Cent2 (75%)","Company Value Cent2","Carrie GP Cent2 (25%)",
+      "Carrie Value Cent2","Company GP Cent3 (50%)","Company Value Cent3","Carrie GP Cent3 (50%)",
+      "Carrie Value Cent3","Total Company GP Value","Total Carrie Commission","Paid?"];
+    const HR = 5;
+    headers.forEach((h,i)=> set(HR,i+1,S(h)));
+
+    const money = "$#,##0.00;($#,##0.00);-", D4 = "0.0000";
+    const r0 = HR+1;
+    sales.forEach((sale,k) => {
+      const r = r0+k;
+      const dist = DISTANCE_BY_LOCATION[sale.location] ?? 0;
+      const g = f => 'IF($D'+r+'="","",'+f+')';
+      const I="I"+r, C="C"+r;
+      const t1="MIN("+I+",0.01)", t2="MAX(0,MIN("+I+",0.02)-0.01)", t3="MAX(0,"+I+"-0.02)";
+      set(r,1,S(sale.sale_date));
+      set(r,2,S(sale.customer));
+      set(r,3,N(Number(sale.litres),"#,##0"));
+      set(r,4,{t:"n", z:D4, s:{fill:{fgColor:{rgb:"FFFF00"}}}});
+      set(r,5,N(dist));
+      set(r,6,F("E"+r+"*$B$3*2/C"+r,D4));
+      set(r,7,F(g("$D"+r+"+F"+r),D4));
+      set(r,8,N(Number(sale.price_per_litre),D4));
+      set(r,9,F(g("H"+r+"-G"+r),D4));
+      set(r,10,F(g("0.6*"+t1),D4)); set(r,11,F(g("J"+r+"*"+C),money));
+      set(r,12,F(g("0.4*"+t1),D4)); set(r,13,F(g("L"+r+"*"+C),money));
+      set(r,14,F(g("0.75*"+t2),D4)); set(r,15,F(g("N"+r+"*"+C),money));
+      set(r,16,F(g("0.25*"+t2),D4)); set(r,17,F(g("P"+r+"*"+C),money));
+      set(r,18,F(g("0.5*"+t3),D4));  set(r,19,F(g("R"+r+"*"+C),money));
+      set(r,20,F(g("0.5*"+t3),D4));  set(r,21,F(g("T"+r+"*"+C),money));
+      set(r,22,F(g("K"+r+"+O"+r+"+S"+r),money));
+      set(r,23,F(g("IF(I"+r+"<0,$E$3*C"+r+",M"+r+"+Q"+r+"+U"+r+")"),money));
+      set(r,24,S(sale.paid ? "Yes" : "No"));
+    });
+
+    const last = r0 + sales.length - 1, tr = last+1;
+    set(tr,2,S("MONTH TOTAL (all sales)"));
+    set(tr,22,F("SUM(V"+r0+":V"+last+")",money));
+    set(tr,23,F("SUM(W"+r0+":W"+last+")",money));
+    const sm = tr+2;
+    set(sm,2,S("Total commission (all sales, floor applied):")); set(sm,7,F("W"+tr,money));
+    set(sm+1,2,S("Plus monthly retainer:"));                     set(sm+1,7,F("$H$3",money));
+    set(sm+2,2,S("TOTAL PAYABLE TO "+repName.toUpperCase()+":")); set(sm+2,7,F("G"+sm+"+G"+(sm+1),money));
+
+    ws["!ref"] = "A1:"+addr(sm+2,24);
+    ws["!cols"] = [9,18,10,11,9,10,11,11,10,11,12,11,12,11,12,11,12,11,12,11,12,13,14,7].map(w=>({wch:w}));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "New contract");
+    XLSX.writeFile(wb, fileTag+".xlsx");
+  }
+
+  async function runCommissionReport() {
+    const repName = document.getElementById("rep-select").value;
+    const mode = document.getElementById("tf-mode").value;
+    let start, endEx, monthLabel, fileTag;
+    if (mode === "range") {
+      start = document.getElementById("tf-start").value;
+      const endInput = document.getElementById("tf-end").value;
+      if (!start || !endInput) { alert("Pick both start and end dates."); return; }
+      const e = new Date(endInput+"T00:00:00"); e.setDate(e.getDate()+1);
+      endEx = e.toISOString().slice(0,10);
+      monthLabel = start+" to "+endInput;
+      fileTag = repName+"_Commission_"+start+"_to_"+endInput;
+    } else {
+      const m = parseInt(document.getElementById("tf-month").value,10);
+      const y = parseInt(document.getElementById("tf-year").value,10);
+      start = y+"-"+String(m+1).padStart(2,"0")+"-01";
+      const nm = m===11?0:m+1, ny = m===11?y+1:y;
+      endEx = ny+"-"+String(nm+1).padStart(2,"0")+"-01";
+      monthLabel = MONTHS[m].toUpperCase()+" "+y;
+      fileTag = repName+"_Commission_"+MONTHS[m]+"_"+y;
+    }
+    const btn = document.getElementById("report-btn");
+    const orig = btn.textContent; btn.disabled = true; btn.textContent = "Generating…";
+    try {
+      if (typeof XLSX === "undefined") { alert("Spreadsheet library still loading — check your connection and try again."); return; }
+      const { data: sales, error } = await sb.from("sales")
+        .select("sale_date, customer, location, litres, price_per_litre, paid, status")
+        .eq("rep_name", repName)
+        .gte("sale_date", start)
+        .lt("sale_date", endEx)
+        .neq("status", "cancelled")
+        .order("sale_date", { ascending: true });
+      if (error) throw error;
+      if (!sales || !sales.length) { alert("No sales found for "+repName+" in "+monthLabel+"."); return; }
+      buildAndDownload(sales, { repName, monthLabel, fileTag });
+    } catch (e) {
+      alert("Could not generate report: " + (e.message || e));
+    } finally {
+      btn.disabled = false; btn.textContent = orig;
+    }
+  }
+
+  function setupReportCard() {
+    const card = document.getElementById("report-card");
+    if (!card) return;
+    const admin = isReportAdmin();
+    card.style.display = admin ? "block" : "none";
+    if (!admin) return;
+    const rep = document.getElementById("rep-select");
+    if (rep && !rep.dataset.filled) { rep.innerHTML = REPS.map(n=>'<option>'+n+'</option>').join(""); rep.dataset.filled = "1"; }
+    const now = new Date();
+    const mo = document.getElementById("tf-month");
+    if (mo && !mo.dataset.filled) { mo.innerHTML = MONTHS.map((m,i)=>'<option value="'+i+'"'+(i===now.getMonth()?" selected":"")+'>'+m+'</option>').join(""); mo.dataset.filled = "1"; }
+    const yr = document.getElementById("tf-year");
+    if (yr && !yr.dataset.filled) { const y=now.getFullYear(); yr.innerHTML=[y,y-1,y+1].map(v=>'<option>'+v+'</option>').join(""); yr.dataset.filled = "1"; }
+    const mode = document.getElementById("tf-mode");
+    if (mode && !mode.dataset.wired) {
+      mode.addEventListener("change", () => {
+        const range = mode.value === "range";
+        document.getElementById("tf-month-row").style.display = range ? "none" : "grid";
+        document.getElementById("tf-range-row").style.display = range ? "grid" : "none";
+      });
+      mode.dataset.wired = "1";
+    }
+  }
+
+  window.runCommissionReport = runCommissionReport;
+  window.setupReportCard = setupReportCard;
+})();
 
 // ---- INIT ----
 // Check for existing session on load
