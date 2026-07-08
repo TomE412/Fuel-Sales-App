@@ -1171,7 +1171,7 @@ function setSyncBadge(state) {
 // ---- COMMISSION REPORT (admin only) ----
 (function(){
   // ---- editable settings ----
-  const REPS = ["Carrie"];              // add more rep_name values here as you take them on
+  let REPS = []; // populated dynamically from profiles table;              // add more rep_name values here as you take them on
   const PRICE_PER_KM = 2.2;             // haulage $/km (round trip auto-applied)
   const LOSS_FLOOR   = 0.005;           // $/L paid on loss deals (confirm with Niel)
   const RETAINER     = 1200;            // monthly retainer $
@@ -1296,14 +1296,30 @@ function setSyncBadge(state) {
     }
   }
 
-  function setupReportCard() {
+  async function setupReportCard() {
     const card = document.getElementById("report-card");
     if (!card) return;
     const admin = isReportAdmin();
     card.style.display = admin ? "block" : "none";
     if (!admin) return;
     const rep = document.getElementById("rep-select");
-    if (rep && !rep.dataset.filled) { rep.innerHTML = REPS.map(n=>'<option>'+n+'</option>').join(""); rep.dataset.filled = "1"; }
+    if (rep && !rep.dataset.filled) {
+      // Load rep names dynamically from profiles table (role = rep)
+      try {
+        const { data: repProfiles, error } = await sb.from('profiles').select('full_name').eq('role', 'rep').order('full_name');
+        if (!error && repProfiles && repProfiles.length) {
+          REPS = repProfiles.map(p => p.full_name);
+        } else {
+          // Fallback: derive from distinct rep_name values already in sales
+          const { data: salesReps } = await sb.from('sales').select('rep_name');
+          REPS = [...new Set((salesReps||[]).map(s => s.rep_name).filter(Boolean))].sort();
+        }
+      } catch(e) {
+        console.log('Could not load reps for report:', e);
+      }
+      rep.innerHTML = REPS.map(n=>'<option>'+n+'</option>').join("");
+      rep.dataset.filled = "1";
+    }
     const now = new Date();
     const mo = document.getElementById("tf-month");
     if (mo && !mo.dataset.filled) { mo.innerHTML = MONTHS.map((m,i)=>'<option value="'+i+'"'+(i===now.getMonth()?" selected":"")+'>'+m+'</option>').join(""); mo.dataset.filled = "1"; }
