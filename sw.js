@@ -1,5 +1,5 @@
-const CACHE='fuel-v8';
-const CORE=['./','index.html','ops-dashboard.html','manifest.json','dash-manifest.json','icon-192.png','icon-512.png','apple-touch-icon.png'];
+const CACHE='fuel-v9';
+const CORE=['./','index.html','manifest.json','icon-192.png','icon-512.png','apple-touch-icon.png'];
 
 self.addEventListener('install',e=>{
   self.skipWaiting();
