@@ -167,6 +167,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
                 <th onclick="sortRec('customer')">Customer</th>
                 <th onclick="sortRec('rep')">Rep</th>
                 <th onclick="sortRec('litres')">Litres</th>
+                <th onclick="sortRec('price')">Price/L</th>
                 <th onclick="sortRec('value')">Value</th>
                 <th onclick="sortRec('term')">Terms</th>
                 <th onclick="sortRec('due')">Due date</th>
@@ -175,7 +176,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
               </tr>
             </thead>
             <tbody id="rec-body">
-              <tr><td colspan="8" class="empty-msg">Loading...</td></tr>
+              <tr><td colspan="9" class="empty-msg">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -368,6 +369,7 @@ function renderReceivables(){
       case 'customer':av=a.customer;bv=b.customer;break;
       case 'rep':av=a.rep;bv=b.rep;break;
       case 'litres':av=a.litres;bv=b.litres;break;
+      case 'price':av=a.price;bv=b.price;break;
       case 'value':av=a.value;bv=b.value;break;
       case 'term':av=a.paymentTerm;bv=b.paymentTerm;break;
       case 'days':
@@ -381,7 +383,7 @@ function renderReceivables(){
   document.getElementById('rec-count').textContent=receivables.length;
   const body=document.getElementById('rec-body');
   if(!sorted.length){
-    body.innerHTML='<tr><td colspan="8" class="empty-msg">✓ No outstanding receivables</td></tr>';
+    body.innerHTML='<tr><td colspan="9" class="empty-msg">✓ No outstanding receivables</td></tr>';
     return;
   }
   body.innerHTML=sorted.map(s=>{
@@ -398,6 +400,7 @@ function renderReceivables(){
       <td style="font-weight:700;">${s.customer} ${fp}</td>
       <td>${s.rep}</td>
       <td class="mono">${s.litres.toLocaleString()}</td>
+      <td class="mono">$${s.price.toFixed(3)}</td>
       <td class="mono" style="font-weight:700;">${money(s.value)}</td>
       <td>${s.paymentTerm}</td>
       <td class="mono">${fmtDate(s.paymentDue)}</td>
