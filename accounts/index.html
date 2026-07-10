@@ -284,6 +284,15 @@ async function accSignIn(){
 
 // FETCH
 async function fetchData(){
+  // Show cached data IMMEDIATELY so dashboard is never empty offline
+  try{
+    const cached=localStorage.getItem('acc_cache');
+    if(cached){
+      allSales=JSON.parse(cached);
+      renderAll();
+    }
+  }catch(e){}
+
   try{
     const daysBack=120;
     const fromDate=new Date();
@@ -309,10 +318,13 @@ async function fetchData(){
       paid:s.paid,
       status:s.status
     }));
+    // Save fresh data for offline use
+    try{localStorage.setItem('acc_cache',JSON.stringify(allSales));}catch(e){}
     document.getElementById('last-sync').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
     renderAll();
   }catch(e){
-    console.log('Fetch error:',e);
+    console.log('Using cached data (offline):',e.message);
+    document.getElementById('last-sync').textContent='offline';
   }
 }
 

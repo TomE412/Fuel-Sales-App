@@ -883,15 +883,37 @@ async function cancelSale(id) {
 
 async function loadSales() {
   setSyncBadge('loading');
-  const { data, error } = await sb.from('sales')
-    .select('*')
-    .order('created_at', { ascending: false });
 
-  if (error) { setSyncBadge('error'); return; }
-  allSales = data || [];
-  renderSales();
-  renderDash();
-  setSyncBadge('synced');
+  // Show cached sales IMMEDIATELY so the app is never empty offline
+  try {
+    const cached = localStorage.getItem('sales_cache_' + (currentUser?.id || 'x'));
+    if (cached) {
+      allSales = JSON.parse(cached);
+      renderSales();
+      renderDash();
+    }
+  } catch(e) {}
+
+  try {
+    const { data, error } = await sb.from('sales')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    allSales = data || [];
+    // Save fresh data to cache for offline use
+    try {
+      localStorage.setItem('sales_cache_' + (currentUser?.id || 'x'), JSON.stringify(allSales));
+    } catch(e) {}
+    renderSales();
+    renderDash();
+    setSyncBadge('synced');
+  } catch (e) {
+    // Offline or error — we already showed cached data above
+    console.log('Using cached sales (offline):', e.message);
+    setSyncBadge(allSales.length ? 'offline' : 'error');
+  }
 }
 
 async function recordSale() {
@@ -1165,6 +1187,7 @@ function setSyncBadge(state) {
   const el = document.getElementById('sync-badge');
   if (state==='loading') { el.textContent='Syncing...'; el.className='sync-badge pending'; }
   else if (state==='synced') { el.textContent='Synced ✓'; el.className='sync-badge'; }
+  else if (state==='offline') { el.textContent='Offline — showing saved data'; el.className='sync-badge pending'; }
   else if (state==='error') { el.textContent='Sync error'; el.className='sync-badge error'; }
 }
 
