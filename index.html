@@ -908,11 +908,19 @@ async function loadSales() {
     } catch(e) {}
     renderSales();
     renderDash();
-    setSyncBadge('synced');
+    // If there are queued offline sales, try to sync them now that we're online
+    if (getQueue().length > 0) {
+      setSyncBadge('queued');
+      syncQueue();
+    } else {
+      setSyncBadge('synced');
+    }
   } catch (e) {
     // Offline or error — we already showed cached data above
     console.log('Using cached sales (offline):', e.message);
-    setSyncBadge(allSales.length ? 'offline' : 'error');
+    // Show queued count if any, otherwise offline/error
+    if (getQueue().length > 0) setSyncBadge('queued');
+    else setSyncBadge(allSales.length ? 'offline' : 'error');
   }
 }
 
@@ -945,11 +953,27 @@ async function recordSale() {
     parseInt(curFollowup);
   const followupDate = followupDays && delivery ? addDays(delivery, followupDays) : null;
 
+  // Client-side validation matching the database constraints
+  // (so an offline sale can't queue something the server will later reject)
+  if (litres <= 0 || litres > 40000) {
+    alert('Litres must be between 1 and 40,000.');
+    return;
+  }
+  if (price < 1.00 || price > 3.00) {
+    alert('Price per litre must be between $1.00 and $3.00.');
+    return;
+  }
+  if (customer.length < 3) {
+    alert('Customer name must be at least 3 characters.');
+    return;
+  }
+
   btn.disabled = true;
   btn.textContent = 'Recording...';
   setSyncBadge('loading');
 
-  const { error } = await sb.from('sales').insert({
+  // Build the sale payload once — used for both online insert and offline queue
+  const salePayload = {
     rep_id: currentUser.id, // rep_name is set automatically by database trigger
     sale_date: date,
     customer,
@@ -965,35 +989,109 @@ async function recordSale() {
     paid: curTerm === 'COD',
     notes,
     status: 'pending'
-  });
+  };
 
-  if (error) {
-    alert('Error saving sale: ' + error.message);
-    setSyncBadge('error');
-  } else {
-    // Reset form
-    document.getElementById('s-customer').value = '';
-    document.getElementById('s-location').value = '';
-    document.getElementById('s-litres').value = '';
-    document.getElementById('s-price').value = '';
-    document.getElementById('s-delivery').value = '';
-    document.getElementById('s-notes').value = '';
-    document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
-    selectFuel('Diesel', document.getElementById('fuel-diesel'));
-    curTerm = 'COD';
-    document.querySelectorAll('#terms-grid .term-btn').forEach((b,i) => b.classList.toggle('selected', i===0));
-    curFollowup = 'none';
-    document.querySelectorAll('#followup-grid .term-btn').forEach(b => b.classList.remove('selected'));
-    document.getElementById('followup-other-wrap').style.display = 'none';
-    document.getElementById('term-other-wrap').style.display = 'none';
+  let savedOnline = false;
+  try {
+    const { error } = await sb.from('sales').insert(salePayload);
+    if (error) throw error;
+    savedOnline = true;
+  } catch (e) {
+    // Offline or network failure — queue it locally for later sync
+    queueSale(salePayload);
+  }
 
-    await loadSales();
-    showTab('sales', document.querySelectorAll('.tab')[1]);
+  // Reset form regardless of online/offline (the sale is captured either way)
+  document.getElementById('s-customer').value = '';
+  document.getElementById('s-location').value = '';
+  document.getElementById('s-litres').value = '';
+  document.getElementById('s-price').value = '';
+  document.getElementById('s-delivery').value = '';
+  document.getElementById('s-notes').value = '';
+  document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
+  selectFuel('Diesel', document.getElementById('fuel-diesel'));
+  curTerm = 'COD';
+  document.querySelectorAll('#terms-grid .term-btn').forEach((b,i) => b.classList.toggle('selected', i===0));
+  curFollowup = 'none';
+  document.querySelectorAll('#followup-grid .term-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('followup-other-wrap').style.display = 'none';
+  document.getElementById('term-other-wrap').style.display = 'none';
+
+  await loadSales();
+  showTab('sales', document.querySelectorAll('.tab')[1]);
+
+  if (savedOnline) {
     setSyncBadge('synced');
+  } else {
+    setSyncBadge('queued');
+    alert('No internet right now — this sale is saved on your phone and will upload automatically when you are back online.');
   }
 
   btn.disabled = false;
   btn.textContent = 'Record Sale';
+}
+
+// ============================================================
+// OFFLINE QUEUE SYSTEM
+// ============================================================
+function queueKey() {
+  return 'sale_queue_' + (currentUser?.id || 'x');
+}
+
+function getQueue() {
+  try {
+    return JSON.parse(localStorage.getItem(queueKey()) || '[]');
+  } catch(e) { return []; }
+}
+
+function saveQueue(q) {
+  try { localStorage.setItem(queueKey(), JSON.stringify(q)); } catch(e) {}
+}
+
+function queueSale(payload) {
+  const q = getQueue();
+  // Give it a unique local id so we can dedupe and show it in the list
+  q.push({
+    _localId: 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+    _queuedAt: new Date().toISOString(),
+    payload: payload
+  });
+  saveQueue(q);
+}
+
+async function syncQueue() {
+  const q = getQueue();
+  if (!q.length) return;
+  if (!currentUser) return;
+
+  // Make sure we still have a valid auth session before writing
+  const { data: sess } = await sb.auth.getSession();
+  if (!sess || !sess.session) return; // not authenticated — try again later
+
+  const remaining = [];
+  let syncedCount = 0;
+
+  for (const item of q) {
+    try {
+      const { error } = await sb.from('sales').insert(item.payload);
+      if (error) throw error;
+      syncedCount++;
+    } catch (e) {
+      // Keep it in the queue to retry next time
+      remaining.push(item);
+    }
+  }
+
+  saveQueue(remaining);
+
+  if (syncedCount > 0) {
+    await loadSales();
+    if (remaining.length === 0) {
+      setSyncBadge('synced');
+    } else {
+      setSyncBadge('queued');
+    }
+  }
 }
 
 async function markDelivered(id) {
@@ -1009,11 +1107,29 @@ async function markDelivered(id) {
 // ---- RENDER ----
 function renderSales() {
   const el = document.getElementById('sales-list');
-  if (!allSales.length) {
+
+  // Build display list: queued (unsynced) sales first, then synced sales
+  const queued = getQueue();
+  const queuedRows = queued.map(item => {
+    const p = item.payload;
+    const fuelPill = p.fuel_type ? `<span class="pill ${p.fuel_type==='Petrol'?'p-petrol':'p-diesel'}">${p.fuel_type}</span>` : '';
+    const pendingPill = `<span class="pill" style="background:var(--amber-light);color:var(--amber);">⏳ Not synced yet</span>`;
+    return `<div class="sale-row" style="border-left:3px solid var(--amber);">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div class="sale-customer">${p.customer}${fuelPill}${pendingPill}</div>
+        <div class="sale-litres">${(p.litres||0).toLocaleString()} L</div>
+      </div>
+      <div class="sale-meta">${p.location||'—'} · ${fmtDate(p.sale_date)} · ${p.payment_term}</div>
+      <div class="sale-meta">Del: ${fmtDate(p.delivery_date)} · Pay due: ${fmtDate(p.payment_due)}</div>
+      <div class="sale-meta" style="color:var(--amber);font-weight:600;">Saved on this phone — will upload when back online</div>
+    </div>`;
+  }).join('');
+
+  if (!allSales.length && !queued.length) {
     el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><p>No sales recorded yet</p></div>';
     return;
   }
-  el.innerHTML = allSales.map(s => {
+  el.innerHTML = queuedRows + allSales.map(s => {
     const delivered = s.status === 'delivered';
     const fuelPill = s.fuel_type ? `<span class="pill ${s.fuel_type==='Petrol'?'p-petrol':'p-diesel'}">${s.fuel_type}</span>` : '';
     const delPill = delivered ? `<span class="pill p-del">✓ Delivered</span>` : '';
@@ -1188,6 +1304,11 @@ function setSyncBadge(state) {
   if (state==='loading') { el.textContent='Syncing...'; el.className='sync-badge pending'; }
   else if (state==='synced') { el.textContent='Synced ✓'; el.className='sync-badge'; }
   else if (state==='offline') { el.textContent='Offline — showing saved data'; el.className='sync-badge pending'; }
+  else if (state==='queued') {
+    const n = getQueue().length;
+    el.textContent = n > 0 ? ('⏳ ' + n + ' to upload') : 'Synced ✓';
+    el.className = n > 0 ? 'sync-badge pending' : 'sync-badge';
+  }
   else if (state==='error') { el.textContent='Sync error'; el.className='sync-badge error'; }
 }
 
@@ -1390,6 +1511,22 @@ sb.auth.getSession().then(async ({ data }) => {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
+
+// ---- OFFLINE QUEUE SYNC TRIGGERS ----
+// 1. When the browser detects it's back online, sync immediately
+window.addEventListener('online', () => {
+  if (currentUser && getQueue().length > 0) {
+    setSyncBadge('queued');
+    syncQueue();
+  }
+});
+
+// 2. Safety net — every 30 seconds, if online and there's a queue, try syncing
+setInterval(() => {
+  if (navigator.onLine && currentUser && getQueue().length > 0) {
+    syncQueue();
+  }
+}, 30000);
 </script>
 </body>
 </html>
