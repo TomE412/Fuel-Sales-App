@@ -1219,7 +1219,7 @@ function setSyncBadge(state) {
     const F = (f,z) => ({ t:"n", f:f, ...(z?{z}:{}) });
 
     set(1,1,S(repName.toUpperCase()+" — MONTHLY COMMISSION  |  Niel's structure (eff. 1 June 2026)  |  "+monthLabel));
-    set(2,1,S("From Supabase. Niel fills ONLY the yellow Cost Price. Loss deals auto-pay the half-cent floor. All sales included."));
+    set(2,1,S("From Supabase. Niel fills ONLY the yellow Cost Price. Every sale pays at least the half-cent floor (incl. break-even & loss); better deals pay the tiered rate. All sales included."));
     set(3,1,S("Price per km ($):")); set(3,2,N(PRICE_PER_KM,"0.00"));
     set(3,4,S("Loss floor ($/L):")); set(3,5,N(LOSS_FLOOR,"0.0000"));
     set(3,6,S("Monthly retainer ($):")); set(3,8,N(RETAINER,"$#,##0"));
@@ -1256,7 +1256,7 @@ function setSyncBadge(state) {
       set(r,18,F(g("0.5*"+t3),D4));  set(r,19,F(g("R"+r+"*"+C),money));
       set(r,20,F(g("0.5*"+t3),D4));  set(r,21,F(g("T"+r+"*"+C),money));
       set(r,22,F(g("K"+r+"+O"+r+"+S"+r),money));
-      set(r,23,F(g("IF(I"+r+"<0,$E$3*C"+r+",M"+r+"+Q"+r+"+U"+r+")"),money));
+      set(r,23,F(g("MAX($E$3*C"+r+",M"+r+"+Q"+r+"+U"+r+")"),money));
       set(r,24,S(sale.paid ? "Yes" : "No"));
     });
 
