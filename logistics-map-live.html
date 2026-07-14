@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Skelsee Logistics — Reorder & Prospect Planner</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  :root{--ink:#12242e;--paper:#f5f2ec;--panel:#fff;--line:#d9d2c5;--accent:#1f4e78;--muted:#5c6670;
+    --cust:#1f4e78;--farm:#5a8f7b;--mine:#8a6d3b;--inseason:#c0392b;--font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:var(--font);color:var(--ink);background:var(--paper);display:flex;flex-direction:column;height:100vh;overflow:hidden}
+  header{background:var(--ink);color:var(--paper);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+  header h1{font-size:15px;font-weight:700}
+  header .date{font-size:11px;color:#b8c2c9;margin-left:auto}
+  .wrap{flex:1;display:flex;min-height:0}
+  #map{flex:1;min-height:0}
+  .side{width:300px;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;flex-shrink:0}
+  .layer-toggles{padding:8px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:5px}
+  .layer-toggles label{display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer}
+  .layer-toggles .cnt{margin-left:auto;color:var(--muted);font-size:11px}
+  .sw{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+  .toolbar{padding:8px 12px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .toolbar select{font-family:var(--font);font-size:11px;padding:4px 8px;border:1px solid var(--line);border-radius:5px;background:#fff;flex:1}
+  .summary{padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px}
+  .summary .big{font-size:20px;font-weight:700;color:var(--accent)}
+  .summary .lit{color:var(--muted);font-size:11px}
+  .list{flex:1;overflow-y:auto}
+  .row{padding:8px 12px;border-bottom:1px solid #eee;cursor:pointer;font-size:12px}
+  .row:hover{background:#faf8f4}
+  .row .nm{font-weight:600;display:flex;align-items:center;gap:6px}
+  .row .mt{color:var(--muted);font-size:11px;margin-top:2px}
+  .tag{font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:auto;color:#fff}
+  .demo-note{background:#fff8e1;color:#8a6d1a;font-size:10px;padding:4px 14px;text-align:center}
+  .leaflet-popup-content{font-family:var(--font);font-size:12px;line-height:1.5}
+  .leaflet-popup-content b{color:var(--accent)}
+  @media(max-width:720px){.wrap{flex-direction:column}.side{width:100%;height:46%;border-left:none;border-top:1px solid var(--line)}#map{height:54%}}
+
+  /* login + status */
+  .gate{position:fixed;inset:0;background:var(--ink);display:flex;align-items:center;justify-content:center;z-index:9999}
+  .gate .card{background:var(--panel);border-radius:14px;padding:26px 24px;width:300px;box-shadow:0 10px 40px rgba(0,0,0,.35)}
+  .gate h2{font-size:17px;margin-bottom:4px;color:var(--ink)}
+  .gate p{font-size:12px;color:var(--muted);margin-bottom:16px}
+  .gate input{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:7px;font-size:13px;margin-bottom:10px;font-family:var(--font)}
+  .gate button{width:100%;padding:10px;border:none;border-radius:7px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)}
+  .gate button:disabled{opacity:.6}
+  .gate .err{color:#c0392b;font-size:11px;margin-top:8px;min-height:14px}
+  .banner{background:#fdecea;color:#c0392b;font-size:11px;padding:6px 14px;text-align:center;display:none}
+  .banner.show{display:block}
+</style>
+</head>
+<body>
+<header><h1>Skelsee Logistics</h1><span style="font-size:11px;color:#b8c2c9">Reorder & Prospect Planner</span><span class="date" id="today"></span></header>
+<div class="demo-note" id="demoNote">Showing your real map pins (demo mode) — connect Supabase to go live.</div>
+<div class="wrap">
+  <div id="map"></div>
+  <aside class="side">
+    <div class="layer-toggles">
+      <label><span class="sw" style="background:var(--cust)"></span><input type="checkbox" id="tgCust" checked> Existing customers <span class="cnt" id="cCust">0</span></label>
+      <label><span class="sw" style="background:var(--farm)"></span><input type="checkbox" id="tgFarm" checked> Farmer prospects <span class="cnt" id="cFarm">0</span></label>
+      <label><span class="sw" style="background:var(--mine)"></span><input type="checkbox" id="tgMine" checked> Mine prospects <span class="cnt" id="cMine">0</span></label>
+    </div>
+    <div class="toolbar">
+      <select id="areaFilter"><option value="all">All areas</option></select>
+      <select id="seasonFilter"><option value="all">Any season</option><option value="in_season">In-season only</option></select>
+    </div>
+    <div class="summary"><div><span class="big" id="visCount">0</span> shown</div><div class="lit" id="visSub">customers + prospects on map</div></div>
+    <div class="list" id="list"></div>
+  </aside>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<body>
+<div class="gate" id="gate">
+  <div class="card">
+    <h2>Skelsee Logistics</h2>
+    <p>Route & prospect planner — ops / admin sign in.</p>
+    <input id="email" type="email" placeholder="Email" autocomplete="username">
+    <input id="password" type="password" placeholder="Password" autocomplete="current-password">
+    <button id="loginBtn">Sign in</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+<div class="banner" id="banner"></div>
+
+<header><h1>Skelsee Logistics</h1><span style="font-size:11px;color:#b8c2c9">Reorder & Prospect Planner</span><span class="date" id="today"></span></header>
+<div class="demo-note" id="demoNote">Showing your real map pins (demo mode) — connect Supabase to go live.</div>
+<div class="wrap">
+  <div id="map"></div>
+  <aside class="side">
+    <div class="layer-toggles">
+      <label><span class="sw" style="background:var(--cust)"></span><input type="checkbox" id="tgCust" checked> Existing customers <span class="cnt" id="cCust">0</span></label>
+      <label><span class="sw" style="background:var(--farm)"></span><input type="checkbox" id="tgFarm" checked> Farmer prospects <span class="cnt" id="cFarm">0</span></label>
+      <label><span class="sw" style="background:var(--mine)"></span><input type="checkbox" id="tgMine" checked> Mine prospects <span class="cnt" id="cMine">0</span></label>
+    </div>
+    <div class="toolbar">
+      <select id="areaFilter"><option value="all">All areas</option></select>
+      <select id="seasonFilter"><option value="all">Any season</option><option value="in_season">In-season only</option></select>
+    </div>
+    <div class="summary"><div><span class="big" id="visCount">0</span> shown</div><div class="lit" id="visSub">customers + prospects on map</div></div>
+    <div class="list" id="list"></div>
+  </aside>
+</div>
+<script>
+const SB_URL="https://lkaotuavapyvqfuuyzft.supabase.co";
+const SB_ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYW90dWF2YXB5dnFmdXV5emZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MzU4NzcsImV4cCI6MjA5NzQxMTg3N30.he7Ah-TVyzZZAMiCHglIzP-UbdnxDw-CW4V9mYYJBDU";
+const sb = supabase.createClient(SB_URL, SB_ANON);
+
+// demo fallback (your real pins, used only if live fetch yields nothing/offline)
+const DEMO=[
+{n:"Pan African Mining (Pvt) Ltd",t:"customer",s:"customer",a:"BANKET",lat:-17.40062,lng:30.52152,c:""},
+{n:"Bryden Country School",t:"customer",s:"customer",a:"CHEGUTU",lat:-18.12629,lng:30.18192,c:""},
+{n:"Festive Eggs",t:"customer",s:"customer",a:"CHEGUTU",lat:-18.18099,lng:30.08189,c:""},
+{n:"Shengxiang Investments.",t:"customer",s:"customer",a:"GOROMONZI",lat:-17.92914,lng:31.29318,c:""},
+{n:"Midlands Christian Schools",t:"customer",s:"customer",a:"GWERU",lat:-19.51167,lng:29.71201,c:""},
+{n:"RK Farm Pvt Ltd",t:"customer",s:"customer",a:"KAROI",lat:-16.72203,lng:29.93426,c:""},
+{n:"Dandy Zimbabwe P/L",t:"customer",s:"customer",a:"NORTON",lat:-17.89124,lng:30.65757,c:""},
+{n:"Zambezi Cruise & Safaris t/a",t:"customer",s:"customer",a:"SELOUS",lat:-18.13041,lng:30.37977,c:""},
+{n:"Steel Makers",t:"customer",s:"customer",a:"",lat:-20.06159,lng:30.79892,c:""},
+{n:"Dorowa Phosphate Mine",t:"mine",s:"prospect",a:"",lat:-19.06899,lng:31.77208,c:""},
+{n:"Sabi Star Mine",t:"mine",s:"prospect",a:"",lat:-19.20349,lng:31.96059,c:"LITHIUM"},
+{n:"shamva mine",t:"mine",s:"prospect",a:"",lat:-17.31969,lng:31.49977,c:"GOLD"},
+{n:"Penhalonga mine",t:"mine",s:"prospect",a:"",lat:-18.88317,lng:32.698,c:"GOLD"},
+{n:"Tiger Reef Mine",t:"mine",s:"prospect",a:"",lat:-18.87515,lng:29.71204,c:""},
+{n:"Globe and Phoenix Mine",t:"mine",s:"prospect",a:"",lat:-18.92613,lng:29.80054,c:""},
+{n:"Primrose Mine",t:"mine",s:"prospect",a:"",lat:-18.92162,lng:29.7502,c:""},
+{n:"Trojan Nickel Mine",t:"mine",s:"prospect",a:"",lat:-17.33305,lng:31.28395,c:""},
+{n:"Canterbury Mining",t:"mine",s:"prospect",a:"",lat:-17.31435,lng:31.51448,c:"GOLD"},
+{n:"Jena Mines",t:"mine",s:"prospect",a:"",lat:-18.91115,lng:29.15551,c:""},
+{n:"ZINWA Tokwe-Mukosi",t:"mine",s:"prospect",a:"",lat:-20.73917,lng:30.90988,c:""},
+{n:"CRG MIne",t:"mine",s:"prospect",a:"",lat:-17.22863,lng:32.05056,c:""},
+{n:"ZIQ",t:"mine",s:"prospect",a:"",lat:-17.30506,lng:32.12133,c:""},
+{n:"Ran Mine",t:"mine",s:"prospect",a:"",lat:-17.31079,lng:31.28915,c:""},
+{n:"Sandawa Mine",t:"mine",s:"prospect",a:"",lat:-20.49763,lng:29.899,c:"GOLD"},
+{n:"lynx Graphite mine",t:"mine",s:"prospect",a:"",lat:-16.6008,lng:29.46296,c:""},
+{n:"Last hope mine",t:"mine",s:"prospect",a:"",lat:-16.71143,lng:29.75172,c:""},
+{n:"Cam and motor mine",t:"mine",s:"prospect",a:"",lat:-18.31921,lng:29.94061,c:""},
+{n:"Bombo",t:"mine",s:"prospect",a:"",lat:-18.30078,lng:29.83248,c:"GOLD"},
+{n:"Peter MArais",t:"mine",s:"prospect",a:"",lat:-18.39202,lng:29.92037,c:""},
+{n:"Angus Thiesen",t:"mine",s:"prospect",a:"",lat:-17.50707,lng:30.95062,c:"GOLD"},
+{n:"Nakweru Investments",t:"mine",s:"prospect",a:"",lat:-17.34425,lng:31.52772,c:"GOLD"},
+{n:"Point 24",t:"mine",s:"prospect",a:"",lat:-17.34363,lng:31.50813,c:""},
+{n:"Dragon Mine / Elsberry",t:"mine",s:"prospect",a:"",lat:-17.29138,lng:32.05821,c:""},
+{n:"SAbi Goldmine",t:"mine",s:"prospect",a:"",lat:-20.39339,lng:30.13436,c:""},
+{n:"Renco Mine",t:"mine",s:"prospect",a:"",lat:-20.62502,lng:31.16829,c:""},
+{n:"Point 27",t:"mine",s:"prospect",a:"",lat:-17.26498,lng:31.60383,c:""},
+{n:"Point 28",t:"mine",s:"prospect",a:"",lat:-17.28508,lng:31.61368,c:""},
+{n:"AFROCHINE",t:"mine",s:"prospect",a:"",lat:-18.05895,lng:30.38236,c:""},
+{n:"How Mine",t:"mine",s:"prospect",a:"",lat:-20.30469,lng:28.77625,c:""},
+{n:"Golden Valley",t:"mine",s:"prospect",a:"",lat:-18.22721,lng:29.7949,c:""},
+{n:"Venice mine",t:"mine",s:"prospect",a:"",lat:-18.4912,lng:29.77411,c:""},
+{n:"TODAL Mine",t:"mine",s:"prospect",a:"",lat:-19.67819,lng:30.01121,c:""},
+{n:"Silabela Mine Chines Carrie",t:"mine",s:"prospect",a:"",lat:-19.02138,lng:29.04252,c:""},
+{n:"Mr CHen Chinese Customer Car",t:"mine",s:"prospect",a:"",lat:-17.4759,lng:31.39538,c:""},
+{n:"Chinese Mine Newtron Mining",t:"mine",s:"prospect",a:"",lat:-17.14877,lng:32.42183,c:""},
+{n:"A Rendell",t:"farmer",s:"prospect",a:"TRELAWNEY",lat:-17.53317,lng:30.45661,c:"TOBACCO"},
+{n:"A Stidolph.",t:"farmer",s:"prospect",a:"KAROI",lat:-16.79382,lng:29.66541,c:"TOBACCO"},
+{n:"ADAM FALKENBERG",t:"farmer",s:"prospect",a:"Chinhoyi",lat:-17.33076,lng:30.22482,c:"TOBACCO"},
+{n:"GRAEME SMITH",t:"farmer",s:"prospect",a:"Bromley",lat:-18.07425,lng:31.33619,c:"TOBACCO"},
+{n:"ANDREW MARCHUSSEN",t:"farmer",s:"prospect",a:"Beatrice",lat:-18.23594,lng:30.88067,c:"TOBACCO"},
+{n:"ANDREW MATABIRI",t:"farmer",s:"prospect",a:"Trelawney",lat:-17.52089,lng:30.42657,c:"TOBACCO"},
+{n:"JAMES ODENDAAL.",t:"farmer",s:"prospect",a:"Bromley",lat:-18.07229,lng:31.34701,c:"TOBACCO"},
+{n:"ANTHONY BLYTH",t:"farmer",s:"prospect",a:"Norton",lat:-17.98068,lng:30.66068,c:"TOBACCO"},
+{n:"OX HACKING.",t:"farmer",s:"prospect",a:"Bromley",lat:-18.08045,lng:31.35456,c:"TOBACCO"},
+{n:"Ben Mostert.",t:"farmer",s:"prospect",a:"Karoi",lat:-16.75733,lng:29.76566,c:"TOBACCO"},
+{n:"BEN NEL.",t:"farmer",s:"prospect",a:"Darwendale",lat:-17.71351,lng:30.51584,c:"TOBACCO"},
+{n:"Benade",t:"farmer",s:"prospect",a:"LIONS DEN",lat:-17.25012,lng:30.02247,c:"TOBACCO"},
+{n:"Billy Van de merwe",t:"farmer",s:"prospect",a:"DARWENDALE",lat:-17.7037,lng:30.59514,c:"TOBACCO"},
+{n:"RICH HOWES.",t:"farmer",s:"prospect",a:"Bromley",lat:-18.08616,lng:31.34769,c:"TOBACCO"},
+{n:"CAMPBELL REID",t:"farmer",s:"prospect",a:"Beatrice",lat:-18.25887,lng:30.87296,c:"TOBACCO"},
+{n:"D Meikle",t:"farmer",s:"prospect",a:"BANKET",lat:-17.38877,lng:30.42681,c:"TOBACCO"},
+{n:"D Nel",t:"farmer",s:"prospect",a:"TRELAWNEY",lat:-17.53432,lng:30.43601,c:"TOBACCO"},
+{n:"DAN NEL.",t:"farmer",s:"prospect",a:"Dawendale",lat:-17.67001,lng:30.29989,c:"TOBACCO"},
+{n:"DANA NEL",t:"farmer",s:"prospect",a:"Karoi",lat:-16.90047,lng:29.63359,c:"TOBACCO"},
+{n:"CRAIG COLEMAN",t:"farmer",s:"prospect",a:"Headlands",lat:-18.25944,lng:31.97338,c:"TOBACCO"},
+{n:"DAVE BOUMER - Bryn",t:"farmer",s:"prospect",a:"Norton",lat:-17.90201,lng:30.67214,c:"TOBACCO"},
+{n:"DAVE CAPSOPOULOS.",t:"farmer",s:"prospect",a:"Trelawney",lat:-17.53366,lng:30.46863,c:"TOBACCO"},
+{n:"GRANT HOFMEYER",t:"farmer",s:"prospect",a:"Shamva",lat:-17.27509,lng:31.57781,c:"TOBACCO"},
+{n:"MARK van BLERK",t:"farmer",s:"prospect",a:"Headlands",lat:-18.49494,lng:31.93473,c:"TOBACCO"},
+{n:"DIAAN LUBBE",t:"farmer",s:"prospect",a:"Karoi",lat:-16.75437,lng:29.61064,c:"TOBACCO"},
+{n:"DOUG SINCLAIR/ IAN MILLAR",t:"farmer",s:"prospect",a:"Harare South",lat:-17.96106,lng:30.95801,c:"TOBACCO"},
+{n:"DUNCAN WOOD.",t:"farmer",s:"prospect",a:"Mvurwi",lat:-17.03504,lng:30.83641,c:"TOBACCO"},
+{n:"MICHAEL MAKONI",t:"farmer",s:"prospect",a:"Headlands",lat:-18.27471,lng:32.0312,c:"TOBACCO"},
+{n:"EDISON MAKINA",t:"farmer",s:"prospect",a:"Beatrice",lat:-18.28061,lng:30.87346,c:"TOBACCO"},
+{n:"SEAN BROMLEY",t:"farmer",s:"prospect",a:"Headlands",lat:-18.29427,lng:32.11772,c:"TOBACCO"},
+{n:"GALEN SWALES DIANA FARM.",t:"farmer",s:"prospect",a:"Trelawney",lat:-17.51909,lng:30.45266,c:"TOBACCO"},
+{n:"GALEN SWALES MALABAR FARM.",t:"farmer",s:"prospect",a:"Trelawney",lat:-17.52269,lng:30.44151,c:"TOBACCO"},
+{n:"GARY HOBBS",t:"farmer",s:"prospect",a:"Chinoyi",lat:-17.39236,lng:30.23718,c:"TOBACCO"},
+{n:"Warick Smith",t:"farmer",s:"prospect",a:"Headlands",lat:-18.28742,lng:32.05214,c:"TOBACCO"},
+{n:"GRAHAM WEBB.",t:"farmer",s:"prospect",a:"Centenary",lat:-16.7103,lng:31.11387,c:"TOBACCO"},
+{n:"GRANT GARDENER",t:"farmer",s:"prospect",a:"Karoi",lat:-16.85786,lng:29.87326,c:"TOBACCO"},
+{n:"ANDY LOCK",t:"farmer",s:"prospect",a:"Macheke",lat:-18.38692,lng:31.82678,c:"TOBACCO"},
+{n:"Grove- IVy customer",t:"farmer",s:"prospect",a:"CHEGUTU",lat:-18.1508,lng:30.15439,c:"TOBACCO"},
+{n:"DANE SWEMMER",t:"farmer",s:"prospect",a:"Macheke",lat:-17.88072,lng:31.86605,c:"TOBACCO"},
+{n:"Hobbs",t:"farmer",s:"prospect",a:"KAROI",lat:-16.86671,lng:29.67194,c:"TOBACCO"},
+{n:"Howes",t:"farmer",s:"prospect",a:"WEDZA",lat:-18.62675,lng:31.55664,c:"TOBACCO"},
+{n:"Hugo Winkfield",t:"farmer",s:"prospect",a:"HARARE",lat:-17.93523,lng:30.89996,c:"TOBACCO"},
+{n:"IAN BARKER",t:"farmer",s:"prospect",a:"Karoi",lat:-16.99629,lng:29.67245,c:"TOBACCO"},
+{n:"Jack Hawgood",t:"farmer",s:"prospect",a:"Beatrice",lat:-18.24801,lng:30.83741,c:"TOBACCO"},
+{n:"FRANK BOREMAN",t:"farmer",s:"prospect",a:"Macheke",lat:-18.00387,lng:31.87813,c:"TOBACCO"},
+{n:"JASON WATT- Ripping Waters\u00a0 ",t:"farmer",s:"prospect",a:"Macheke",lat:-18.21107,lng:31.82897,c:"TOBACCO"},
+{n:"JOHN FABER",t:"farmer",s:"prospect",a:"Macheke",lat:-18.18002,lng:31.74496,c:"TOBACCO"},
+{n:"JODY COWLEY.",t:"farmer",s:"prospect",a:"Trelawney",lat:-17.52777,lng:30.46142,c:"TOBACCO"},
+{n:"JOHN OSBORNE.",t:"farmer",s:"prospect",a:"Macheke",lat:-18.01822,lng:31.88218,c:"TOBACCO"},
+{n:"JOHN GIBSON",t:"farmer",s:"prospect",a:"",lat:-17.92955,lng:31.04255,c:"TOBACCO"},
+{n:"RICH SWEMMER",t:"farmer",s:"prospect",a:"Macheke, 2 farms\u00a0 , 40km, 15km offroad",lat:-17.92841,lng:31.83824,c:"TOBACCO"},
+{n:"RICK PAGE - Bad Payer",t:"farmer",s:"prospect",a:"Macheke",lat:-18.11255,lng:31.8681,c:"TOBACCO"},
+{n:"KEVIN COOKE.",t:"farmer",s:"prospect",a:"Beatrice",lat:-18.21149,lng:30.86041,c:"TOBACCO"},
+{n:"Leon Burger",t:"farmer",s:"prospect",a:"Kwekwe",lat:-18.95468,lng:29.84502,c:"TOBACCO"},
+{n:"Maggs",t:"farmer",s:"prospect",a:"CONCESSION",lat:-17.36761,lng:30.90794,c:"TOBACCO"},
+{n:"MANIAS CHITASHA",t:"farmer",s:"prospect",a:"",lat:-17.93968,lng:31.17408,c:"TOBACCO"},
+{n:"ROB ZEE",t:"farmer",s:"prospect",a:"Macheke",lat:-17.86879,lng:32.09144,c:"TOBACCO"},
+{n:"MARTIN NHAPATA",t:"farmer",s:"prospect",a:"Mvurwi",lat:-17.01377,lng:30.82174,c:"TOBACCO"},
+{n:"RYAN LOUBSER.",t:"farmer",s:"prospect",a:"Macheke",lat:-17.89412,lng:31.79807,c:"TOBACCO"},
+{n:"MIKE LAMB",t:"farmer",s:"prospect",a:"Beatrice",lat:-18.28297,lng:30.84718,c:"TOBACCO"}
+];
+let DATA=[];
+
+const SEASON={TOBACCO:[1,12],MAIZE:[8,6],WHEAT:[4,10],BARLEY:[4,10],SOYBEANS:[9,5],SUNFLOWER:[9,6],COTTON:[9,8],SUGARCANE:[1,12],POTATOES:[1,12],CITRUS:[1,12],DAIRY:[1,12],POULTRY:[1,12]};
+const COL={customer:'#1f4e78',farmer:'#5a8f7b',mine:'#8a6d3b'};
+const MM=new Date().getMonth()+1;
+function inSeason(crop){const w=SEASON[crop];if(!w)return null;const[a,b]=w;return a<=b?(MM>=a&&MM<=b):(MM>=a||MM<=b);}
+
+let map,markers=[];
+function initMap(){if(map)return;map=L.map('map',{zoomControl:true}).setView([-17.8,30.8],7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:18}).addTo(map);}
+
+// ---- AUTH ----
+async function tryExistingSession(){
+  const {data:{session}}=await sb.auth.getSession();
+  if(session){ await afterLogin(); }
+}
+async function doLogin(){
+  const btn=document.getElementById('loginBtn'), err=document.getElementById('loginErr');
+  btn.disabled=true; err.textContent='';
+  const email=document.getElementById('email').value.trim();
+  const password=document.getElementById('password').value;
+  const {error}=await sb.auth.signInWithPassword({email,password});
+  if(error){ err.textContent=error.message; btn.disabled=false; return; }
+  await afterLogin();
+}
+async function afterLogin(){
+  document.getElementById('gate').style.display='none';
+  await loadData();
+}
+
+// ---- DATA ----
+async function loadData(){
+  const banner=document.getElementById('banner');
+  try{
+    // prospects (map_prospect_feed) + customers (map_customer_feed)
+    const [pRes,cRes]=await Promise.all([
+      sb.from('map_prospect_feed').select('*'),
+      sb.from('map_customer_feed').select('*')
+    ]);
+    if(pRes.error) throw pRes.error;
+    const prospects=(pRes.data||[]).map(r=>({
+      n:r.name, t:r.entity_type, s:'prospect', a:r.area||'',
+      lat:Number(r.lat), lng:Number(r.lng),
+      c:(Array.isArray(r.crops)&&r.crops[0])?r.crops[0]:''
+    }));
+    const customers=(cRes.error?[]:(cRes.data||[])).map(r=>({
+      n:r.customer_name||r.name, t:'customer', s:'customer', a:r.usual_location||'',
+      lat:Number(r.lat), lng:Number(r.lng), c:''
+    })).filter(d=>!isNaN(d.lat)&&!isNaN(d.lng));
+    DATA=[...customers,...prospects].filter(d=>!isNaN(d.lat)&&!isNaN(d.lng));
+    if(DATA.length===0){
+      banner.textContent='No rows returned — your account may not have ops/admin access, or data isn\'t loaded yet.';
+      banner.classList.add('show');
+      DATA=DEMO; // show something rather than an empty map
+    }else{
+      document.getElementById('demoNote').style.display='none';
+    }
+  }catch(e){
+    banner.textContent='Could not reach database ('+e.message+') — showing demo pins.';
+    banner.classList.add('show');
+    DATA=DEMO;
+  }
+  initMap(); fillAreas(); counts(); render();
+}
+function typeOn(t){return t==='customer'?tgCust.checked:t==='farmer'?tgFarm.checked:tgMine.checked;}
+function visible(){
+  const area=areaFilter.value, sf=seasonFilter.value;
+  return DATA.filter(d=>{
+    if(!typeOn(d.t))return false;
+    if(area!=='all' && (d.a||'').toUpperCase()!==area)return false;
+    if(sf==='in_season'){const s=inSeason(d.c);if(d.t==='farmer'&&s===false)return false;}
+    return true;
+  });
+}
+function render(){
+  markers.forEach(m=>map.removeLayer(m));markers=[];
+  const vis=visible();
+  vis.forEach(d=>{
+    const seasonHot=d.t==='farmer'&&inSeason(d.c)===true;
+    const m=L.circleMarker([d.lat,d.lng],{radius:d.t==='customer'?7:6,
+      fillColor:seasonHot?'#c0392b':COL[d.t],color:'#fff',weight:1.5,fillOpacity:.85}).addTo(map);
+    const seas=d.c?(inSeason(d.c)===true?' · in-season now':inSeason(d.c)===false?' · off-season':''):'';
+    m.bindPopup('<b>'+d.n+'</b><br>'+(d.t==='customer'?'Existing customer':d.t==='mine'?'Mine (prospect)':'Farmer (prospect)')+
+      '<br>'+(d.a||'area unknown')+(d.c?'<br>Crop: '+d.c+seas:'')+(d.t!=='customer'?'<br><i>potential to fill tank space</i>':''));
+    markers.push(m);
+  });
+  visCount.textContent=vis.length;
+  const nc=vis.filter(d=>d.t==='customer').length,nf=vis.filter(d=>d.t==='farmer').length,nm=vis.filter(d=>d.t==='mine').length;
+  visSub.textContent=nc+' customers · '+nf+' farmers · '+nm+' mines';
+  // list: in-season farmers + mines first (the fill-space targets)
+  vis.sort((a,b)=>{const ha=a.t==='farmer'&&inSeason(a.c)===true?0:a.t!=='customer'?1:2;
+    const hb=b.t==='farmer'&&inSeason(b.c)===true?0:b.t!=='customer'?1:2;return ha-hb;});
+  list.innerHTML=vis.slice(0,120).map((d,i)=>{
+    const hot=d.t==='farmer'&&inSeason(d.c)===true;
+    const tag=d.t==='customer'?'':hot?'<span class="tag" style="background:#c0392b">IN SEASON</span>':
+      d.t==='mine'?'<span class="tag" style="background:#8a6d3b">MINE</span>':'<span class="tag" style="background:#5a8f7b">FARMER</span>';
+    return '<div class="row" data-i="'+i+'"><div class="nm"><span class="sw" style="background:'+(hot?'#c0392b':COL[d.t])+'"></span>'+d.n+tag+
+      '</div><div class="mt">'+(d.a||'—')+(d.c?' · '+d.c:'')+'</div></div>';
+  }).join('')||'<div style="padding:14px;color:#9aa0a6">No pins match.</div>';
+  [...list.querySelectorAll('.row')].forEach(el=>el.onclick=()=>{const d=vis[+el.dataset.i];
+    map.setView([d.lat,d.lng],11);markers.forEach(m=>{const ll=m.getLatLng();if(ll.lat===d.lat&&ll.lng===d.lng)m.openPopup();});});
+}
+function fillAreas(){
+  const areas=[...new Set(DATA.map(d=>(d.a||'').toUpperCase()).filter(Boolean))].sort();
+  areaFilter.innerHTML='<option value="all">All areas</option>'+areas.map(a=>'<option>'+a+'</option>').join('');
+}
+function counts(){cCust.textContent=DATA.filter(d=>d.t==='customer').length;
+  cFarm.textContent=DATA.filter(d=>d.t==='farmer').length;cMine.textContent=DATA.filter(d=>d.t==='mine').length;}
+today.textContent=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+['tgCust','tgFarm','tgMine','areaFilter','seasonFilter'].forEach(id=>document.getElementById(id).onchange=render);
+
+today.textContent=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+['tgCust','tgFarm','tgMine','areaFilter','seasonFilter'].forEach(id=>document.getElementById(id).onchange=render);
+document.getElementById('loginBtn').onclick=doLogin;
+document.getElementById('password').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+tryExistingSession();
+</script>
+</body>
+</html>
