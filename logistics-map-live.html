@@ -5,15 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Skelsee Logistics — Reorder & Prospect Planner</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
-  :root{--ink:#12242e;--paper:#f5f2ec;--panel:#fff;--line:#d9d2c5;--accent:#1f4e78;--muted:#5c6670;
-    --cust:#1f4e78;--farm:#5a8f7b;--mine:#8a6d3b;--inseason:#c0392b;--font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+  :root{
+    --red:#D4180A;--red-dark:#A32D2D;--red-light:#FCEBEB;
+    --green:#1D9E75;--green-light:#EAF3DE;--green-dark:#3B6D11;
+    --amber:#BA7517;--amber-light:#FAEEDA;
+    --blue:#185FA5;--blue-light:#E6F1FB;--blue-dark:#0C447C;
+    --ink:#1a1a18;--paper:#F0F0EE;--panel:#ffffff;--line:#E0E0DE;--accent:#D4180A;--muted:#9a9a97;
+    --cust:#185FA5;--farm:#1D9E75;--mine:#BA7517;--inseason:#D4180A;
+    --font:'DM Sans',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --mono:'DM Mono',monospace;}
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
   body{font-family:var(--font);color:var(--ink);background:var(--paper);display:flex;flex-direction:column;height:100vh;overflow:hidden}
-  header{background:var(--ink);color:var(--paper);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0}
-  header h1{font-size:15px;font-weight:700}
-  header .date{font-size:11px;color:#b8c2c9;margin-left:auto}
+  header{background:#fff;color:var(--ink);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid var(--line)}
+  header h1{font-size:15px;font-weight:700;color:var(--red)}
+  header .date{font-size:11px;color:var(--muted);margin-left:auto;font-family:var(--mono)}
   .wrap{flex:1;display:flex;min-height:0}
   #map{flex:1;min-height:0}
   .side{width:300px;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;flex-shrink:0}
@@ -24,7 +32,7 @@
   .toolbar{padding:8px 12px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   .toolbar select{font-family:var(--font);font-size:11px;padding:4px 8px;border:1px solid var(--line);border-radius:5px;background:#fff;flex:1}
   .summary{padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px}
-  .summary .big{font-size:20px;font-weight:700;color:var(--accent)}
+  .summary .big{font-size:20px;font-weight:700;color:var(--red);font-family:var(--mono)}
   .summary .lit{color:var(--muted);font-size:11px}
   .list{flex:1;overflow-y:auto}
   .row{padding:8px 12px;border-bottom:1px solid #eee;cursor:pointer;font-size:12px}
@@ -37,15 +45,59 @@
   .leaflet-popup-content b{color:var(--accent)}
   @media(max-width:720px){.wrap{flex-direction:column}.side{width:100%;height:46%;border-left:none;border-top:1px solid var(--line)}#map{height:54%}}
 
-  .gate{position:fixed;inset:0;background:var(--ink);display:flex;align-items:center;justify-content:center;z-index:9999}
+  .gate{position:fixed;inset:0;background:var(--paper);display:flex;align-items:center;justify-content:center;z-index:9999}
   .gate .card{background:var(--panel);border-radius:14px;padding:26px 24px;width:300px;box-shadow:0 10px 40px rgba(0,0,0,.35)}
   .gate h2{font-size:17px;margin-bottom:4px;color:var(--ink)}
   .gate p{font-size:12px;color:var(--muted);margin-bottom:16px}
   .gate input{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:7px;font-size:13px;margin-bottom:10px;font-family:var(--font)}
-  .gate button{width:100%;padding:10px;border:none;border-radius:7px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)}
+  .gate button{width:100%;padding:11px;border:none;border-radius:8px;background:var(--red);color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font)}
   .gate button:disabled{opacity:.6}
   .gate .err{color:#c0392b;font-size:11px;margin-top:8px;min-height:14px}
   .banner{background:#fdecea;color:#c0392b;font-size:11px;padding:6px 14px;text-align:center;display:none}
+
+  /* PLANNER */
+  .planner{border-top:2px solid var(--red);background:var(--red-light);display:flex;flex-direction:column;max-height:45%;flex-shrink:0}
+  .planner-head{padding:9px 12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+  .planner-head h3{font-size:12px;font-weight:700;color:var(--red-dark);text-transform:uppercase;letter-spacing:0.04em;display:flex;align-items:center;gap:6px}
+  .planner-head .chev{font-size:11px;color:var(--red-dark)}
+  .planner-body{display:flex;flex-direction:column;min-height:0;flex:1}
+  .planner.collapsed .planner-body{display:none}
+  .truck-gauge{padding:8px 12px}
+  .gauge-track{height:22px;background:#fff;border:1px solid var(--line);border-radius:11px;overflow:hidden;position:relative}
+  .gauge-fill{height:100%;background:linear-gradient(90deg,var(--amber),var(--green));transition:width 0.3s;border-radius:11px 0 0 11px}
+  .gauge-fill.over{background:var(--red)}
+  .gauge-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-family:var(--mono);color:var(--ink)}
+  .gauge-sub{font-size:10px;color:var(--muted);text-align:center;margin-top:3px}
+  .run-list{flex:1;overflow-y:auto;min-height:0}
+  .run-row{padding:7px 12px;border-bottom:1px solid #f0e5e2;display:flex;align-items:center;gap:8px;font-size:12px}
+  .run-row .rn{flex:1;min-width:0}
+  .run-row .rn b{font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .run-row .rn span{font-size:10px;color:var(--muted)}
+  .run-row input{width:64px;padding:4px 6px;border:1px solid var(--line);border-radius:5px;font-family:var(--mono);font-size:11px;text-align:right}
+  .run-row .rm{color:var(--red);cursor:pointer;font-weight:700;font-size:14px;padding:0 4px}
+  .planner-empty{padding:14px 12px;font-size:11px;color:var(--muted);text-align:center}
+  .planner-actions{padding:8px 12px;display:flex;gap:6px;border-top:1px solid #f0e5e2}
+  .planner-actions button{flex:1;padding:8px;border:none;border-radius:7px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer}
+  .btn-clear{background:#fff;color:var(--red);border:1px solid var(--red)!important}
+  .btn-export{background:var(--red);color:#fff}
+  .add-run-btn{margin-top:6px;width:100%;padding:6px;background:var(--red);color:#fff;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer}
+
+  /* REORDER PANEL */
+  .reorder{border-top:1px solid var(--line);display:flex;flex-direction:column;max-height:40%;flex-shrink:0}
+  .reorder-head{padding:9px 12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:var(--blue-light)}
+  .reorder-head h3{font-size:12px;font-weight:700;color:var(--blue-dark);text-transform:uppercase;letter-spacing:0.04em;display:flex;align-items:center;gap:6px}
+  .reorder-tabs{display:flex;border-bottom:1px solid var(--line)}
+  .reorder-tab{flex:1;padding:7px 4px;font-size:10px;font-weight:700;text-align:center;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);text-transform:uppercase;letter-spacing:0.02em}
+  .reorder-tab.active{color:var(--blue-dark);border-bottom-color:var(--blue)}
+  .reorder-tab .n{display:block;font-size:14px;font-family:var(--mono)}
+  .reorder-list{flex:1;overflow-y:auto;min-height:0}
+  .ro-row{padding:8px 12px;border-bottom:1px solid #eef;font-size:12px;display:flex;align-items:flex-start;gap:8px}
+  .ro-row .roi{flex:1;min-width:0}
+  .ro-row .roi b{font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ro-row .roi span{font-size:10px;color:var(--muted)}
+  .ro-pct{font-family:var(--mono);font-weight:700;font-size:12px;flex-shrink:0}
+  .ro-add{background:var(--red);color:#fff;border:none;border-radius:5px;font-size:10px;font-weight:700;padding:4px 7px;cursor:pointer;flex-shrink:0;white-space:nowrap}
+  .reorder.collapsed .reorder-tabs,.reorder.collapsed .reorder-list{display:none}
   .banner.show{display:block}
 </style>
 </head>
@@ -62,7 +114,7 @@
 </div>
 <div class="banner" id="banner"></div>
 
-<header><h1>Skelsee Logistics</h1><span style="font-size:11px;color:#b8c2c9">Reorder & Prospect Planner</span><span class="date" id="today"></span></header>
+<header><h1>⛽ Skelsee Logistics</h1><span style="font-size:11px;color:var(--muted)">Route &amp; Load Planner</span><span class="date" id="today"></span></header>
 <div class="demo-note" id="demoNote">Showing your real map pins (demo mode) — connect Supabase to go live.</div>
 <div class="wrap">
   <div id="map"></div>
@@ -78,6 +130,46 @@
     </div>
     <div class="summary"><div><span class="big" id="visCount">0</span> shown</div><div class="lit" id="visSub">customers + prospects on map</div></div>
     <div class="list" id="list"></div>
+
+    <!-- REORDER PANEL -->
+    <div class="reorder" id="reorder">
+      <div class="reorder-head" onclick="toggleReorder()">
+        <h3>📞 Reorder — who to call</h3>
+        <span class="chev" id="reorderChev" style="font-size:11px;color:var(--blue-dark)">▾</span>
+      </div>
+      <div class="reorder-tabs" id="reorderTabs">
+        <div class="reorder-tab active" data-b="due_now" onclick="setReorderTab('due_now')">Due now<span class="n" id="roCntDue">–</span></div>
+        <div class="reorder-tab" data-b="overdue" onclick="setReorderTab('overdue')">Overdue<span class="n" id="roCntOver">–</span></div>
+        <div class="reorder-tab" data-b="gone_quiet" onclick="setReorderTab('gone_quiet')">Gone quiet<span class="n" id="roCntQuiet">–</span></div>
+      </div>
+      <div class="reorder-list" id="reorderList">
+        <div class="planner-empty">Loading reorder data…</div>
+      </div>
+    </div>
+
+    <!-- LOAD PLANNER -->
+    <div class="planner" id="planner">
+      <div class="planner-head" onclick="togglePlanner()">
+        <h3>🚛 Build a run</h3>
+        <span class="chev" id="plannerChev">▾</span>
+      </div>
+      <div class="planner-body">
+        <div class="truck-gauge">
+          <div class="gauge-track">
+            <div class="gauge-fill" id="gaugeFill" style="width:0%"></div>
+            <div class="gauge-label" id="gaugeLabel">0%</div>
+          </div>
+          <div class="gauge-sub" id="gaugeSub">0 / 40,000 L · truck empty</div>
+        </div>
+        <div class="run-list" id="runList">
+          <div class="planner-empty">Click a pin on the map, then "Add to run" to start building a load.</div>
+        </div>
+        <div class="planner-actions">
+          <button class="btn-clear" onclick="clearRun()">Clear</button>
+          <button class="btn-export" onclick="exportRun()">Copy run</button>
+        </div>
+      </div>
+    </div>
   </aside>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -223,8 +315,10 @@ function render(){
     const m=L.circleMarker([d.lat,d.lng],{radius:d.t==='customer'?7:6,
       fillColor:seasonHot?'#c0392b':COL[d.t],color:'#fff',weight:1.5,fillOpacity:.85}).addTo(map);
     const seas=d.c?(inSeason(d.c)===true?' · in-season now':inSeason(d.c)===false?' · off-season':''):'';
+    const gidx = DATA.indexOf(d);
     m.bindPopup('<b>'+d.n+'</b><br>'+(d.t==='customer'?'Existing customer':d.t==='mine'?'Mine (prospect)':'Farmer (prospect)')+
-      '<br>'+(d.a||'area unknown')+(d.c?'<br>Crop: '+d.c+seas:'')+(d.t!=='customer'?'<br><i>potential to fill tank space</i>':''));
+      '<br>'+(d.a||'area unknown')+(d.c?'<br>Crop: '+d.c+seas:'')+(d.t!=='customer'?'<br><i>potential to fill tank space</i>':'')+
+      '<br><button onclick="addToRun('+gidx+')" style="margin-top:6px;padding:5px 10px;background:#D4180A;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">+ Add to run</button>');
     markers.push(m);
   });
   visCount.textContent=vis.length;
@@ -252,6 +346,163 @@ function counts(){cCust.textContent=DATA.filter(d=>d.t==='customer').length;
 today.textContent=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
 ['tgCust','tgFarm','tgMine','areaFilter','seasonFilter'].forEach(id=>document.getElementById(id).onchange=render);
 
+
+// ---- LOAD PLANNER ----
+const TRUCK_CAP = 40000; // litres
+let RUN = []; // [{name, area, litres, type}]
+
+function togglePlanner(){
+  document.getElementById('planner').classList.toggle('collapsed');
+  const c = document.getElementById('plannerChev');
+  c.textContent = document.getElementById('planner').classList.contains('collapsed') ? '▸' : '▾';
+}
+
+function addToRun(gidx){
+  const d = DATA[gidx];
+  if(!d) return;
+  // avoid duplicates by name
+  if(RUN.some(r=>r.name===d.n)){ return; }
+  RUN.push({ name:d.n, area:d.a||'', litres:0, type:d.t });
+  renderRun();
+  // make sure planner is expanded so they see it land
+  document.getElementById('planner').classList.remove('collapsed');
+  document.getElementById('plannerChev').textContent='▾';
+}
+
+function removeFromRun(i){ RUN.splice(i,1); renderRun(); }
+
+function setRunLitres(i, val){
+  const n = parseInt(val)||0;
+  RUN[i].litres = n<0?0:n;
+  updateGauge();
+}
+
+function renderRun(){
+  const list = document.getElementById('runList');
+  if(!RUN.length){
+    list.innerHTML='<div class="planner-empty">Click a pin on the map, then "+ Add to run" to start building a load.</div>';
+    updateGauge();
+    return;
+  }
+  list.innerHTML = RUN.map((r,i)=>{
+    const col = r.type==='customer'?'var(--cust)':r.type==='mine'?'var(--mine)':'var(--farm)';
+    return '<div class="run-row">'+
+      '<span class="sw" style="background:'+col+'"></span>'+
+      '<div class="rn"><b>'+r.name+'</b><span>'+(r.area||'—')+'</span></div>'+
+      '<input type="number" inputmode="numeric" placeholder="litres" value="'+(r.litres||'')+'" '+
+        'onchange="setRunLitres('+i+',this.value)" oninput="setRunLitres('+i+',this.value)">'+
+      '<span class="rm" onclick="removeFromRun('+i+')" title="remove">×</span>'+
+    '</div>';
+  }).join('');
+  updateGauge();
+}
+
+function updateGauge(){
+  const total = RUN.reduce((a,r)=>a+(r.litres||0),0);
+  const pct = Math.round((total/TRUCK_CAP)*100);
+  const fill = document.getElementById('gaugeFill');
+  const label = document.getElementById('gaugeLabel');
+  const sub = document.getElementById('gaugeSub');
+  fill.style.width = Math.min(pct,100)+'%';
+  fill.classList.toggle('over', total>TRUCK_CAP);
+  label.textContent = pct+'%';
+  const rem = TRUCK_CAP-total;
+  if(total>TRUCK_CAP){
+    sub.textContent = total.toLocaleString()+' / 40,000 L · OVER by '+(total-TRUCK_CAP).toLocaleString()+' L';
+    sub.style.color='var(--red)';
+  } else {
+    sub.textContent = total.toLocaleString()+' / 40,000 L · '+rem.toLocaleString()+' L space left';
+    sub.style.color='var(--muted)';
+  }
+}
+
+function clearRun(){
+  if(RUN.length && !confirm('Clear the whole run?')) return;
+  RUN=[]; renderRun();
+}
+
+function exportRun(){
+  if(!RUN.length){ alert('Add some stops to the run first.'); return; }
+  const total = RUN.reduce((a,r)=>a+(r.litres||0),0);
+  const lines = RUN.map((r,i)=>(i+1)+'. '+r.name+(r.area?' ('+r.area+')':'')+' — '+(r.litres||0).toLocaleString()+' L');
+  const txt = 'SKELSEE — DELIVERY RUN\n'+
+    new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})+'\n\n'+
+    lines.join('\n')+'\n\nTOTAL: '+total.toLocaleString()+' / 40,000 L  ('+Math.round(total/TRUCK_CAP*100)+'% full)';
+  // Copy to clipboard, fallback to prompt
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(txt).then(()=>alert('Run copied to clipboard — paste into WhatsApp or a message.')).catch(()=>window.prompt('Copy your run:',txt));
+  } else {
+    window.prompt('Copy your run:',txt);
+  }
+}
+
+// ---- REORDER PANEL ----
+let REORDER = { due_now:[], overdue:[], gone_quiet:[] };
+let reorderTab = 'due_now';
+
+function toggleReorder(){
+  document.getElementById('reorder').classList.toggle('collapsed');
+  const c=document.getElementById('reorderChev');
+  c.textContent=document.getElementById('reorder').classList.contains('collapsed')?'▸':'▾';
+}
+
+async function loadReorder(){
+  try{
+    const { data, error } = await sb.from('app_reorder_due')
+      .select('customer_clean,status,order_count,avg_cycle_days,days_since_last,ripeness_pct,total_litres,avg_litres')
+      .in('status',['due_now','overdue','gone_quiet']);
+    if(error) throw error;
+    REORDER = { due_now:[], overdue:[], gone_quiet:[] };
+    (data||[]).forEach(r=>{ if(REORDER[r.status]) REORDER[r.status].push(r); });
+    // sort each by total litres desc (biggest customers first)
+    Object.keys(REORDER).forEach(k=>REORDER[k].sort((a,b)=>(b.total_litres||0)-(a.total_litres||0)));
+    document.getElementById('roCntDue').textContent = REORDER.due_now.length;
+    document.getElementById('roCntOver').textContent = REORDER.overdue.length;
+    document.getElementById('roCntQuiet').textContent = REORDER.gone_quiet.length;
+    renderReorder();
+  }catch(e){
+    document.getElementById('reorderList').innerHTML =
+      '<div class="planner-empty">Reorder data not available yet.<br><span style="font-size:10px">('+(e.message||e)+')</span></div>';
+  }
+}
+
+function setReorderTab(b){
+  reorderTab=b;
+  [...document.querySelectorAll('.reorder-tab')].forEach(t=>t.classList.toggle('active',t.dataset.b===b));
+  renderReorder();
+}
+
+function renderReorder(){
+  const rows = REORDER[reorderTab]||[];
+  const list = document.getElementById('reorderList');
+  if(!rows.length){
+    const msg = reorderTab==='gone_quiet'
+      ? 'No customers have gone quiet — good sign.'
+      : 'Nobody in this bucket right now.';
+    list.innerHTML='<div class="planner-empty">'+msg+'</div>';
+    return;
+  }
+  list.innerHTML = rows.map(r=>{
+    const pctCol = r.status==='gone_quiet'?'var(--red)':r.status==='overdue'?'var(--amber)':'var(--green-dark)';
+    const litres = r.avg_litres?Math.round(r.avg_litres):0;
+    const sub = 'every '+(r.avg_cycle_days||'?')+'d · '+ (r.days_since_last||0)+'d ago · ~'+litres.toLocaleString()+'L/order';
+    // add-to-run for a reorder customer uses its typical order size
+    const safeName = r.customer_clean.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    return '<div class="ro-row">'+
+      '<div class="roi"><b>'+r.customer_clean+'</b><span>'+sub+'</span></div>'+
+      '<span class="ro-pct" style="color:'+pctCol+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</span>'+
+      '<button class="ro-add" onclick="addReorderToRun(\''+safeName+'\','+litres+')">+ run</button>'+
+    '</div>';
+  }).join('');
+}
+
+function addReorderToRun(name, litres){
+  if(RUN.some(r=>r.name===name)) return;
+  RUN.push({ name:name, area:'', litres:litres||0, type:'customer' });
+  renderRun();
+  document.getElementById('planner').classList.remove('collapsed');
+  document.getElementById('plannerChev').textContent='▾';
+}
 
 // ---- AUTH ----
 async function tryExistingSession(){
@@ -313,7 +564,7 @@ async function loadData(){
     banner.classList.add('show');
     DATA=DEMO;
   }
-  initMap(); fillAreas(); counts(); render();
+  initMap(); fillAreas(); counts(); render(); loadReorder();
 }
 
 today.textContent=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
