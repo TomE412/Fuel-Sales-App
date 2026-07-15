@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light only">
+<title>Skelsee — Ops Planner</title>
+<link rel="manifest" href="./manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --red:#D4180A;--red-dark:#A32D2D;--red-light:#FCEBEB;
+  --green:#1D9E75;--green-light:#EAF3DE;--green-dark:#3B6D11;
+  --amber:#BA7517;--amber-light:#FAEEDA;
+  --blue:#185FA5;--blue-light:#E6F1FB;--blue-dark:#0C447C;
+  --bg:#F0F0EE;--surface:#fff;--line:#E0E0DE;--muted:#9a9a97;--text2:#5a5a57;--text:#1a1a18;
+  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;}
+
+/* AUTH */
+.auth{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:999;}
+.auth.hidden{display:none;}
+.auth-box{background:#fff;border:1px solid var(--line);border-radius:14px;padding:30px;width:100%;max-width:360px;}
+.auth-box h1{font-size:19px;font-weight:700;margin-bottom:4px;}
+.auth-box .sub{font-size:13px;color:var(--muted);margin-bottom:22px;}
+.fld{margin-bottom:12px;}
+.fld label{font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em;}
+.fld input{width:100%;padding:11px 12px;background:#F4F4F2;border:1.5px solid var(--line);border-radius:8px;font-family:var(--font);font-size:14px;outline:none;}
+.fld input:focus{border-color:var(--red);background:#fff;}
+.btn{width:100%;padding:12px;background:var(--red);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;}
+.err{color:var(--red);font-size:12px;text-align:center;margin-top:10px;min-height:16px;}
+
+/* APP */
+.app{display:none;flex-direction:column;height:100vh;overflow:hidden;}
+.app.active{display:flex;}
+.top{background:#fff;border-bottom:1px solid var(--line);padding:9px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.top h1{font-size:15px;font-weight:700;color:var(--red);}
+.top .who{font-size:12px;color:var(--muted);}
+.top .right{margin-left:auto;display:flex;align-items:center;gap:12px;}
+.clock{font-family:var(--mono);font-size:12px;color:var(--text2);}
+.live{font-size:10px;font-weight:700;color:var(--green-dark);background:var(--green-light);padding:3px 9px;border-radius:99px;}
+.maplink{font-size:11px;font-weight:700;color:var(--blue);text-decoration:none;border:1px solid var(--blue);padding:4px 10px;border-radius:7px;}
+.maplink:hover{background:var(--blue-light);}
+.signout{font-size:11px;color:var(--muted);cursor:pointer;background:none;border:none;font-family:var(--font);text-decoration:underline;}
+
+/* LAYOUT — side by side */
+.cols{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px;overflow:hidden;min-height:0;}
+.col{display:flex;flex-direction:column;gap:12px;overflow-y:auto;min-height:0;}
+@media(max-width:1100px){.cols{grid-template-columns:1fr;overflow-y:auto;}.col{overflow:visible;}}
+
+.panel{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;flex-shrink:0;}
+.ph{padding:9px 13px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;}
+.ph h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;}
+.ph .n{margin-left:auto;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--muted);}
+.pbody{max-height:340px;overflow-y:auto;}
+.empty{padding:22px;text-align:center;font-size:12px;color:var(--muted);}
+
+/* DELIVERY ROWS */
+.row{padding:9px 13px;border-bottom:1px solid #f2f2f0;display:flex;align-items:center;gap:9px;}
+.row:last-child{border-bottom:none;}
+.row .info{flex:1;min-width:0;}
+.row .nm{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.row .meta{font-size:11px;color:var(--muted);margin-top:1px;}
+.row .lit{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green-dark);white-space:nowrap;}
+.mark{background:var(--green);color:#fff;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;white-space:nowrap;}
+.mark:hover{background:var(--green-dark);}
+.mark:disabled{background:var(--green-light);color:var(--green-dark);cursor:default;}
+.done{opacity:0.55;}
+.done .nm{text-decoration:line-through;}
+.pill{display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:5px;}
+.p-diesel{background:var(--blue-light);color:var(--blue-dark);}
+.p-petrol{background:var(--red-light);color:var(--red-dark);}
+.p-done{background:var(--green-light);color:var(--green-dark);}
+
+/* CHASE TABS */
+.tabs{display:flex;border-bottom:1px solid var(--line);}
+.tb{flex:1;padding:7px 4px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;}
+.tb.active{color:var(--red);border-bottom-color:var(--red);}
+.tb .c{display:block;font-family:var(--mono);font-size:14px;}
+.ro{padding:8px 13px;border-bottom:1px solid #f2f2f0;display:flex;align-items:center;gap:8px;}
+.ro:last-child{border-bottom:none;}
+.ro .i{flex:1;min-width:0;}
+.ro .i b{font-size:12px;font-weight:700;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ro .i span{font-size:10px;color:var(--muted);}
+.ro .pct{font-family:var(--mono);font-size:12px;font-weight:700;flex-shrink:0;}
+.ro .amt{font-family:var(--mono);font-size:11px;color:var(--blue);flex-shrink:0;text-align:right;min-width:56px;}
+
+/* BOOK */
+.search{margin-left:auto;padding:5px 9px;border:1px solid var(--line);border-radius:7px;font-family:var(--font);font-size:12px;width:150px;outline:none;}
+table{width:100%;border-collapse:collapse;}
+th{padding:7px 10px;text-align:left;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;background:#fafaf9;position:sticky;top:0;}
+th:hover{color:var(--red);}
+td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
+.mono{font-family:var(--mono);}
+.chips{padding:7px 13px;display:flex;gap:5px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--line);}
+.chip{font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;cursor:pointer;color:var(--muted);background:#F0F0EE;border:1px solid var(--line);}
+.chip.active{background:var(--green-dark);color:#fff;border-color:var(--green-dark);}
+.note{padding:8px 13px;font-size:10px;color:var(--muted);border-top:1px solid var(--line);line-height:1.4;}
+</style>
+</head>
+<body>
+
+<div class="auth" id="auth">
+  <div class="auth-box">
+    <h1>⛽ Ops Planner</h1>
+    <div class="sub">Delivery &amp; reorder planning</div>
+    <div class="fld"><label>Email</label><input type="email" id="em" autocomplete="email"></div>
+    <div class="fld"><label>Password</label><input type="password" id="pw" autocomplete="current-password"></div>
+    <button class="btn" onclick="signIn()">Sign in</button>
+    <div class="err" id="err"></div>
+  </div>
+</div>
+
+<div class="app" id="app">
+  <div class="top">
+    <h1>⛽ Ops Planner</h1>
+    <span class="who" id="who">—</span>
+    <div class="right">
+      <a class="maplink" href="../logistics-map-live.html" target="_blank">🗺️ Map</a>
+      <span class="clock" id="clock"></span>
+      <span class="live">● Live</span>
+      <button class="signout" onclick="signOut()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="cols">
+    <!-- LEFT: deliveries -->
+    <div class="col">
+      <div class="panel">
+        <div class="ph"><h2 style="color:var(--red);">🚛 Today's deliveries</h2><span class="n" id="n-today">0</span></div>
+        <div class="pbody" id="today-list"><div class="empty">Loading…</div></div>
+      </div>
+      <div class="panel">
+        <div class="ph"><h2 style="color:var(--amber);">📅 Upcoming deliveries</h2><span class="n" id="n-up">0</span></div>
+        <div class="pbody" id="up-list"><div class="empty">Loading…</div></div>
+      </div>
+      <div class="panel">
+        <div class="ph"><h2 style="color:var(--green-dark);">✓ Delivered</h2><span class="n" id="n-done">0</span></div>
+        <div class="pbody" id="done-list"><div class="empty">Loading…</div></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: customers -->
+    <div class="col">
+      <div class="panel">
+        <div class="ph"><h2 style="color:var(--blue);">📞 Who to chase</h2>
+          <span class="n" style="font-weight:400;font-size:10px;">ask sales to call — early delivery fills a truck</span></div>
+        <div class="tabs">
+          <div class="tb active" data-b="due_now" onclick="setTab('due_now')">Due now<span class="c" id="c-due">–</span></div>
+          <div class="tb" data-b="overdue" onclick="setTab('overdue')">Overdue<span class="c" id="c-over">–</span></div>
+          <div class="tb" data-b="gone_quiet" onclick="setTab('gone_quiet')">Gone quiet<span class="c" id="c-quiet">–</span></div>
+        </div>
+        <div class="pbody" id="chase-list"><div class="empty">Loading…</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="ph"><h2 style="color:var(--green-dark);">📒 All customers</h2>
+          <input type="text" class="search" id="bk-search" placeholder="Search..." oninput="renderBook()"></div>
+        <div class="chips">
+          <span class="chip active" data-p="all" onclick="setPat('all')">All</span>
+          <span class="chip" data-p="very_frequent" onclick="setPat('very_frequent')">Very frequent</span>
+          <span class="chip" data-p="monthly_ish" onclick="setPat('monthly_ish')">Monthly</span>
+          <span class="chip" data-p="quarterly_ish" onclick="setPat('quarterly_ish')">Quarterly</span>
+          <span class="chip" data-p="occasional" onclick="setPat('occasional')">Occasional</span>
+          <span style="margin-left:auto;font-size:10px;color:var(--muted);" id="bk-count">—</span>
+        </div>
+        <div class="pbody" style="max-height:420px;">
+          <table>
+            <thead><tr>
+              <th onclick="sortBook('customer')">Customer</th>
+              <th onclick="sortBook('order_count')">Ord</th>
+              <th onclick="sortBook('avg_cycle_days')">Every</th>
+              <th onclick="sortBook('avg_litres')">Typical</th>
+              <th onclick="sortBook('days_since_last')">Since</th>
+              <th onclick="sortBook('ripeness_pct')">Ripe</th>
+            </tr></thead>
+            <tbody id="bk-body"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="note">Ripeness = how far through their usual buying cycle they are. 100% = due. Estimates from history, not promises.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL='https://lkaotuavapyvqfuuyzft.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYW90dWF2YXB5dnFmdXV5emZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MzU4NzcsImV4cCI6MjA5NzQxMTg3N30.he7Ah-TVyzZZAMiCHglIzP-UbdnxDw-CW4V9mYYJBDU';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+let SALES=[], CHASE={due_now:[],overdue:[],gone_quiet:[]}, BOOK=[];
+let tab='due_now', pat='all', bkSort={k:'ripeness_pct',d:-1};
+
+// ---- AUTH (ops + admin only) ----
+async function signIn(){
+  const email=document.getElementById('em').value.trim();
+  const password=document.getElementById('pw').value;
+  const err=document.getElementById('err');
+  err.textContent='';
+  if(!email||!password){err.textContent='Enter email and password.';return;}
+  const {data,error}=await sb.auth.signInWithPassword({email,password});
+  if(error){err.textContent=error.message;return;}
+  const {data:p}=await sb.from('profiles').select('full_name,role').eq('id',data.user.id).single();
+  if(!p||!['ops','admin'].includes(p.role)){
+    await sb.auth.signOut();
+    err.textContent='Access denied — ops or admin only.';
+    return;
+  }
+  start(p);
+}
+
+async function signOut(){
+  await sb.auth.signOut();
+  document.getElementById('app').classList.remove('active');
+  document.getElementById('auth').classList.remove('hidden');
+  document.getElementById('pw').value='';
+}
+
+function start(p){
+  document.getElementById('who').textContent=p.full_name||'';
+  document.getElementById('auth').classList.add('hidden');
+  document.getElementById('app').classList.add('active');
+  loadAll();
+}
+
+// ---- DATA ----
+async function loadAll(){
+  await Promise.all([loadSales(), loadChase(), loadBook()]);
+}
+
+async function loadSales(){
+  try{
+    const from=new Date(); from.setDate(from.getDate()-60);
+    const {data,error}=await sb.from('sales')
+      .select('id,customer,location,litres,fuel_type,sale_date,delivery_date,status,delivered_at,notes,rep_name')
+      .gte('sale_date',from.toISOString().split('T')[0])
+      .neq('status','cancelled')
+      .order('delivery_date',{ascending:true});
+    if(error) throw error;
+    SALES=data||[];
+    try{localStorage.setItem('ops_sales',JSON.stringify(SALES));}catch(e){}
+  }catch(e){
+    try{ SALES=JSON.parse(localStorage.getItem('ops_sales')||'[]'); }catch(_){ SALES=[]; }
+  }
+  renderDeliveries();
+}
+
+async function loadChase(){
+  try{
+    const {data,error}=await sb.from('app_customer_retention')
+      .select('customer,order_count,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,status')
+      .in('status',['due_now','overdue','gone_quiet']);
+    if(error) throw error;
+    CHASE={due_now:[],overdue:[],gone_quiet:[]};
+    (data||[]).forEach(r=>{ if(CHASE[r.status]) CHASE[r.status].push(r); });
+    Object.keys(CHASE).forEach(k=>CHASE[k].sort((a,b)=>(b.total_litres||0)-(a.total_litres||0)));
+    document.getElementById('c-due').textContent=CHASE.due_now.length;
+    document.getElementById('c-over').textContent=CHASE.overdue.length;
+    document.getElementById('c-quiet').textContent=CHASE.gone_quiet.length;
+    renderChase();
+  }catch(e){
+    document.getElementById('chase-list').innerHTML='<div class="empty">Chase list unavailable ('+(e.message||e)+')</div>';
+  }
+}
+
+async function loadBook(){
+  try{
+    const {data,error}=await sb.from('app_customer_book')
+      .select('customer,order_count,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,status,buying_pattern');
+    if(error) throw error;
+    BOOK=data||[];
+    renderBook();
+  }catch(e){
+    document.getElementById('bk-body').innerHTML='<tr><td colspan="6" class="empty">Book unavailable ('+(e.message||e)+')</td></tr>';
+  }
+}
+
+// ---- DELIVERIES ----
+async function markDelivered(id){
+  const s=SALES.find(x=>x.id===id);
+  if(!s) return;
+  if(!confirm('Mark '+s.customer+' as delivered?')) return;
+  const {error}=await sb.from('sales').update({status:'delivered',delivered_at:new Date().toISOString()}).eq('id',id);
+  if(error){ alert('Could not update: '+error.message); return; }
+  await loadSales();
+}
+
+function fmt(d){
+  if(!d) return '—';
+  const x=new Date((d+'').split('T')[0]+'T00:00:00');
+  if(isNaN(x)) return '—';
+  const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return x.getDate()+' '+M[x.getMonth()]+' '+x.getFullYear();
+}
+
+function row(s,opts){
+  const done = s.status==='delivered';
+  const fp = s.fuel_type?'<span class="pill '+(s.fuel_type==='Petrol'?'p-petrol':'p-diesel')+'">'+s.fuel_type+'</span>':'';
+  const dp = done?'<span class="pill p-done">✓</span>':'';
+  const btn = (!done && opts.showBtn)
+    ? '<button class="mark" onclick="markDelivered('+s.id+')">Mark delivered</button>' : '';
+  return '<div class="row'+(done?' done':'')+'">'+
+    '<div class="info">'+
+      '<div class="nm">'+s.customer+fp+dp+'</div>'+
+      '<div class="meta">'+(s.location||'—')+' · '+fmt(s.delivery_date)+(s.rep_name?' · '+s.rep_name:'')+
+        (s.notes?' · <i>'+s.notes+'</i>':'')+'</div>'+
+    '</div>'+
+    '<div class="lit">'+(s.litres||0).toLocaleString()+' L</div>'+
+    btn+
+  '</div>';
+}
+
+function renderDeliveries(){
+  const today=new Date().toISOString().split('T')[0];
+  const dd=s=>(s.delivery_date||'').split('T')[0];
+
+  const todays = SALES.filter(s=>dd(s)===today && s.status!=='delivered');
+  const upcoming = SALES.filter(s=>dd(s)>today && s.status!=='delivered')
+                        .sort((a,b)=>dd(a).localeCompare(dd(b)));
+  const delivered = SALES.filter(s=>s.status==='delivered')
+                        .sort((a,b)=>(b.delivered_at||'').localeCompare(a.delivered_at||''))
+                        .slice(0,25);
+  // overdue deliveries (past date, not marked) go at the top of today's
+  const late = SALES.filter(s=>dd(s) && dd(s)<today && s.status!=='delivered')
+                    .sort((a,b)=>dd(a).localeCompare(dd(b)));
+
+  const t=document.getElementById('today-list');
+  const all=[...late,...todays];
+  document.getElementById('n-today').textContent=all.length;
+  t.innerHTML = all.length
+    ? all.map(s=>{
+        const isLate = dd(s)<today;
+        return (isLate?'<div style="border-left:3px solid var(--red);">':'<div>')+
+               row(s,{showBtn:true})+'</div>';
+      }).join('')
+    : '<div class="empty">Nothing due today</div>';
+
+  document.getElementById('n-up').textContent=upcoming.length;
+  document.getElementById('up-list').innerHTML = upcoming.length
+    ? upcoming.map(s=>row(s,{showBtn:true})).join('')
+    : '<div class="empty">No upcoming deliveries</div>';
+
+  document.getElementById('n-done').textContent=delivered.length;
+  document.getElementById('done-list').innerHTML = delivered.length
+    ? delivered.map(s=>row(s,{showBtn:false})).join('')
+    : '<div class="empty">Nothing delivered yet</div>';
+}
+
+// ---- CHASE ----
+function setTab(b){
+  tab=b;
+  [...document.querySelectorAll('.tb')].forEach(x=>x.classList.toggle('active',x.dataset.b===b));
+  renderChase();
+}
+
+function renderChase(){
+  const rows=CHASE[tab]||[];
+  const el=document.getElementById('chase-list');
+  if(!rows.length){
+    el.innerHTML='<div class="empty">'+(tab==='gone_quiet'?'Nobody has gone quiet — good sign.':'Nobody in this bucket.')+'</div>';
+    return;
+  }
+  el.innerHTML=rows.map(r=>{
+    const col=r.status==='gone_quiet'?'var(--red)':r.status==='overdue'?'var(--amber)':'var(--green-dark)';
+    const lit=r.avg_litres?Math.round(r.avg_litres):0;
+    return '<div class="ro">'+
+      '<div class="i"><b>'+r.customer+'</b>'+
+        '<span>every '+(r.avg_cycle_days||'?')+'d · '+(r.days_since_last||0)+'d ago · last '+fmt(r.last_order)+'</span></div>'+
+      '<div class="amt">'+(lit?lit.toLocaleString()+' L':'—')+'</div>'+
+      '<div class="pct" style="color:'+col+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</div>'+
+    '</div>';
+  }).join('');
+}
+
+// ---- BOOK ----
+function setPat(p){
+  pat=p;
+  [...document.querySelectorAll('.chip')].forEach(x=>x.classList.toggle('active',x.dataset.p===p));
+  renderBook();
+}
+
+function sortBook(k){
+  if(bkSort.k===k) bkSort.d*=-1; else {bkSort.k=k;bkSort.d=-1;}
+  renderBook();
+}
+
+function renderBook(){
+  const q=(document.getElementById('bk-search')?.value||'').toLowerCase().trim();
+  let rows=BOOK.filter(r=>{
+    if(pat!=='all' && r.buying_pattern!==pat) return false;
+    if(q && !(r.customer||'').toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const k=bkSort.k,d=bkSort.d;
+  rows.sort((a,b)=>{
+    let av=a[k],bv=b[k];
+    if(k==='customer'){av=(av||'').toLowerCase();bv=(bv||'').toLowerCase();return av<bv?-d:av>bv?d:0;}
+    return ((av||0)-(bv||0))*d;
+  });
+  document.getElementById('bk-count').textContent=rows.length+' of '+BOOK.length;
+  const b=document.getElementById('bk-body');
+  if(!rows.length){b.innerHTML='<tr><td colspan="6" class="empty">No match</td></tr>';return;}
+  const pl={very_frequent:'Very frequent',monthly_ish:'Monthly',quarterly_ish:'Quarterly',occasional:'Occasional',unknown:'—'};
+  const pc={very_frequent:'var(--green-dark)',monthly_ish:'var(--blue)',quarterly_ish:'var(--amber)',occasional:'var(--muted)',unknown:'var(--muted)'};
+  b.innerHTML=rows.map(r=>{
+    const col=r.status==='gone_quiet'?'var(--red)':r.status==='overdue'?'var(--amber)':r.status==='due_now'?'var(--green-dark)':'var(--muted)';
+    return '<tr>'+
+      '<td style="font-weight:700;">'+r.customer+
+        '<div style="font-size:9px;font-weight:600;color:'+(pc[r.buying_pattern]||'var(--muted)')+';">'+(pl[r.buying_pattern]||'—')+'</div></td>'+
+      '<td class="mono">'+(r.order_count||0)+'</td>'+
+      '<td class="mono">'+(r.avg_cycle_days?r.avg_cycle_days+'d':'—')+'</td>'+
+      '<td class="mono">'+Math.round(r.avg_litres||0).toLocaleString()+'</td>'+
+      '<td class="mono">'+(r.days_since_last!=null?r.days_since_last+'d':'—')+'</td>'+
+      '<td class="mono" style="font-weight:700;color:'+col+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</td>'+
+    '</tr>';
+  }).join('');
+}
+
+// ---- CLOCK + INIT ----
+function tick(){
+  const n=new Date();
+  document.getElementById('clock').textContent=
+    n.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})+' '+
+    n.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+}
+setInterval(tick,1000); tick();
+
+document.getElementById('pw').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});
+
+sb.auth.getSession().then(async ({data})=>{
+  if(data.session?.user){
+    const {data:p}=await sb.from('profiles').select('full_name,role').eq('id',data.session.user.id).single();
+    if(p&&['ops','admin'].includes(p.role)) start(p);
+  }
+}).catch(()=>{});
+
+setInterval(()=>{ if(document.getElementById('app').classList.contains('active')) loadAll(); },60000);
+
+if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
+</script>
+</body>
+</html>
