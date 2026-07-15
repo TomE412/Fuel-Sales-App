@@ -117,6 +117,26 @@ textarea:focus{border-color:var(--red);background:#fff;}
 
 /* LOGOUT */
 .logout-btn{width:100%;padding:13px;background:var(--gray);color:var(--text2);border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;margin-top:12px;}
+
+/* CUSTOMER AUTOCOMPLETE */
+.ac-wrap{position:relative;}
+.ac-list{position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--red);border-top:none;border-radius:0 0 8px 8px;max-height:230px;overflow-y:auto;z-index:50;box-shadow:0 6px 18px rgba(0,0,0,0.10);display:none;}
+.ac-list.show{display:block;}
+.ac-item{padding:11px 14px;cursor:pointer;border-bottom:1px solid #f2f2f0;}
+.ac-item:last-child{border-bottom:none;}
+.ac-item:hover,.ac-item.sel{background:var(--red-light);}
+.ac-name{font-size:14px;font-weight:600;line-height:1.3;}
+.ac-name b{color:var(--red);font-weight:700;}
+.ac-meta{font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:2px;}
+.ac-new{padding:11px 14px;background:var(--blue-light);cursor:pointer;}
+.ac-new .ac-name{color:var(--blue);}
+.cust-matched{display:none;align-items:center;gap:6px;margin-top:6px;padding:7px 10px;background:var(--green-light);border-radius:6px;}
+.cust-matched.show{display:flex;}
+.cust-matched .txt{font-size:11px;color:var(--green-dark);font-weight:600;line-height:1.3;}
+.cust-matched .clear{margin-left:auto;color:var(--text3);cursor:pointer;font-weight:700;padding:0 4px;}
+.cust-new{display:none;align-items:center;gap:6px;margin-top:6px;padding:7px 10px;background:var(--blue-light);border-radius:6px;}
+.cust-new.show{display:flex;}
+.cust-new .txt{font-size:11px;color:var(--blue);font-weight:600;}
 </style>
 </head>
 <body>
@@ -217,7 +237,19 @@ textarea:focus{border-color:var(--red);background:#fff;}
       </div>
       <div class="field">
         <label>Customer name</label>
-        <input type="text" id="s-customer" placeholder="e.g. Khaya Cement">
+        <div class="ac-wrap">
+          <input type="text" id="s-customer" placeholder="Start typing..." autocomplete="off">
+          <div class="ac-list" id="ac-list"></div>
+        </div>
+        <div class="cust-matched" id="cust-matched">
+          <span style="color:var(--green-dark);font-weight:700;">✓</span>
+          <span class="txt" id="cust-matched-txt"></span>
+          <span class="clear" onclick="clearCustomerMatch()">×</span>
+        </div>
+        <div class="cust-new" id="cust-new">
+          <span style="color:var(--blue);font-weight:700;">+</span>
+          <span class="txt">New customer — will be added to the list</span>
+        </div>
       </div>
       <div class="field">
         <label>Location</label>
@@ -673,6 +705,10 @@ async function loadUser(user, showLock = false) {
     localStorage.setItem(getPinKey(user.id), DEFAULT_PIN);
   }
 
+  // Customer autocomplete: wire the input and load the canonical list
+  initCustomerAutocomplete();
+  loadCustomerList();
+
   if (showLock) {
     showLockScreen();
     // Load sales in background so they're ready when unlocked
@@ -856,6 +892,133 @@ async function signOut() {
   document.getElementById('auth-password').value = '';
 }
 
+// ---- CUSTOMER AUTOCOMPLETE ----
+let CUSTOMER_LIST = [];
+let selectedCustomerId = null;
+let acIdx = -1;
+let acCurrent = [];
+
+async function loadCustomerList(){
+  // Show cached list immediately so it works offline
+  try{
+    const cached = localStorage.getItem('customer_list');
+    if(cached) CUSTOMER_LIST = JSON.parse(cached);
+  }catch(e){}
+  try{
+    const { data, error } = await sb.from('customer_locations')
+      .select('id,invoice_name,total_litres,order_count')
+      .order('total_litres',{ascending:false});
+    if(error) throw error;
+    CUSTOMER_LIST = data||[];
+    try{ localStorage.setItem('customer_list', JSON.stringify(CUSTOMER_LIST)); }catch(e){}
+  }catch(e){
+    console.log('Customer list: using cached (offline):', e.message);
+  }
+}
+
+function acNorm(s){ return (s||'').toLowerCase().replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim(); }
+
+function acSearch(q){
+  const nq = acNorm(q);
+  if(nq.length < 2) return [];
+  const starts=[], wordStart=[], contains=[];
+  CUSTOMER_LIST.forEach(c=>{
+    const nc = acNorm(c.invoice_name);
+    if(nc.startsWith(nq)) starts.push(c);
+    else if(nc.split(' ').some(w=>w.startsWith(nq))) wordStart.push(c);
+    else if(nc.includes(nq)) contains.push(c);
+  });
+  const byVol=(a,b)=>(b.total_litres||0)-(a.total_litres||0);
+  return [...starts.sort(byVol), ...wordStart.sort(byVol), ...contains.sort(byVol)].slice(0,6);
+}
+
+function acHighlight(name,q){
+  const nq=acNorm(q), nn=acNorm(name);
+  const i=nn.indexOf(nq);
+  if(i<0) return name;
+  let count=-1,start=-1,end=-1;
+  for(let j=0;j<name.length;j++){
+    const ch=name[j].toLowerCase();
+    if(/[a-z0-9 ]/.test(ch)) count++;
+    if(count===i && start<0) start=j;
+    if(count===i+nq.length-1){ end=j+1; break; }
+  }
+  if(start<0||end<0) return name;
+  return name.slice(0,start)+'<b>'+name.slice(start,end)+'</b>'+name.slice(end);
+}
+
+function acRender(q){
+  acCurrent = acSearch(q);
+  const list = document.getElementById('ac-list');
+  const nq = acNorm(q);
+  if(nq.length<2){ list.classList.remove('show'); return; }
+  let html = acCurrent.map((c,i)=>{
+    const meta = (c.order_count||0)+' orders · '+Math.round((c.total_litres||0)/1000)+'k litres';
+    return '<div class="ac-item'+(i===acIdx?' sel':'')+'" onclick="acPick('+c.id+')">'+
+      '<div class="ac-name">'+acHighlight(c.invoice_name,q)+'</div>'+
+      '<div class="ac-meta">'+meta+'</div></div>';
+  }).join('');
+  const exact = acCurrent.some(c=>acNorm(c.invoice_name)===nq);
+  if(!exact){
+    const safe = q.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    html += '<div class="ac-new" onclick="acPickNew()">'+
+      '<div class="ac-name">+ Add "'+safe+'" as a new customer</div>'+
+      '<div class="ac-meta">not in the list yet</div></div>';
+  }
+  list.innerHTML = html;
+  list.classList.add('show');
+}
+
+function acPick(id){
+  const c = CUSTOMER_LIST.find(x=>x.id===id);
+  if(!c) return;
+  document.getElementById('s-customer').value = c.invoice_name;
+  selectedCustomerId = c.id;
+  document.getElementById('ac-list').classList.remove('show');
+  document.getElementById('cust-matched').classList.add('show');
+  document.getElementById('cust-new').classList.remove('show');
+  document.getElementById('cust-matched-txt').textContent = 'Linked to accounts record';
+}
+
+function acPickNew(){
+  selectedCustomerId = null;
+  document.getElementById('ac-list').classList.remove('show');
+  document.getElementById('cust-matched').classList.remove('show');
+  document.getElementById('cust-new').classList.add('show');
+}
+
+function clearCustomerMatch(){
+  selectedCustomerId = null;
+  document.getElementById('s-customer').value='';
+  document.getElementById('cust-matched').classList.remove('show');
+  document.getElementById('cust-new').classList.remove('show');
+  document.getElementById('s-customer').focus();
+}
+
+function initCustomerAutocomplete(){
+  const input = document.getElementById('s-customer');
+  if(!input || input.dataset.acWired) return;
+  input.addEventListener('input', e=>{
+    selectedCustomerId = null;
+    acIdx = -1;
+    document.getElementById('cust-matched').classList.remove('show');
+    document.getElementById('cust-new').classList.remove('show');
+    acRender(e.target.value);
+  });
+  input.addEventListener('keydown', e=>{
+    const list = document.getElementById('ac-list');
+    if(!list.classList.contains('show')) return;
+    if(e.key==='ArrowDown'){ e.preventDefault(); acIdx=Math.min(acIdx+1,acCurrent.length-1); acRender(input.value); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); acIdx=Math.max(acIdx-1,-1); acRender(input.value); }
+    else if(e.key==='Enter'){ if(acIdx>=0&&acCurrent[acIdx]){ e.preventDefault(); acPick(acCurrent[acIdx].id); } }
+    else if(e.key==='Escape'){ list.classList.remove('show'); }
+  });
+  document.addEventListener('click', e=>{
+    if(!e.target.closest('.ac-wrap')) document.getElementById('ac-list').classList.remove('show');
+  });
+  input.dataset.acWired = '1';
+}
+
 // ---- SALES ----
 async function markPaid(id) {
   if (!confirm('Mark this sale as paid?')) return;
@@ -977,6 +1140,7 @@ async function recordSale() {
     rep_id: currentUser.id, // rep_name is set automatically by database trigger
     sale_date: date,
     customer,
+    customer_id: selectedCustomerId, // hard link when picked from the list; null for new customers
     location,
     fuel_type: curFuel,
     litres,
@@ -1003,6 +1167,10 @@ async function recordSale() {
 
   // Reset form regardless of online/offline (the sale is captured either way)
   document.getElementById('s-customer').value = '';
+  selectedCustomerId = null;
+  document.getElementById('cust-matched').classList.remove('show');
+  document.getElementById('cust-new').classList.remove('show');
+  document.getElementById('ac-list').classList.remove('show');
   document.getElementById('s-location').value = '';
   document.getElementById('s-litres').value = '';
   document.getElementById('s-price').value = '';
