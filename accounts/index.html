@@ -68,6 +68,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .retention-tabs{display:flex;gap:4px;margin-left:auto;}
 .rt-tab{font-size:11px;font-weight:700;padding:4px 10px;border-radius:7px;cursor:pointer;color:var(--gray-text);background:var(--gray-bg,#F0F0EE);}
 .rt-tab.active{background:var(--red);color:#fff;}
+.bk-chip{font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;cursor:pointer;color:var(--gray-text);background:#F0F0EE;border:1px solid var(--gray-light);}
+.bk-chip.active{background:var(--green-dark);color:#fff;border-color:var(--green-dark);}
 .ph-count{font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px;background:var(--amber-light);color:var(--amber);}
 
 /* TABLE */
@@ -306,6 +308,60 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
         </div>
         <div style="padding:10px 16px;font-size:11px;color:var(--gray-text);border-top:1px solid var(--gray-light);">
           Combines invoice history with live rep-app sales. A new sale resets the customer's clock automatically where names match.
+        </div>
+      </div>
+
+      <!-- MONTHLY VOLUME CHART -->
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title" style="color:var(--blue);">📊 Monthly volume — actual</div>
+          <div style="margin-left:auto;font-size:11px;color:var(--gray-text);" id="mv-range">—</div>
+        </div>
+        <div style="padding:16px;">
+          <div style="display:flex;align-items:flex-end;gap:6px;height:150px;" id="mv-chart"></div>
+          <div id="mv-note" style="margin-top:12px;padding:9px 11px;background:var(--amber-light);border-radius:7px;font-size:11px;color:var(--amber);line-height:1.5;">
+            <b>What this is:</b> actual litres sold per month, not a forecast. A reliable seasonal picture needs 2+ years of history — with the data loaded so far this shows what has happened, not what will.
+          </div>
+        </div>
+      </div>
+
+      <!-- FULL CUSTOMER BOOK -->
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title" style="color:var(--green-dark);">📒 Full customer book</div>
+          <input type="text" id="book-search" placeholder="Search customer..." oninput="renderBook()"
+            style="margin-left:auto;padding:6px 10px;border:1px solid var(--gray-light);border-radius:7px;font-family:inherit;font-size:12px;width:190px;outline:none;">
+        </div>
+        <div style="padding:8px 16px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--gray-light);">
+          <span style="font-size:11px;color:var(--gray-text);font-weight:700;">Pattern:</span>
+          <span class="bk-chip active" data-p="all" onclick="setBookFilter('all')">All</span>
+          <span class="bk-chip" data-p="very_frequent" onclick="setBookFilter('very_frequent')">Very frequent</span>
+          <span class="bk-chip" data-p="monthly_ish" onclick="setBookFilter('monthly_ish')">Monthly-ish</span>
+          <span class="bk-chip" data-p="quarterly_ish" onclick="setBookFilter('quarterly_ish')">Quarterly-ish</span>
+          <span class="bk-chip" data-p="occasional" onclick="setBookFilter('occasional')">Occasional</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--gray-text);" id="book-count">—</span>
+        </div>
+        <div style="overflow-x:auto;max-height:520px;overflow-y:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th onclick="sortBook('customer')">Customer</th>
+                <th onclick="sortBook('order_count')">Orders</th>
+                <th onclick="sortBook('avg_cycle_days')">Buys every</th>
+                <th onclick="sortBook('avg_litres')">Avg order</th>
+                <th onclick="sortBook('total_litres')">Total litres</th>
+                <th onclick="sortBook('est_annual_litres')">Est. per year</th>
+                <th onclick="sortBook('last_order')">Last order</th>
+                <th onclick="sortBook('ripeness_pct')">Ripeness</th>
+              </tr>
+            </thead>
+            <tbody id="book-body">
+              <tr><td colspan="8" class="empty-msg">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="padding:10px 16px;font-size:11px;color:var(--gray-text);border-top:1px solid var(--gray-light);">
+          "Est. per year" is a rough run-rate (average order × orders per year at their current cycle) — an indication, not a promise.
         </div>
       </div>
     </div><!-- /view-retention -->
@@ -690,13 +746,121 @@ sb.auth.getSession().then(async({data})=>{
   }
 });
 
+// ===== MONTHLY VOLUME CHART =====
+let MONTHLY = [];
+
+async function loadMonthly(){
+  try{
+    const { data, error } = await sb.from('app_monthly_volume')
+      .select('month_key,month_label,total_litres,order_count,customer_count');
+    if(error) throw error;
+    MONTHLY = data||[];
+    renderMonthly();
+  }catch(e){
+    document.getElementById('mv-chart').innerHTML =
+      '<div style="font-size:12px;color:var(--gray-text);padding:20px;">Monthly data not available ('+(e.message||e)+')</div>';
+  }
+}
+
+function renderMonthly(){
+  const el = document.getElementById('mv-chart');
+  if(!MONTHLY.length){ el.innerHTML='<div class="empty-msg">No data</div>'; return; }
+  const max = Math.max(...MONTHLY.map(m=>m.total_litres||0), 1);
+  const thisMonth = new Date().toISOString().slice(0,7);
+  el.innerHTML = MONTHLY.map(m=>{
+    const h = Math.max(Math.round(((m.total_litres||0)/max)*110), 3);
+    const isCur = m.month_key===thisMonth;
+    const col = isCur?'var(--amber)':'var(--blue)';
+    const lbl = (m.total_litres>=1000)?Math.round(m.total_litres/1000)+'k':(m.total_litres||0);
+    const short = (m.month_label||'').split(' ')[0];
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;" title="'+
+      m.month_label+': '+Math.round(m.total_litres||0).toLocaleString()+'L from '+m.customer_count+' customers ('+m.order_count+' orders)">'+
+      '<div style="font-size:9px;font-weight:700;color:'+col+';font-family:var(--mono);">'+lbl+'</div>'+
+      '<div style="width:100%;height:'+h+'px;background:'+col+';border-radius:3px 3px 0 0;"></div>'+
+      '<div style="font-size:10px;font-weight:600;color:'+(isCur?'var(--amber)':'var(--gray-text)')+';">'+short+'</div>'+
+      '<div style="font-size:8px;color:var(--gray-text);">'+m.customer_count+' cust</div>'+
+    '</div>';
+  }).join('');
+  const first = MONTHLY[0]?.month_label||'', last = MONTHLY[MONTHLY.length-1]?.month_label||'';
+  document.getElementById('mv-range').textContent = first+' – '+last+' · '+MONTHLY.length+' months of data';
+  // If under 18 months, keep the honesty note. Otherwise soften it.
+  if(MONTHLY.length >= 18){
+    document.getElementById('mv-note').innerHTML =
+      '<b>Seasonal view:</b> with '+MONTHLY.length+' months of history, month-on-month comparison starts to show genuine seasonal patterns. Still an indication, not a guarantee.';
+  }
+}
+
+// ===== FULL CUSTOMER BOOK =====
+let BOOK = [];
+let bookFilter = 'all';
+let bookSort = { key:'total_litres', dir:-1 };
+
+async function loadBook(){
+  try{
+    const { data, error } = await sb.from('app_customer_book')
+      .select('customer,order_count,first_order,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,est_annual_litres,status,buying_pattern');
+    if(error) throw error;
+    BOOK = data||[];
+    renderBook();
+  }catch(e){
+    document.getElementById('book-body').innerHTML =
+      '<tr><td colspan="8" class="empty-msg">Customer book not available ('+(e.message||e)+')</td></tr>';
+  }
+}
+
+function setBookFilter(p){
+  bookFilter = p;
+  [...document.querySelectorAll('.bk-chip')].forEach(x=>x.classList.toggle('active', x.dataset.p===p));
+  renderBook();
+}
+
+function sortBook(key){
+  if(bookSort.key===key) bookSort.dir*=-1; else { bookSort.key=key; bookSort.dir=-1; }
+  renderBook();
+}
+
+function renderBook(){
+  const q = (document.getElementById('book-search')?.value||'').toLowerCase().trim();
+  let rows = BOOK.filter(r=>{
+    if(bookFilter!=='all' && r.buying_pattern!==bookFilter) return false;
+    if(q && !(r.customer||'').toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const k=bookSort.key, dir=bookSort.dir;
+  rows.sort((a,b)=>{
+    let av=a[k], bv=b[k];
+    if(k==='customer'||k==='last_order'){ av=(av||'')+''; bv=(bv||'')+''; return av<bv?-dir:av>bv?dir:0; }
+    return ((av||0)-(bv||0))*dir;
+  });
+  document.getElementById('book-count').textContent = rows.length+' of '+BOOK.length+' customers';
+  const body = document.getElementById('book-body');
+  if(!rows.length){ body.innerHTML='<tr><td colspan="8" class="empty-msg">No customers match</td></tr>'; return; }
+  const patLabel={very_frequent:'Very frequent',monthly_ish:'Monthly-ish',quarterly_ish:'Quarterly-ish',occasional:'Occasional',unknown:'—'};
+  const patCol={very_frequent:'var(--green-dark)',monthly_ish:'var(--blue)',quarterly_ish:'var(--amber)',occasional:'var(--gray-text)',unknown:'var(--gray-text)'};
+  body.innerHTML = rows.map(r=>{
+    const pctCol = r.status==='gone_quiet'?'var(--red)':r.status==='overdue'?'var(--amber)':r.status==='due_now'?'var(--green-dark)':'var(--gray-text)';
+    const cyc = r.avg_cycle_days ? r.avg_cycle_days+'d' : '—';
+    return '<tr>'+
+      '<td style="font-weight:700;">'+r.customer+
+        '<div style="font-size:10px;font-weight:600;color:'+(patCol[r.buying_pattern]||'var(--gray-text)')+';">'+(patLabel[r.buying_pattern]||'—')+'</div></td>'+
+      '<td class="mono">'+(r.order_count||0)+'</td>'+
+      '<td class="mono">'+cyc+'</td>'+
+      '<td class="mono">'+Math.round(r.avg_litres||0).toLocaleString()+'</td>'+
+      '<td class="mono" style="font-weight:700;">'+Math.round(r.total_litres||0).toLocaleString()+'</td>'+
+      '<td class="mono" style="color:var(--blue);">'+(r.est_annual_litres?Math.round(r.est_annual_litres).toLocaleString():'—')+'</td>'+
+      '<td class="mono" style="font-size:11px;">'+fmtD(r.last_order)+'</td>'+
+      '<td class="mono" style="font-weight:700;color:'+pctCol+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</td>'+
+    '</tr>';
+  }).join('');
+}
+
 // ===== VIEW SWITCHER =====
 function switchView(v){
   document.getElementById('view-receivables').style.display = v==='receivables'?'block':'none';
   document.getElementById('view-retention').style.display   = v==='retention'?'block':'none';
   document.getElementById('vt-receivables').classList.toggle('active', v==='receivables');
   document.getElementById('vt-retention').classList.toggle('active', v==='retention');
-  if(v==='retention' && !retentionLoaded){ loadRetention(); }
+  if(v==='retention' && !retentionLoaded){ loadRetention(); loadMonthly(); loadBook(); }
 }
 
 // ===== CUSTOMER RETENTION =====
@@ -738,7 +902,9 @@ function sortRet(key){
 function fmtD(d){
   if(!d) return '—';
   const x=new Date(d+'T00:00:00');
-  return String(x.getDate()).padStart(2,'0')+'/'+String(x.getMonth()+1).padStart(2,'0')+'/'+x.getFullYear();
+  if(isNaN(x)) return '—';
+  const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return x.getDate()+' '+MON[x.getMonth()]+' '+x.getFullYear();
 }
 
 function renderRetention(){
