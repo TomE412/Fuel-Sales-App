@@ -62,6 +62,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .panel{background:#fff;border-radius:12px;border:1px solid var(--gray-border);overflow:hidden;}
 .ph{padding:12px 16px;border-bottom:1px solid var(--gray-border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
 .ph-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.view-tabs{display:flex;gap:8px;margin-bottom:16px;}
+.view-tab{padding:9px 18px;border:1px solid var(--gray-light);background:#fff;border-radius:9px;font-family:inherit;font-size:13px;font-weight:700;color:var(--gray-text);cursor:pointer;transition:all .15s;}
+.view-tab.active{background:var(--red);color:#fff;border-color:var(--red);}
+.retention-tabs{display:flex;gap:4px;margin-left:auto;}
+.rt-tab{font-size:11px;font-weight:700;padding:4px 10px;border-radius:7px;cursor:pointer;color:var(--gray-text);background:var(--gray-bg,#F0F0EE);}
+.rt-tab.active{background:var(--red);color:#fff;}
 .ph-count{font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px;background:var(--amber-light);color:var(--amber);}
 
 /* TABLE */
@@ -129,6 +135,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
   </div>
 
   <div class="content">
+    <!-- VIEW TABS -->
+    <div class="view-tabs">
+      <button class="view-tab active" id="vt-receivables" onclick="switchView('receivables')">💰 Receivables</button>
+      <button class="view-tab" id="vt-retention" onclick="switchView('retention')">📉 Customer retention</button>
+    </div>
+
+    <!-- ===== RECEIVABLES VIEW ===== -->
+    <div id="view-receivables">
     <!-- SUMMARY FIGURES -->
     <div class="summary-grid">
       <div class="sum-card">
@@ -237,6 +251,64 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
       </div>
       <div style="padding:0 16px 14px;font-size:12px;color:var(--gray-text);" id="report-status"></div>
     </div>
+    </div><!-- /view-receivables -->
+
+    <!-- ===== RETENTION VIEW ===== -->
+    <div id="view-retention" style="display:none;">
+      <div class="summary-grid">
+        <div class="sum-card">
+          <div class="sum-label">Gone quiet</div>
+          <div class="sum-value" id="r-quiet" style="color:var(--red);">0</div>
+          <div class="sum-sub">regulars who stopped — investigate</div>
+        </div>
+        <div class="sum-card">
+          <div class="sum-label">Overdue</div>
+          <div class="sum-value" id="r-overdue" style="color:var(--amber);">0</div>
+          <div class="sum-sub">past their usual cycle</div>
+        </div>
+        <div class="sum-card">
+          <div class="sum-label">Due now</div>
+          <div class="sum-value" id="r-due" style="color:var(--green-dark);">0</div>
+          <div class="sum-sub">at their reorder point</div>
+        </div>
+        <div class="sum-card">
+          <div class="sum-label">Due soon</div>
+          <div class="sum-value" id="r-soon" style="color:var(--blue);">0</div>
+          <div class="sum-sub">approaching</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title" style="color:var(--red);">📉 Customers to chase</div>
+          <div class="retention-tabs" id="retention-tabs">
+            <span class="rt-tab active" data-b="gone_quiet" onclick="setRetTab('gone_quiet')">Gone quiet</span>
+            <span class="rt-tab" data-b="overdue" onclick="setRetTab('overdue')">Overdue</span>
+            <span class="rt-tab" data-b="due_now" onclick="setRetTab('due_now')">Due now</span>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th onclick="sortRet('customer')">Customer</th>
+                <th onclick="sortRet('last_order')">Last order</th>
+                <th onclick="sortRet('days_since_last')">Days since</th>
+                <th onclick="sortRet('avg_cycle_days')">Usual cycle</th>
+                <th onclick="sortRet('ripeness_pct')">Ripeness</th>
+                <th onclick="sortRet('total_litres')">Total litres</th>
+              </tr>
+            </thead>
+            <tbody id="retention-body">
+              <tr><td colspan="6" class="empty-msg">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="padding:10px 16px;font-size:11px;color:var(--gray-text);border-top:1px solid var(--gray-light);">
+          Combines invoice history with live rep-app sales. A new sale resets the customer's clock automatically where names match.
+        </div>
+      </div>
+    </div><!-- /view-retention -->
   </div>
 </div>
 
@@ -617,6 +689,84 @@ sb.auth.getSession().then(async({data})=>{
     }
   }
 });
+
+// ===== VIEW SWITCHER =====
+function switchView(v){
+  document.getElementById('view-receivables').style.display = v==='receivables'?'block':'none';
+  document.getElementById('view-retention').style.display   = v==='retention'?'block':'none';
+  document.getElementById('vt-receivables').classList.toggle('active', v==='receivables');
+  document.getElementById('vt-retention').classList.toggle('active', v==='retention');
+  if(v==='retention' && !retentionLoaded){ loadRetention(); }
+}
+
+// ===== CUSTOMER RETENTION =====
+let RETENTION = { gone_quiet:[], overdue:[], due_now:[], due_soon:[] };
+let retTab = 'gone_quiet';
+let retSort = { key:'total_litres', dir:-1 };
+let retentionLoaded = false;
+
+async function loadRetention(){
+  try{
+    const { data, error } = await sb.from('app_customer_retention')
+      .select('customer,order_count,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,status');
+    if(error) throw error;
+    RETENTION = { gone_quiet:[], overdue:[], due_now:[], due_soon:[] };
+    (data||[]).forEach(r=>{ if(RETENTION[r.status]) RETENTION[r.status].push(r); });
+    document.getElementById('r-quiet').textContent   = RETENTION.gone_quiet.length;
+    document.getElementById('r-overdue').textContent = RETENTION.overdue.length;
+    document.getElementById('r-due').textContent     = RETENTION.due_now.length;
+    document.getElementById('r-soon').textContent    = RETENTION.due_soon.length;
+    retentionLoaded = true;
+    renderRetention();
+  }catch(e){
+    document.getElementById('retention-body').innerHTML =
+      '<tr><td colspan="6" class="empty-msg">Retention data not available yet ('+(e.message||e)+')</td></tr>';
+  }
+}
+
+function setRetTab(b){
+  retTab=b;
+  [...document.querySelectorAll('.rt-tab')].forEach(t=>t.classList.toggle('active',t.dataset.b===b));
+  renderRetention();
+}
+
+function sortRet(key){
+  if(retSort.key===key) retSort.dir*=-1; else { retSort.key=key; retSort.dir=-1; }
+  renderRetention();
+}
+
+function fmtD(d){
+  if(!d) return '—';
+  const x=new Date(d+'T00:00:00');
+  return String(x.getDate()).padStart(2,'0')+'/'+String(x.getMonth()+1).padStart(2,'0')+'/'+x.getFullYear();
+}
+
+function renderRetention(){
+  let rows = (RETENTION[retTab]||[]).slice();
+  const k=retSort.key, dir=retSort.dir;
+  rows.sort((a,b)=>{
+    let av=a[k], bv=b[k];
+    if(k==='customer'){ av=(av||'').toLowerCase(); bv=(bv||'').toLowerCase(); return av<bv?-dir:av>bv?dir:0; }
+    return ((av||0)-(bv||0))*dir;
+  });
+  const body=document.getElementById('retention-body');
+  if(!rows.length){
+    const msg = retTab==='gone_quiet' ? 'No customers have gone quiet — good sign.' : 'Nobody in this bucket right now.';
+    body.innerHTML='<tr><td colspan="6" class="empty-msg">'+msg+'</td></tr>';
+    return;
+  }
+  body.innerHTML = rows.map(r=>{
+    const pctCol = r.status==='gone_quiet'?'var(--red)':r.status==='overdue'?'var(--amber)':'var(--green-dark)';
+    return '<tr>'+
+      '<td style="font-weight:700;">'+r.customer+'</td>'+
+      '<td class="mono">'+fmtD(r.last_order)+'</td>'+
+      '<td class="mono">'+(r.days_since_last||0)+'d</td>'+
+      '<td class="mono">'+(r.avg_cycle_days||'?')+'d</td>'+
+      '<td class="mono" style="font-weight:700;color:'+pctCol+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</td>'+
+      '<td class="mono">'+Math.round(r.total_litres||0).toLocaleString()+'</td>'+
+    '</tr>';
+  }).join('');
+}
 
 setInterval(()=>{if(document.getElementById('acc-wrap').classList.contains('active'))fetchData();},60000);
 
