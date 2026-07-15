@@ -312,13 +312,43 @@ function render(){
   const vis=visible();
   vis.forEach(d=>{
     const seasonHot=d.t==='farmer'&&inSeason(d.c)===true;
-    const m=L.circleMarker([d.lat,d.lng],{radius:d.t==='customer'?7:6,
-      fillColor:seasonHot?'#c0392b':COL[d.t],color:'#fff',weight:1.5,fillOpacity:.85}).addTo(map);
+    // customers are coloured by reorder status so the map tells the
+    // same story as the call list: red = gone quiet, amber = overdue,
+    // green = due now. Prospects keep their type colour.
+    let fill = COL[d.t], rad = d.t==='customer'?7:6;
+    if(d.t==='customer' && d.rstatus){
+      const byStatus = { gone_quiet:'#D4180A', overdue:'#BA7517', due_now:'#1D9E75',
+                         due_soon:'#185FA5', not_yet:'#9BB7D4', insufficient_history:'#C9C9C6' };
+      fill = byStatus[d.rstatus] || COL[d.t];
+      if(d.rstatus==='gone_quiet'||d.rstatus==='due_now') rad = 8;
+    } else if(seasonHot){ fill = '#c0392b'; }
+    const m=L.circleMarker([d.lat,d.lng],{radius:rad,
+      fillColor:fill,color:'#fff',weight:1.5,fillOpacity:.85}).addTo(map);
     const seas=d.c?(inSeason(d.c)===true?' · in-season now':inSeason(d.c)===false?' · off-season':''):'';
     const gidx = DATA.indexOf(d);
-    m.bindPopup('<b>'+d.n+'</b><br>'+(d.t==='customer'?'Existing customer':d.t==='mine'?'Mine (prospect)':'Farmer (prospect)')+
-      '<br>'+(d.a||'area unknown')+(d.c?'<br>Crop: '+d.c+seas:'')+(d.t!=='customer'?'<br><i>potential to fill tank space</i>':'')+
-      '<br><button onclick="addToRun('+gidx+')" style="margin-top:6px;padding:5px 10px;background:#D4180A;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">+ Add to run</button>');
+    let body = '<b>'+d.n+'</b>';
+    if(d.t==='customer'){
+      // customer pin — show the site and their reorder position
+      const ripeCol = d.rstatus==='gone_quiet'?'#D4180A':d.rstatus==='overdue'?'#BA7517':d.rstatus==='due_now'?'#3B6D11':'#9a9a97';
+      const statusLbl = {gone_quiet:'GONE QUIET',overdue:'Overdue',due_now:'Due now',due_soon:'Due soon',not_yet:'Not yet',insufficient_history:'Thin history'}[d.rstatus]||'';
+      body += '<br><span style="color:#9a9a97;font-size:11px;">'+(d.place||'')+
+              (d.parent?' · '+d.parent:'')+(d.isPrimary?'':' (other site)')+'</span>';
+      if(d.ripe!=null){
+        body += '<br><span style="color:'+ripeCol+';font-weight:700;font-size:11px;">'+statusLbl+' — '+d.ripe+'%</span>';
+      }
+      if(d.cycle) body += '<br><span style="font-size:11px;">Buys every '+d.cycle+'d · '+(d.since!=null?d.since+'d since last':'')+'</span>';
+      if(d.avgL)  body += '<br><span style="font-size:11px;">Typical order: '+Math.round(d.avgL).toLocaleString()+' L</span>';
+      if(d.totalL) body += '<br><span style="font-size:10px;color:#9a9a97;">'+d.orders+' orders · '+Math.round(d.totalL).toLocaleString()+' L total</span>';
+      if(d.precision && d.precision!=='exact')
+        body += '<br><span style="font-size:9px;color:#9a9a97;"><i>pinned at '+(d.precision==='suburb_centre'?'suburb':'town')+' centre</i></span>';
+    } else {
+      body += '<br>'+(d.t==='mine'?'Mine (prospect)':'Farmer (prospect)')+
+              '<br>'+(d.a||'area unknown')+(d.c?'<br>Crop: '+d.c+seas:'')+
+              '<br><i>potential to fill tank space</i>';
+    }
+    const litres = d.avgL?Math.round(d.avgL):0;
+    body += '<br><button onclick="addToRun('+gidx+')" style="margin-top:6px;padding:5px 10px;background:#D4180A;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">+ Add to run'+(litres?' ('+litres.toLocaleString()+'L)':'')+'</button>';
+    m.bindPopup(body);
     markers.push(m);
   });
   visCount.textContent=vis.length;
@@ -360,9 +390,11 @@ function togglePlanner(){
 function addToRun(gidx){
   const d = DATA[gidx];
   if(!d) return;
-  // avoid duplicates by name
-  if(RUN.some(r=>r.name===d.n)){ return; }
-  RUN.push({ name:d.n, area:d.a||'', litres:0, type:d.t });
+  // a multi-site customer can legitimately be added at two sites,
+  // so key on name+site rather than name alone
+  const key = d.n + '|' + (d.a||'');
+  if(RUN.some(r=>(r.name+'|'+(r.area||''))===key)){ return; }
+  RUN.push({ name:d.n, area:d.a||'', litres:d.avgL?Math.round(d.avgL):0, type:d.t });
   renderRun();
   // make sure planner is expanded so they see it land
   document.getElementById('planner').classList.remove('collapsed');
@@ -535,17 +567,25 @@ async function loadData(){
       c:(Array.isArray(r.crops)&&r.crops[0])?r.crops[0]:''
     })).filter(d=>!isNaN(d.lat)&&!isNaN(d.lng));
 
-    // customers: optional — view may not exist yet (invoices not loaded).
+    // customers: from app_customer_map (one row per customer SITE,
+    // so multi-site customers appear at each of their sites).
     let customers=[];
     try{
-      const cRes = await sb.from('map_customer_feed').select('*');
+      const cRes = await sb.from('app_customer_map').select('*');
       if(!cRes.error && cRes.data){
         customers=cRes.data.map(r=>({
-          n:r.customer_name||r.name, t:'customer', s:'customer',
-          a:r.usual_location||'', lat:Number(r.lat), lng:Number(r.lng), c:''
+          n:r.name, t:'customer', s:'customer',
+          a:r.place||'',                       // the site (suburb or town)
+          lat:Number(r.lat), lng:Number(r.lng), c:'',
+          // extra reorder info for the popup
+          place:r.place, region:r.region, parent:r.parent_town,
+          precision:r.precision, isPrimary:r.is_primary,
+          cycle:r.avg_cycle_days, avgL:r.avg_litres,
+          since:r.days_since_last, ripe:r.ripeness_pct,
+          rstatus:r.status, totalL:r.total_litres, orders:r.order_count
         })).filter(d=>!isNaN(d.lat)&&!isNaN(d.lng));
       }
-    }catch(_){ /* customer feed not ready yet — fine */ }
+    }catch(_){ /* customer map not ready yet — fine */ }
 
     DATA=[...customers,...prospects];
     if(DATA.length===0){
@@ -555,7 +595,7 @@ async function loadData(){
     }else{
       const dn=document.getElementById('demoNote'); if(dn) dn.style.display='none';
       if(customers.length===0){
-        banner.textContent='Showing '+prospects.length+' prospects. Customer layer loads once invoice data is in.';
+        banner.textContent='Showing '+prospects.length+' prospects. No customer sites mapped yet — run the places/sites SQL.';
         banner.classList.add('show');
       }
     }
