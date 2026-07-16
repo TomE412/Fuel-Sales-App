@@ -145,6 +145,32 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
 .lg{display:flex;align-items:center;gap:4px;}
 .dot{width:9px;height:9px;border-radius:50%;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,0.15);flex-shrink:0;}
 
+/* MAP SEARCH */
+.msearch{position:relative;}
+.msearch input{padding:6px 10px;border:1.5px solid var(--line);border-radius:7px;font-family:var(--font);font-size:11px;font-weight:600;outline:none;width:190px;background:#fff;}
+.msearch input:focus{border-color:var(--blue);}
+.mres{position:absolute;top:100%;left:0;right:0;margin-top:3px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.14);max-height:260px;overflow-y:auto;display:none;z-index:1200;}
+.mres.on{display:block;}
+.mres .grp{padding:5px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:#fafaf9;border-bottom:1px solid var(--line);position:sticky;top:0;}
+.mres .hit{padding:7px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f5f5f3;display:flex;align-items:center;gap:7px;}
+.mres .hit:hover{background:var(--blue-light);}
+.mres .hit b{font-weight:700;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mres .hit span{font-size:10px;color:var(--muted);white-space:nowrap;}
+.mres .none{padding:14px;text-align:center;font-size:11px;color:var(--muted);}
+
+/* DEPOT PICKER */
+.depots{display:flex;gap:5px;margin-bottom:10px;}
+.dp{flex:1;padding:7px 4px;text-align:center;border:1.5px solid var(--line);border-radius:8px;cursor:pointer;background:#fff;user-select:none;}
+.dp.active{border-color:var(--red);background:var(--red-light);}
+.dp b{display:block;font-size:11px;font-weight:700;}
+.dp span{font-size:9px;color:var(--muted);}
+
+/* ROUTING BADGE */
+.rbadge{display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;margin-left:6px;vertical-align:middle;}
+.rb-road{background:var(--green-light);color:var(--green-dark);}
+.rb-line{background:var(--amber-light);color:var(--amber);}
+.rb-busy{background:var(--blue-light);color:var(--blue);}
+
 .runsec{padding:12px;border-bottom:1px solid var(--line);}
 .runsec h3{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text2);margin-bottom:9px;}
 .trucks{display:flex;gap:5px;margin-bottom:10px;}
@@ -306,6 +332,11 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
       <select id="map-route" onchange="drawPins()" style="padding:6px 9px;border:1.5px solid var(--line);border-radius:7px;font-family:var(--font);font-size:11px;font-weight:700;outline:none;background:#fff;">
         <option value="all">All routes</option>
       </select>
+      <div class="msearch">
+        <input type="text" id="msq" placeholder="🔍 Find a customer or place…" autocomplete="off"
+               oninput="mapSearch()" onfocus="mapSearch()">
+        <div class="mres" id="mres"></div>
+      </div>
       <label class="tgl" id="drag-tgl"><input type="checkbox" id="drag-on" onchange="toggleDrag()"> ✋ Move pins</label>
       <button class="sbtn" onclick="startAdd()" id="add-btn">➕ Add customer</button>
       <div class="legend">
@@ -320,31 +351,33 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
       <div id="map"></div>
       <div class="mside">
         <div class="runsec">
-          <h3>1 · Which truck?</h3>
+          <h3>1 · Loading where?</h3>
+          <div class="depots" id="depots"></div>
+          <h3 style="margin-top:12px;">2 · Which truck?</h3>
           <div class="trucks" id="trucks"></div>
           <div class="cap" id="cap"><i id="cap-fill" style="width:0%"></i></div>
           <div class="capline"><span id="cap-l">0 L</span><span id="cap-r">—</span></div>
         </div>
         <div class="runsec">
-          <h3>2 · Stops <span style="float:right;font-family:var(--mono);color:var(--muted);" id="stop-n">0</span></h3>
+          <h3>3 · Stops <span style="float:right;font-family:var(--mono);color:var(--muted);" id="stop-n">0</span></h3>
           <div id="stops"><div class="empty" style="padding:14px;">Click a pin → <b>Add to run</b></div></div>
         </div>
         <div class="runsec" style="border-bottom:none;">
-          <h3>3 · What it costs</h3>
+          <h3>4 · What it costs <span class="rbadge rb-line" id="r-badge">straight line</span></h3>
           <div class="costbox">
-            <div class="costrow"><span>Distance (est.)</span><span class="v" id="c-km">— km</span></div>
+            <div class="costrow"><span>Distance</span><span class="v" id="c-km">— km</span></div>
+            <div class="costrow"><span>Driving time</span><span class="v" id="c-time">—</span></div>
             <div class="costrow"><span>Rate</span><span class="v" id="c-rate">—</span></div>
             <div class="costrow"><span>Litres on board</span><span class="v" id="c-lit">0 L</span></div>
             <div class="costrow big"><span>Trip cost</span><span class="v" id="c-tot">$0</span></div>
             <div class="costrow" style="margin-top:5px;"><span style="color:var(--text2);">Per litre</span><span class="v" id="c-per" style="color:var(--text2);">—</span></div>
           </div>
           <div style="display:flex;gap:6px;margin-top:9px;">
-            <button class="sbtn primary" style="flex:1;" onclick="openDirections()" id="dir-btn" disabled>🧭 Directions</button>
+            <button class="sbtn primary" style="flex:1;" onclick="openDirections()" id="dir-btn" disabled>🧭 Open in Maps</button>
             <button class="sbtn danger" onclick="clearRun()">Clear</button>
           </div>
-          <div style="font-size:10px;color:var(--muted);line-height:1.5;padding-top:9px;">
-            Distance is straight-line from the depot and back, × the road factor. Good enough to compare
-            one running order against another — not a surveyed figure. Rates come from Settings.
+          <div style="font-size:10px;color:var(--muted);line-height:1.5;padding-top:9px;" id="r-note">
+            Add a stop to work out the road distance.
           </div>
         </div>
       </div>
@@ -396,9 +429,14 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
           <div class="ph"><h2 style="color:var(--amber);">📏 Distance</h2><span class="saved" id="sv-set">Saved</span></div>
           <div style="padding:14px;">
             <div class="sfld">
-              <label>Road factor</label>
+              <label>Routing key (OpenRouteService)</label>
+              <input type="text" id="s-ors" placeholder="paste key…" style="font-size:11px;">
+              <div class="hint">Gives real road distances and driving times. Free key from openrouteservice.org — 2,000 trips a day. Leave blank to use straight-line only.</div>
+            </div>
+            <div class="sfld">
+              <label>Road factor <span style="font-weight:400;color:var(--muted);">— fallback only</span></label>
               <input type="number" id="s-road" step="0.05" min="1" max="3">
-              <div class="hint">Straight-line distance × this ≈ real road km. 1.3 is a sensible starting point. Raise it if the app keeps under-reading against your odometer.</div>
+              <div class="hint">Only used when road routing can't reach the internet or you're out of daily requests. Straight-line × this ≈ road km. Raise it if the fallback keeps under-reading against your odometer.</div>
             </div>
             <button class="btn" style="background:var(--blue);" onclick="saveSettings()">Save</button>
           </div>
@@ -408,7 +446,7 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
           <div style="padding:14px;font-size:12px;line-height:1.65;color:var(--text2);">
             <p style="margin-bottom:10px;"><b>Ripeness</b> — how far through their usual gap between orders a customer is. 100% means they're due, on past behaviour. It's a prompt to ring, not a forecast.</p>
             <p style="margin-bottom:10px;"><b>Route</b> — the direction out of Harare, not which tarmac. A mine off the road still sits on the route the truck takes to reach it.</p>
-            <p style="margin-bottom:10px;"><b>Trip cost</b> — straight-line km × road factor × the truck's rate, depot out and back. Use it to compare running orders, not to quote a customer.</p>
+            <p style="margin-bottom:10px;"><b>Trip cost</b> — road km × the truck's rate, depot out and back. The badge on the map tells you whether it used real roads or fell back to a straight line. Real roads are close, but mine and farm tracks are often missing from the map, so treat it as a good guide rather than a quote.</p>
             <p><b>History</b> — cycles are built on roughly 6.5 months of orders. Enough to spot a rhythm. Not enough to see a season.</p>
           </div>
         </div>
@@ -449,14 +487,21 @@ const SUPABASE_URL='https://lkaotuavapyvqfuuyzft.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYW90dWF2YXB5dnFmdXV5emZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MzU4NzcsImV4cCI6MjA5NzQxMTg3N30.he7Ah-TVyzZZAMiCHglIzP-UbdnxDw-CW4V9mYYJBDU';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
-const DEPOT={lat:-17.8419,lng:31.1183,name:'Msasa depot'};
+let DEPOTS=[], depotKey=null, depotMarker=null;
+function DEPOT(){
+  const d=DEPOTS.find(x=>x.depot_key===depotKey)||DEPOTS[0];
+  return d?{lat:+d.latitude,lng:+d.longitude,name:d.depot_name}:{lat:-17.8419,lng:31.1183,name:'Msasa depot'};
+}
 
 let SALES=[], CHASE={due_now:[],overdue:[],gone_quiet:[]}, BOOK=[];
-let BOARD=[], ROUTES=[], PLACES=[], TRUCKS=[], SETTINGS={road_factor:1.3}, CUSTNAMES=[];
+let BOARD=[], ROUTES=[], PLACES=[], TRUCKS=[], SETTINGS={road_factor:1.3,ors_key:null}, CUSTNAMES=[];
 let tab='due_now', pat='all', bkSort={k:'ripeness_pct',d:-1};
 let curRoute=null, page='today';
 let map=null, pinLayer=null, dragLayer=null, markers={}, mapReady=false;
 let RUN=[], truckKey=null, dragMode=false, addMode=false, pendingLatLng=null, runLine=null;
+
+// routing state: km + minutes from the last successful call, and how we got them
+let ROUTE={km:0, mins:null, mode:'line', busy:false, seq:0};
 
 const STATUS_COL={gone_quiet:'#D4180A',overdue:'#BA7517',due_now:'#3B6D11',due_soon:'#185FA5',not_yet:'#c9c9c6',never_ordered:'#c9c9c6',unknown:'#c9c9c6'};
 const STATUS_LBL={gone_quiet:'Gone quiet',overdue:'Overdue',due_now:'Due now',due_soon:'Due soon',not_yet:'Not yet due',never_ordered:'Never ordered',unknown:'No history'};
@@ -509,18 +554,21 @@ async function loadAll(){
 
 async function loadRefs(){
   try{
-    const [r,p,t,s,c]=await Promise.all([
+    const [r,p,t,s,c,d]=await Promise.all([
       sb.from('routes').select('*').order('sort_order'),
       sb.from('place_coords').select('*').order('place'),
       sb.from('trucks').select('*').eq('active',true).order('sort_order'),
       sb.from('app_settings').select('*').eq('id',1).maybeSingle(),
-      sb.from('customer_locations').select('id,invoice_name').order('invoice_name')
+      sb.from('customer_locations').select('id,invoice_name').order('invoice_name'),
+      sb.from('depots').select('*').eq('active',true).order('sort_order')
     ]);
-    ROUTES=r.data||[]; PLACES=p.data||[]; TRUCKS=t.data||[];
+    ROUTES=r.data||[]; PLACES=p.data||[]; TRUCKS=t.data||[]; DEPOTS=d.data||[];
     if(s.data) SETTINGS=s.data;
     CUSTNAMES=c.data||[];
     if(!truckKey && TRUCKS.length) truckKey=TRUCKS[TRUCKS.length-1].truck_key;
-    renderRoutePicker(); renderTrucks(); renderSettings(); fillMapRoutes(); fillPlaceSelect();
+    if(!depotKey && DEPOTS.length) depotKey=DEPOTS[0].depot_key;
+    renderRoutePicker(); renderDepots(); renderTrucks(); renderSettings(); fillMapRoutes(); fillPlaceSelect();
+    if(mapReady) drawDepot();
   }catch(e){ console.warn('refs',e); }
 }
 
@@ -813,10 +861,9 @@ function initMap(){
   map=L.map('map',{zoomControl:true}).setView([-18.3,30.5],7);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
   pinLayer=L.layerGroup().addTo(map);
-  L.circleMarker([DEPOT.lat,DEPOT.lng],{radius:8,color:'#fff',weight:2,fillColor:'#1a1a18',fillOpacity:1})
-    .addTo(map).bindTooltip('Msasa depot');
   map.on('click',e=>{ if(addMode) dropPin(e.latlng); });
   mapReady=true;
+  drawDepot();
   drawPins();
 }
 
@@ -873,7 +920,7 @@ function drawPins(){
       markers[b.site_id]=m;
     }
   });
-  if(RUN.length) drawRunLine();
+  if(RUN.length && ROUTE.mode==='line') drawLineRoute();
 }
 
 function popupHTML(b){
@@ -1045,12 +1092,79 @@ function refreshPopups(){
   Object.values(markers).forEach(m=>{ if(m._site && m.getPopup) { if(m.getPopup()) m.setPopupContent(popupHTML(m._site)); } });
 }
 
-function runKm(){
+/* ---- distance: straight-line fallback ---- */
+function lineKm(){
   if(!RUN.length) return 0;
-  let km=0, prev=[DEPOT.lat,DEPOT.lng];
+  const D=DEPOT();
+  let km=0, prev=[D.lat,D.lng];
   RUN.forEach(s=>{ km+=haversine(prev[0],prev[1],s.lat,s.lng); prev=[s.lat,s.lng]; });
-  km+=haversine(prev[0],prev[1],DEPOT.lat,DEPOT.lng);
+  km+=haversine(prev[0],prev[1],D.lat,D.lng);
   return km*(+SETTINGS.road_factor||1.3);
+}
+
+/* ---- distance: real roads via OpenRouteService ---- */
+let orsTimer=null;
+function requestRoute(){
+  clearTimeout(orsTimer);
+  if(!RUN.length){
+    ROUTE={km:0,mins:null,mode:'line',busy:false,seq:ROUTE.seq+1};
+    if(runLine){ map.removeLayer(runLine); runLine=null; }
+    paintCost();
+    return;
+  }
+  // show the straight-line answer immediately, then refine
+  ROUTE.km=lineKm(); ROUTE.mins=null; ROUTE.mode='line';
+  drawLineRoute();
+  paintCost();
+  if(!SETTINGS.ors_key){ return; }               // no key → stay on straight line
+  ROUTE.busy=true; paintCost();
+  orsTimer=setTimeout(fetchRoute,450);           // debounce rapid pin clicks
+}
+
+async function fetchRoute(){
+  const seq=++ROUTE.seq;
+  const D=DEPOT();
+  // ORS wants [lng,lat]
+  const coords=[[D.lng,D.lat],...RUN.map(s=>[s.lng,s.lat]),[D.lng,D.lat]];
+  try{
+    const res=await fetch('https://api.openrouteservice.org/v2/directions/driving-hgv/geojson',{
+      method:'POST',
+      headers:{'Authorization':SETTINGS.ors_key,'Content-Type':'application/json'},
+      body:JSON.stringify({coordinates:coords})
+    });
+    if(!res.ok) throw new Error('ORS '+res.status);
+    const gj=await res.json();
+    if(seq!==ROUTE.seq) return;                  // a newer request overtook this one
+    const sum=gj.features?.[0]?.properties?.summary;
+    if(!sum||!sum.distance) throw new Error('no route');
+    ROUTE.km=sum.distance/1000;
+    ROUTE.mins=sum.duration/60;
+    ROUTE.mode='road';
+    ROUTE.busy=false;
+    drawRoadRoute(gj);
+    paintCost();
+  }catch(e){
+    if(seq!==ROUTE.seq) return;
+    console.warn('routing fell back:',e.message||e);
+    ROUTE.km=lineKm(); ROUTE.mins=null; ROUTE.mode='line'; ROUTE.busy=false;
+    drawLineRoute();
+    paintCost();
+  }
+}
+
+function drawLineRoute(){
+  if(!mapReady) return;
+  if(runLine){ map.removeLayer(runLine); runLine=null; }
+  if(!RUN.length) return;
+  const D=DEPOT();
+  const pts=[[D.lat,D.lng],...RUN.map(s=>[s.lat,s.lng]),[D.lat,D.lng]];
+  runLine=L.polyline(pts,{color:'#BA7517',weight:2,opacity:0.6,dashArray:'6,5'}).addTo(map);
+}
+
+function drawRoadRoute(gj){
+  if(!mapReady) return;
+  if(runLine){ map.removeLayer(runLine); runLine=null; }
+  runLine=L.geoJSON(gj,{style:{color:'#185FA5',weight:4,opacity:0.8}}).addTo(map);
 }
 
 function renderRun(){
@@ -1078,35 +1192,147 @@ function renderRun(){
       '</div>').join('')
     : '<div class="empty" style="padding:14px;">Click a pin → <b>Add to run</b></div>';
 
-  const km=runKm();
+  paintCost();
+  requestRoute();
+}
+
+/* paints the cost box from whatever ROUTE currently holds */
+function paintCost(){
+  const t=TRUCKS.find(x=>x.truck_key===truckKey);
+  const lit=RUN.reduce((a,s)=>a+(s.litres||0),0);
+  const km=ROUTE.km||0;
   const rate=t?+t.cost_per_km:0;
   const tot=km*rate;
+
   document.getElementById('c-km').textContent=km?Math.round(km).toLocaleString()+' km':'— km';
   document.getElementById('c-rate').textContent=t?'$'+rate.toFixed(2)+'/km':'—';
   document.getElementById('c-lit').textContent=lit.toLocaleString()+' L';
   document.getElementById('c-tot').textContent='$'+Math.round(tot).toLocaleString();
   document.getElementById('c-per').textContent=lit?'$'+(tot/lit).toFixed(3)+'/L':'—';
-  document.getElementById('dir-btn').disabled=!RUN.length;
-  drawRunLine();
-}
 
-function drawRunLine(){
-  if(!mapReady) return;
-  if(runLine){ map.removeLayer(runLine); runLine=null; }
-  if(!RUN.length) return;
-  const pts=[[DEPOT.lat,DEPOT.lng],...RUN.map(s=>[s.lat,s.lng]),[DEPOT.lat,DEPOT.lng]];
-  runLine=L.polyline(pts,{color:'#185FA5',weight:2.5,opacity:0.75,dashArray:'6,5'}).addTo(map);
+  const tm=document.getElementById('c-time');
+  if(ROUTE.mins){
+    const h=Math.floor(ROUTE.mins/60), m=Math.round(ROUTE.mins%60);
+    tm.textContent=(h?h+'h ':'')+m+'m';
+  }else{ tm.textContent='—'; }
+
+  const bd=document.getElementById('r-badge');
+  const nt=document.getElementById('r-note');
+  if(!RUN.length){
+    bd.className='rbadge rb-line'; bd.textContent='no stops';
+    nt.textContent='Add a stop to work out the road distance.';
+  }else if(ROUTE.busy){
+    bd.className='rbadge rb-busy'; bd.textContent='checking roads…';
+    nt.textContent='Showing the straight-line estimate while the road distance loads.';
+  }else if(ROUTE.mode==='road'){
+    bd.className='rbadge rb-road'; bd.textContent='real roads';
+    nt.innerHTML='Road distance and time from OpenStreetMap, routed for a heavy truck. Mine and farm tracks are often missing from the map, so that last stretch can read short.';
+  }else{
+    bd.className='rbadge rb-line'; bd.textContent='straight line';
+    nt.innerHTML=SETTINGS.ors_key
+      ? '<b style="color:var(--amber);">Road routing unavailable</b> — offline, over the daily limit, or no road found. This is straight-line × '+(+SETTINGS.road_factor||1.3)+'.'
+      : 'No routing key set (Settings). This is straight-line × '+(+SETTINGS.road_factor||1.3)+'.';
+  }
+  document.getElementById('dir-btn').disabled=!RUN.length;
 }
 
 function openDirections(){
   if(!RUN.length) return;
-  const o=DEPOT.lat+','+DEPOT.lng;
+  const D=DEPOT();
+  const o=D.lat+','+D.lng;
   const wp=RUN.map(s=>s.lat+','+s.lng);
   const dest=wp.pop();
   let url='https://www.google.com/maps/dir/?api=1&origin='+o+'&destination='+dest+'&travelmode=driving';
   if(wp.length) url+='&waypoints='+encodeURIComponent(wp.join('|'));
   window.open(url,'_blank');
 }
+
+/* ============ DEPOTS ============ */
+function renderDepots(){
+  const el=document.getElementById('depots');
+  if(!el) return;
+  el.innerHTML=DEPOTS.length ? DEPOTS.map(d=>
+    '<div class="dp'+(depotKey===d.depot_key?' active':'')+'" data-d="'+d.depot_key+'" onclick="pickDepot(\''+d.depot_key+'\')">'+
+      '<b>'+esc(d.depot_name.split('—')[0].trim())+'</b>'+
+      '<span>'+esc((d.depot_name.split('—')[1]||'').trim())+'</span>'+
+    '</div>').join('') : '<div class="empty" style="padding:10px;">No depots — run SQL 18.</div>';
+}
+function pickDepot(k){
+  depotKey=k;
+  [...document.querySelectorAll('.dp')].forEach(x=>x.classList.toggle('active',x.dataset.d===k));
+  drawDepot();
+  requestRoute();
+}
+function drawDepot(){
+  if(!mapReady) return;
+  if(depotMarker){ map.removeLayer(depotMarker); depotMarker=null; }
+  const D=DEPOT();
+  depotMarker=L.circleMarker([D.lat,D.lng],{radius:9,color:'#fff',weight:2.5,fillColor:'#1a1a18',fillOpacity:1})
+    .addTo(map).bindTooltip('⛽ '+D.name,{permanent:false});
+}
+
+/* ============ MAP SEARCH ============ */
+function mapSearch(){
+  const q=(document.getElementById('msq').value||'').toLowerCase().trim();
+  const el=document.getElementById('mres');
+  if(q.length<2){ el.classList.remove('on'); return; }
+
+  const seenSite={};
+  const custs=[];
+  BOARD.forEach(b=>{
+    if(seenSite[b.site_id]) return;
+    if(!(b.name||'').toLowerCase().includes(q)) return;
+    if(b.lat==null||b.lng==null) return;
+    seenSite[b.site_id]=1;
+    custs.push(b);
+  });
+  const places=PLACES.filter(p=>(p.place||'').toLowerCase().includes(q));
+
+  let html='';
+  if(custs.length){
+    html+='<div class="grp">Customers</div>'+custs.slice(0,8).map(b=>{
+      const col=STATUS_COL[b.board_status]||'#c9c9c6';
+      return '<div class="hit" onclick="flyToSite('+b.site_id+')">'+
+        '<span class="dot" style="background:'+col+'"></span>'+
+        '<b>'+esc(b.name)+'</b><span>'+esc(b.place)+'</span></div>';
+    }).join('');
+  }
+  if(places.length){
+    html+='<div class="grp">Places</div>'+places.slice(0,8).map(p=>
+      '<div class="hit" onclick="flyToPlace(\''+esc(p.place).replace(/'/g,"\\'")+'\')">'+
+        '<span style="font-size:11px;">📍</span>'+
+        '<b>'+esc(p.place)+'</b><span>'+esc(p.parent||'')+'</span></div>').join('');
+  }
+  if(!html) html='<div class="none">Nothing found</div>';
+  el.innerHTML=html;
+  el.classList.add('on');
+}
+
+function flyToSite(site_id){
+  const b=BOARD.find(x=>x.site_id===site_id);
+  if(!b) return;
+  closeSearch();
+  // if the pin is filtered out by the route dropdown, drop back to All so it's visible
+  const sel=document.getElementById('map-route');
+  const onRoute=BOARD.some(x=>x.site_id===site_id && x.route_key===sel.value);
+  if(sel.value!=='all' && !onRoute){ sel.value='all'; drawPins(); }
+  map.flyTo([b.lat,b.lng],12,{duration:0.8});
+  const m=markers[site_id];
+  if(m && m.openPopup) setTimeout(()=>m.openPopup(),850);
+}
+function flyToPlace(name){
+  const p=PLACES.find(x=>x.place===name);
+  if(!p) return;
+  closeSearch();
+  map.flyTo([+p.latitude,+p.longitude],11,{duration:0.8});
+}
+function closeSearch(){
+  document.getElementById('mres').classList.remove('on');
+  document.getElementById('msq').value='';
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.msearch')) document.getElementById('mres')?.classList.remove('on');
+});
 
 /* ============ SETTINGS ============ */
 function renderSettings(){
@@ -1121,6 +1347,8 @@ function renderSettings(){
     '</div>').join('') : '<div class="empty">No trucks — run SQL 17.</div>';
   const r=document.getElementById('s-road');
   if(r) r.value=+SETTINGS.road_factor||1.3;
+  const k=document.getElementById('s-ors');
+  if(k) k.value=SETTINGS.ors_key||'';
 }
 async function saveTruck(k,v){
   const val=parseFloat(v);
@@ -1133,10 +1361,13 @@ async function saveTruck(k,v){
 async function saveSettings(){
   const rf=parseFloat(document.getElementById('s-road').value);
   if(isNaN(rf)||rf<1){ alert('Road factor must be 1 or more.'); return; }
-  const {error}=await sb.from('app_settings').update({road_factor:rf,updated_at:new Date().toISOString()}).eq('id',1);
+  const key=(document.getElementById('s-ors').value||'').trim()||null;
+  const {error}=await sb.from('app_settings')
+    .update({road_factor:rf,ors_key:key,updated_at:new Date().toISOString()}).eq('id',1);
   if(error){ alert('Could not save: '+error.message); return; }
-  SETTINGS.road_factor=rf;
-  flash('sv-set'); renderRun();
+  SETTINGS.road_factor=rf; SETTINGS.ors_key=key;
+  flash('sv-set');
+  if(RUN.length) requestRoute();
 }
 function flash(id){
   const e=document.getElementById(id);
