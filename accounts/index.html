@@ -80,6 +80,28 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .tbl tr:last-child td{border-bottom:none;}
 .tbl tr:hover td{background:#FAFAF8;}
 .mono{font-family:var(--mono);font-weight:600;}
+
+/* LOST SALE */
+.lost-btn{padding:5px 10px;background:#fff;border:1.5px solid var(--red);color:var(--red);border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.lost-btn:hover{background:var(--red);color:#fff;}
+.lostflag{display:inline-block;font-size:8px;font-weight:700;padding:1px 5px;border-radius:99px;background:var(--red-light);color:var(--red-dark);margin-left:5px;vertical-align:middle;}
+.lmodal{position:fixed;inset:0;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;z-index:9000;padding:16px;}
+.lmodal.on{display:flex;}
+.lbox{background:#fff;border-radius:14px;padding:22px;width:100%;max-width:400px;max-height:90vh;overflow-y:auto;}
+.lbox h2{font-size:16px;font-weight:700;margin-bottom:3px;}
+.lbox .lsub{font-size:13px;color:var(--text2);margin-bottom:16px;font-weight:600;}
+.lfld{margin-bottom:12px;}
+.lfld label{font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.04em;}
+.lfld input{width:100%;padding:10px 11px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;font-family:var(--font);font-size:13px;outline:none;}
+.lfld input:focus{border-color:var(--red);background:#fff;}
+.lreasons{display:flex;gap:6px;margin-bottom:4px;}
+.lrsn{flex:1;padding:9px 4px;text-align:center;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;background:#fff;user-select:none;font-size:12px;font-weight:700;color:var(--text2);}
+.lrsn.active{border-color:var(--red);background:var(--red-light);color:var(--red-dark);}
+.lrow{display:flex;gap:8px;margin-top:14px;}
+.lrow button{flex:1;padding:12px;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;border:none;}
+.lrow .go{background:var(--red);color:#fff;}
+.lrow .no{background:#fff;color:var(--text2);border:1.5px solid var(--gray-border);}
+.lerr{color:var(--red);font-size:12px;text-align:center;margin-top:10px;min-height:16px;}
 .due-soon{color:var(--amber);font-weight:700;}
 .due-today{color:var(--red);font-weight:700;}
 .pill{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;}
@@ -299,6 +321,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
                 <th onclick="sortRet('avg_cycle_days')">Usual cycle</th>
                 <th onclick="sortRet('ripeness_pct')">Ripeness</th>
                 <th onclick="sortRet('total_litres')">Total litres</th>
+                <th style="cursor:default;"></th>
               </tr>
             </thead>
             <tbody id="retention-body">
@@ -798,7 +821,7 @@ let bookSort = { key:'total_litres', dir:-1 };
 async function loadBook(){
   try{
     const { data, error } = await sb.from('app_customer_book')
-      .select('customer,order_count,first_order,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,est_annual_litres,status,buying_pattern');
+      .select('customer,order_count,first_order,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,est_annual_litres,status,buying_pattern,lost_last_round,lost_count');
     if(error) throw error;
     BOOK = data||[];
     renderBook();
@@ -872,7 +895,7 @@ let retentionLoaded = false;
 async function loadRetention(){
   try{
     const { data, error } = await sb.from('app_customer_retention')
-      .select('customer,order_count,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,status');
+      .select('customer,order_count,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,status,lost_last_round,lost_count');
     if(error) throw error;
     RETENTION = { gone_quiet:[], overdue:[], due_now:[], due_soon:[] };
     (data||[]).forEach(r=>{ if(RETENTION[r.status]) RETENTION[r.status].push(r); });
@@ -884,7 +907,7 @@ async function loadRetention(){
     renderRetention();
   }catch(e){
     document.getElementById('retention-body').innerHTML =
-      '<tr><td colspan="6" class="empty-msg">Retention data not available yet ('+(e.message||e)+')</td></tr>';
+      '<tr><td colspan="7" class="empty-msg">Retention data not available yet ('+(e.message||e)+')</td></tr>';
   }
 }
 
@@ -918,18 +941,22 @@ function renderRetention(){
   const body=document.getElementById('retention-body');
   if(!rows.length){
     const msg = retTab==='gone_quiet' ? 'No customers have gone quiet — good sign.' : 'Nobody in this bucket right now.';
-    body.innerHTML='<tr><td colspan="6" class="empty-msg">'+msg+'</td></tr>';
+    body.innerHTML='<tr><td colspan="7" class="empty-msg">'+msg+'</td></tr>';
     return;
   }
   body.innerHTML = rows.map(r=>{
     const pctCol = r.status==='gone_quiet'?'var(--red)':r.status==='overdue'?'var(--amber)':'var(--green-dark)';
+    const flag = r.lost_last_round?'<span class="lostflag">lost last</span>':'';
+    const lc = r.lost_count>0?'<div style="font-size:9px;font-weight:600;color:var(--red-dark);">'+r.lost_count+' lost</div>':'';
+    const cust = (r.customer||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
     return '<tr>'+
-      '<td style="font-weight:700;">'+r.customer+'</td>'+
+      '<td style="font-weight:700;">'+r.customer+flag+lc+'</td>'+
       '<td class="mono">'+fmtD(r.last_order)+'</td>'+
       '<td class="mono">'+(r.days_since_last||0)+'d</td>'+
       '<td class="mono">'+(r.avg_cycle_days||'?')+'d</td>'+
       '<td class="mono" style="font-weight:700;color:'+pctCol+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</td>'+
       '<td class="mono">'+Math.round(r.total_litres||0).toLocaleString()+'</td>'+
+      '<td><button class="lost-btn" onclick="openLost(\''+cust+'\')">Lost sale</button></td>'+
     '</tr>';
   }).join('');
 }
@@ -937,6 +964,107 @@ function renderRetention(){
 setInterval(()=>{if(document.getElementById('acc-wrap').classList.contains('active'))fetchData();},60000);
 
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
+
+// ===== LOST SALE =====
+let lostCustomer=null, lostReason='pricing';
+const RSN_HINT={
+  pricing:'We were beaten on price.',
+  payment:'They had money owing, or we couldn\'t agree terms.',
+  other:'Stock, timing, service \u2014 put the detail in notes.'
+};
+
+function openLost(customer){
+  lostCustomer=customer;
+  lostReason='pricing';
+  document.getElementById('lost-who').textContent=customer;
+  document.getElementById('lost-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('lost-litres').value='';
+  document.getElementById('lost-notes').value='';
+  document.getElementById('lost-err').textContent='';
+  [...document.querySelectorAll('.lrsn')].forEach(x=>x.classList.toggle('active',x.dataset.r==='pricing'));
+  document.getElementById('rsn-hint').textContent=RSN_HINT.pricing;
+  document.getElementById('lostm').classList.add('on');
+}
+function closeLost(){ document.getElementById('lostm').classList.remove('on'); lostCustomer=null; }
+function pickReason(r){
+  lostReason=r;
+  [...document.querySelectorAll('.lrsn')].forEach(x=>x.classList.toggle('active',x.dataset.r===r));
+  document.getElementById('rsn-hint').textContent=RSN_HINT[r]||'';
+}
+
+async function saveLost(){
+  const err=document.getElementById('lost-err');
+  err.textContent='';
+  if(!lostCustomer){ err.textContent='No customer.'; return; }
+  const d=document.getElementById('lost-date').value;
+  if(!d){ err.textContent='Pick the date they bought elsewhere.'; return; }
+  if(d>new Date().toISOString().split('T')[0]){ err.textContent='That date is in the future.'; return; }
+
+  const litres=parseInt(document.getElementById('lost-litres').value)||null;
+  const notes=(document.getElementById('lost-notes').value||'').trim()||null;
+
+  try{
+    let cid=null;
+    try{
+      const {data:cl}=await sb.from('customer_locations')
+        .select('id').ilike('invoice_name',lostCustomer).limit(1).maybeSingle();
+      if(cl) cid=cl.id;
+    }catch(_){}
+    const who=document.getElementById('user-name')?.textContent||null;
+    const {error}=await sb.from('lost_sales').insert({
+      customer:lostCustomer,
+      customer_id:cid,
+      lost_date:d,
+      est_litres:litres,
+      reason:lostReason,
+      notes,
+      logged_by_name:who
+    });
+    if(error) throw error;
+    closeLost();
+    await loadRetention();
+    if(typeof loadBook==='function') await loadBook();
+  }catch(e){ err.textContent=e.message||String(e); }
+}
 </script>
+
+<!-- LOST SALE MODAL -->
+<div class="lmodal" id="lostm">
+  <div class="lbox">
+    <h2>Lost sale</h2>
+    <div class="lsub" id="lost-who">—</div>
+    <div style="background:var(--blue-light);border:1px solid var(--blue);border-radius:9px;padding:10px;font-size:11px;line-height:1.55;color:var(--blue-dark);margin-bottom:16px;">
+      They bought &mdash; just not from us. Logging this <b>keeps their rhythm alive</b> so we ring them at the right time next round.
+      It adds <b>no litres</b> to volume and won't touch their average order size.
+    </div>
+    <div class="lfld">
+      <label>Why did we lose it?</label>
+      <div class="lreasons" id="lreasons">
+        <div class="lrsn active" data-r="pricing" onclick="pickReason('pricing')">Pricing</div>
+        <div class="lrsn"        data-r="payment" onclick="pickReason('payment')">Payment</div>
+        <div class="lrsn"        data-r="other"   onclick="pickReason('other')">Other</div>
+      </div>
+      <div style="font-size:10px;color:var(--text2);line-height:1.45;margin-top:4px;" id="rsn-hint">We were beaten on price.</div>
+    </div>
+    <div class="lfld">
+      <label>Date they bought elsewhere</label>
+      <input type="date" id="lost-date">
+    </div>
+    <div class="lfld">
+      <label>Roughly how many litres?</label>
+      <input type="number" id="lost-litres" placeholder="optional, e.g. 5000">
+      <div style="font-size:10px;color:var(--text2);margin-top:3px;">For reporting what we're losing. Never counted as our volume.</div>
+    </div>
+    <div class="lfld">
+      <label>Notes</label>
+      <input type="text" id="lost-notes" placeholder="optional, e.g. Redan quoted 4c under">
+    </div>
+    <div class="lrow">
+      <button class="no" onclick="closeLost()">Cancel</button>
+      <button class="go" onclick="saveLost()">Log it</button>
+    </div>
+    <div class="lerr" id="lost-err"></div>
+  </div>
+</div>
 </body>
 </html>

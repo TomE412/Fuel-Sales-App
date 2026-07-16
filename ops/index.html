@@ -171,6 +171,14 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
 .rb-line{background:var(--amber-light);color:var(--amber);}
 .rb-busy{background:var(--blue-light);color:var(--blue);}
 
+/* LOST SALE */
+.lost{background:#fff;border:1.5px solid var(--red);color:var(--red);border-radius:6px;font-family:var(--font);font-size:10px;font-weight:700;padding:5px 9px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.lost:hover{background:var(--red);color:#fff;}
+.lostflag{display:inline-block;font-size:8px;font-weight:700;padding:1px 5px;border-radius:99px;background:var(--red-light);color:var(--red-dark);margin-left:5px;vertical-align:middle;}
+.reasons{display:flex;gap:6px;margin-bottom:4px;}
+.rsn{flex:1;padding:9px 4px;text-align:center;border:1.5px solid var(--line);border-radius:8px;cursor:pointer;background:#fff;user-select:none;font-size:12px;font-weight:700;color:var(--text2);}
+.rsn.active{border-color:var(--red);background:var(--red-light);color:var(--red-dark);}
+
 .runsec{padding:12px;border-bottom:1px solid var(--line);}
 .runsec h3{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text2);margin-bottom:9px;}
 .trucks{display:flex;gap:5px;margin-bottom:10px;}
@@ -447,6 +455,7 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
             <p style="margin-bottom:10px;"><b>Ripeness</b> — how far through their usual gap between orders a customer is. 100% means they're due, on past behaviour. It's a prompt to ring, not a forecast.</p>
             <p style="margin-bottom:10px;"><b>Route</b> — the direction out of Harare, not which tarmac. A mine off the road still sits on the route the truck takes to reach it.</p>
             <p style="margin-bottom:10px;"><b>Trip cost</b> — road km × the truck's rate, depot out and back. The badge on the map tells you whether it used real roads or fell back to a straight line. Real roads are close, but mine and farm tracks are often missing from the map, so treat it as a good guide rather than a quote.</p>
+            <p style="margin-bottom:10px;"><b>Lost sale</b> — they bought, just not from us. Logging it keeps their clock running so we ring them at the right time next round instead of writing them off as gone quiet. It adds no litres and doesn't touch their average order size.</p>
             <p><b>History</b> — cycles are built on roughly 6.5 months of orders. Enough to spot a rhythm. Not enough to see a season.</p>
           </div>
         </div>
@@ -479,6 +488,45 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
       <button class="btn" style="background:var(--green);" onclick="saveCustomer()">Save pin</button>
     </div>
     <div class="err" id="a-err"></div>
+  </div>
+</div>
+
+<!-- LOST SALE MODAL -->
+<div class="modal" id="lostm">
+  <div class="mbox">
+    <h2>Lost sale</h2>
+    <div class="msub" id="lost-who" style="font-family:var(--font);">—</div>
+    <div style="background:var(--blue-light);border:1px solid var(--blue);border-radius:9px;padding:10px;font-size:11px;line-height:1.55;color:var(--blue-dark);margin-bottom:16px;">
+      They bought — just not from us. Logging this <b>keeps their rhythm alive</b> so we ring them at the right time next round.
+      It adds <b>no litres</b> to volume and won't touch their average order size.
+    </div>
+    <div class="fld">
+      <label>Why did we lose it?</label>
+      <div class="reasons" id="reasons">
+        <div class="rsn active" data-r="pricing" onclick="pickReason('pricing')">Pricing</div>
+        <div class="rsn"        data-r="payment" onclick="pickReason('payment')">Payment</div>
+        <div class="rsn"        data-r="other"   onclick="pickReason('other')">Other</div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);line-height:1.45;" id="rsn-hint">We were beaten on price.</div>
+    </div>
+    <div class="fld">
+      <label>Date they bought elsewhere</label>
+      <input type="date" id="lost-date">
+    </div>
+    <div class="fld">
+      <label>Roughly how many litres? <span style="font-weight:400;color:var(--muted);">— optional</span></label>
+      <input type="number" id="lost-litres" placeholder="e.g. 5000">
+      <div style="font-size:10px;color:var(--muted);margin-top:3px;">For reporting what we're losing. Never counted as our volume.</div>
+    </div>
+    <div class="fld">
+      <label>Notes <span style="font-weight:400;color:var(--muted);">— optional</span></label>
+      <input type="text" id="lost-notes" placeholder="e.g. Redan quoted 4c under">
+    </div>
+    <div class="mrow">
+      <button class="btn ghost" onclick="closeLost()">Cancel</button>
+      <button class="btn" onclick="saveLost()">Log it</button>
+    </div>
+    <div class="err" id="lost-err"></div>
   </div>
 </div>
 
@@ -604,7 +652,7 @@ async function loadSales(){
 async function loadChase(){
   try{
     const {data,error}=await sb.from('app_customer_retention')
-      .select('customer,order_count,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,status')
+      .select('customer,order_count,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,status,lost_last_round,lost_count')
       .in('status',['due_now','overdue','gone_quiet']);
     if(error) throw error;
     CHASE={due_now:[],overdue:[],gone_quiet:[]};
@@ -622,7 +670,7 @@ async function loadChase(){
 async function loadBook(){
   try{
     const {data,error}=await sb.from('app_customer_book')
-      .select('customer,order_count,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,status,buying_pattern');
+      .select('customer,order_count,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,status,buying_pattern,lost_last_round,lost_count');
     if(error) throw error;
     BOOK=data||[];
     renderBook();
@@ -717,11 +765,13 @@ function renderChase(){
   el.innerHTML=rows.map(r=>{
     const col=STATUS_COL[r.status]||'#9a9a97';
     const lit=r.avg_litres?Math.round(r.avg_litres):0;
+    const flag=r.lost_last_round?'<span class="lostflag">lost last</span>':'';
     return '<div class="ro">'+
-      '<div class="i"><b>'+esc(r.customer)+'</b>'+
+      '<div class="i"><b>'+esc(r.customer)+flag+'</b>'+
         '<span>every '+(r.avg_cycle_days||'?')+'d · '+(r.days_since_last||0)+'d ago · last '+fmt(r.last_order)+'</span></div>'+
       '<div class="amt">'+(lit?lit.toLocaleString()+' L':'—')+'</div>'+
       '<div class="pct" style="color:'+col+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</div>'+
+      '<button class="lost" onclick="openLost(\''+esc(r.customer).replace(/'/g,"\\'")+'\')">Lost sale</button>'+
     '</div>';
   }).join('');
 }
@@ -756,9 +806,11 @@ function renderBook(){
   const pc={very_frequent:'var(--green-dark)',monthly_ish:'var(--blue)',quarterly_ish:'var(--amber)',occasional:'var(--muted)',unknown:'var(--muted)'};
   b.innerHTML=rows.map(r=>{
     const col=STATUS_COL[r.status]||'#9a9a97';
+    const flag=r.lost_last_round?'<span class="lostflag">lost last</span>':'';
+    const lc=r.lost_count>0?'<span style="font-size:9px;color:var(--red-dark);"> · '+r.lost_count+' lost</span>':'';
     return '<tr>'+
-      '<td style="font-weight:700;">'+esc(r.customer)+
-        '<div style="font-size:9px;font-weight:600;color:'+(pc[r.buying_pattern]||'var(--muted)')+';">'+(pl[r.buying_pattern]||'—')+'</div></td>'+
+      '<td style="font-weight:700;">'+esc(r.customer)+flag+
+        '<div style="font-size:9px;font-weight:600;color:'+(pc[r.buying_pattern]||'var(--muted)')+';">'+(pl[r.buying_pattern]||'—')+lc+'</div></td>'+
       '<td class="mono">'+(r.order_count||0)+'</td>'+
       '<td class="mono">'+(r.avg_cycle_days?r.avg_cycle_days+'d':'—')+'</td>'+
       '<td class="mono">'+Math.round(r.avg_litres||0).toLocaleString()+'</td>'+
@@ -831,10 +883,12 @@ function renderRoute(){
   rp.innerHTML=ripe.length
     ? ripe.map(r=>{
         const col=STATUS_COL[r.board_status]||'#9a9a97';
-        return '<div class="ro"><div class="i"><b>'+esc(r.name)+'</b>'+
+        const flag=r.lost_last_round?'<span class="lostflag">lost last</span>':'';
+        return '<div class="ro"><div class="i"><b>'+esc(r.name)+flag+'</b>'+
           '<span>📍 '+esc(r.place)+' · every '+(r.avg_cycle_days||'?')+'d · '+(r.days_since_last||0)+'d ago · <b style="color:'+col+'">'+(STATUS_LBL[r.board_status]||'')+'</b></span></div>'+
           '<div class="amt">'+(r.avg_litres?Math.round(r.avg_litres).toLocaleString()+' L':'—')+'</div>'+
-          '<div class="pct" style="color:'+col+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</div></div>';
+          '<div class="pct" style="color:'+col+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</div>'+
+          '<button class="lost" onclick="openLost(\''+esc(r.name).replace(/'/g,"\\'")+'\')">Lost</button></div>';
       }).join('')
     : '<div class="empty">Nobody due on this road</div>';
   document.getElementById('rt-ripe-n').textContent=ripe.length+' to ring';
@@ -928,7 +982,7 @@ function popupHTML(b){
   const lbl=STATUS_LBL[b.board_status]||'—';
   const col=STATUS_COL[b.board_status]||'#9a9a97';
   const routes=[...new Set(BOARD.filter(x=>x.site_id===b.site_id).map(x=>x.route_name))].join(', ');
-  return '<b>'+esc(b.name)+'</b><br>'+
+  return '<b>'+esc(b.name)+'</b>'+(b.lost_last_round?'<span class="lostflag">lost last</span>':'')+'<br>'+
     '<span style="color:#9a9a97;font-size:11px;">📍 '+esc(b.place)+(b.parent_town?' · '+esc(b.parent_town):'')+'</span><br>'+
     '<span style="color:#9a9a97;font-size:10px;">🛣️ '+esc(routes)+'</span>'+
     '<div style="margin:7px 0;padding:6px 0;border-top:1px solid #eee;border-bottom:1px solid #eee;font-size:11px;line-height:1.6;">'+
@@ -936,10 +990,14 @@ function popupHTML(b){
       (b.avg_cycle_days?'Every '+b.avg_cycle_days+' days · ':'')+
       (b.days_since_last!=null?b.days_since_last+' days ago<br>':'<br>')+
       (b.avg_litres?'Typical: <b>'+Math.round(b.avg_litres).toLocaleString()+' L</b>':'No order history')+
+      (b.lost_count>0?'<br><span style="color:#A32D2D;font-size:10px;">'+b.lost_count+' sale'+(b.lost_count===1?'':'s')+' lost</span>':'')+
     '</div>'+
     (inRun
       ? '<button class="pop-btn rm" onclick="removeStop('+b.site_id+')">− Remove from run</button>'
-      : '<button class="pop-btn" onclick="addStop('+b.site_id+')">+ Add to run</button>');
+      : '<button class="pop-btn" onclick="addStop('+b.site_id+')">+ Add to run</button>')+
+    (b.order_count>0
+      ? '<button class="pop-btn" style="background:#fff;border:1.5px solid #D4180A;color:#D4180A;margin-top:5px;" onclick="openLost(\''+esc(b.name).replace(/'/g,"\\'")+'\')">Lost sale</button>'
+      : '');
 }
 
 function toggleDrag(){
@@ -1126,30 +1184,61 @@ async function fetchRoute(){
   const D=DEPOT();
   // ORS wants [lng,lat]
   const coords=[[D.lng,D.lat],...RUN.map(s=>[s.lng,s.lat]),[D.lng,D.lat]];
+  // radiuses: how far ORS may look for a road to snap each point to.
+  // Default is 350m, which fails the moment a customer sits off a mapped road.
+  // 20km lets it route to the nearest road it knows rather than giving up.
+  const radiuses=coords.map(()=>20000);
   try{
     const res=await fetch('https://api.openrouteservice.org/v2/directions/driving-hgv/geojson',{
       method:'POST',
       headers:{'Authorization':SETTINGS.ors_key,'Content-Type':'application/json'},
-      body:JSON.stringify({coordinates:coords})
+      body:JSON.stringify({coordinates:coords, radiuses, continue_straight:false})
     });
-    if(!res.ok) throw new Error('ORS '+res.status);
+    if(!res.ok){
+      let detail='';
+      try{ const j=await res.json(); detail=j.error?.message||j.error||''; }catch(_){}
+      throw new Error('ORS '+res.status+(detail?' — '+detail:''));
+    }
     const gj=await res.json();
     if(seq!==ROUTE.seq) return;                  // a newer request overtook this one
     const sum=gj.features?.[0]?.properties?.summary;
-    if(!sum||!sum.distance) throw new Error('no route');
+    if(!sum||!sum.distance) throw new Error('no route returned');
     ROUTE.km=sum.distance/1000;
     ROUTE.mins=sum.duration/60;
     ROUTE.mode='road';
     ROUTE.busy=false;
+    ROUTE.err=null;
+    // how far is each stop from where the truck can actually get?
+    ROUTE.offroad=measureOffroad(gj);
     drawRoadRoute(gj);
     paintCost();
   }catch(e){
     if(seq!==ROUTE.seq) return;
     console.warn('routing fell back:',e.message||e);
     ROUTE.km=lineKm(); ROUTE.mins=null; ROUTE.mode='line'; ROUTE.busy=false;
+    ROUTE.err=e.message||String(e);
+    ROUTE.offroad=null;
     drawLineRoute();
     paintCost();
   }
+}
+
+/* How far each stop sits from the routed road — the bit the truck does on tracks */
+function measureOffroad(gj){
+  try{
+    const line=gj.features?.[0]?.geometry?.coordinates;
+    if(!line||!line.length) return null;
+    let worst=0, worstName='';
+    RUN.forEach(s=>{
+      let best=1e9;
+      for(let i=0;i<line.length;i+=3){        // sample — no need to check every vertex
+        const d=haversine(s.lat,s.lng,line[i][1],line[i][0]);
+        if(d<best) best=d;
+      }
+      if(best>worst){ worst=best; worstName=s.name; }
+    });
+    return worst>1 ? {km:worst,name:worstName} : null;   // only flag if over 1km
+  }catch(e){ return null; }
 }
 
 function drawLineRoute(){
@@ -1226,11 +1315,16 @@ function paintCost(){
     nt.textContent='Showing the straight-line estimate while the road distance loads.';
   }else if(ROUTE.mode==='road'){
     bd.className='rbadge rb-road'; bd.textContent='real roads';
-    nt.innerHTML='Road distance and time from OpenStreetMap, routed for a heavy truck. Mine and farm tracks are often missing from the map, so that last stretch can read short.';
+    nt.innerHTML='Road distance and time from OpenStreetMap, routed for a heavy truck.'+
+      (ROUTE.offroad
+        ? ' <b style="color:var(--amber);">'+esc(ROUTE.offroad.name)+' sits about '+
+          Math.round(ROUTE.offroad.km)+' km off the routed road</b> — that last stretch is on tracks the map doesn\'t have, so add time for it.'
+        : '');
   }else{
     bd.className='rbadge rb-line'; bd.textContent='straight line';
     nt.innerHTML=SETTINGS.ors_key
-      ? '<b style="color:var(--amber);">Road routing unavailable</b> — offline, over the daily limit, or no road found. This is straight-line × '+(+SETTINGS.road_factor||1.3)+'.'
+      ? '<b style="color:var(--amber);">Road routing unavailable</b> — using straight-line × '+(+SETTINGS.road_factor||1.3)+
+        '.'+(ROUTE.err?'<br><span style="font-size:9px;opacity:.75;">'+esc(ROUTE.err)+'</span>':'')
       : 'No routing key set (Settings). This is straight-line × '+(+SETTINGS.road_factor||1.3)+'.';
   }
   document.getElementById('dir-btn').disabled=!RUN.length;
@@ -1269,6 +1363,63 @@ function drawDepot(){
   const D=DEPOT();
   depotMarker=L.circleMarker([D.lat,D.lng],{radius:9,color:'#fff',weight:2.5,fillColor:'#1a1a18',fillOpacity:1})
     .addTo(map).bindTooltip('⛽ '+D.name,{permanent:false});
+}
+
+/* ============ LOST SALE ============ */
+let lostCustomer=null, lostReason='pricing';
+const RSN_HINT={
+  pricing:'We were beaten on price.',
+  payment:'They had money owing, or we couldn\'t agree terms.',
+  other:'Stock, timing, service — put the detail in notes.'
+};
+
+function openLost(customer){
+  lostCustomer=customer;
+  lostReason='pricing';
+  document.getElementById('lost-who').textContent=customer;
+  document.getElementById('lost-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('lost-litres').value='';
+  document.getElementById('lost-notes').value='';
+  document.getElementById('lost-err').textContent='';
+  [...document.querySelectorAll('.rsn')].forEach(x=>x.classList.toggle('active',x.dataset.r==='pricing'));
+  document.getElementById('rsn-hint').textContent=RSN_HINT.pricing;
+  document.getElementById('lostm').classList.add('on');
+}
+function closeLost(){ document.getElementById('lostm').classList.remove('on'); lostCustomer=null; }
+function pickReason(r){
+  lostReason=r;
+  [...document.querySelectorAll('.rsn')].forEach(x=>x.classList.toggle('active',x.dataset.r===r));
+  document.getElementById('rsn-hint').textContent=RSN_HINT[r]||'';
+}
+
+async function saveLost(){
+  const err=document.getElementById('lost-err');
+  err.textContent='';
+  if(!lostCustomer){ err.textContent='No customer.'; return; }
+  const d=document.getElementById('lost-date').value;
+  if(!d){ err.textContent='Pick the date they bought elsewhere.'; return; }
+  if(d>new Date().toISOString().split('T')[0]){ err.textContent='That date is in the future.'; return; }
+
+  const litres=parseInt(document.getElementById('lost-litres').value)||null;
+  const notes=(document.getElementById('lost-notes').value||'').trim()||null;
+  const cl=CUSTNAMES.find(c=>(c.invoice_name||'').toLowerCase()===lostCustomer.toLowerCase());
+
+  try{
+    const {data:u}=await sb.auth.getUser();
+    const who=document.getElementById('who').textContent||null;
+    const {error}=await sb.from('lost_sales').insert({
+      customer:lostCustomer,
+      customer_id:cl?cl.id:null,
+      lost_date:d,
+      est_litres:litres,
+      reason:lostReason,
+      notes,
+      logged_by_name:who
+    });
+    if(error) throw error;
+    closeLost();
+    await Promise.all([loadChase(), loadBook(), loadBoard()]);
+  }catch(e){ err.textContent=e.message||String(e); }
 }
 
 /* ============ MAP SEARCH ============ */
