@@ -6,7 +6,14 @@
 <meta name="color-scheme" content="light only">
 <title>Skelsee — Ops Planner</title>
 <link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ops Planner">
+<meta name="theme-color" content="#D4180A">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -15,69 +22,74 @@
   --green:#1D9E75;--green-light:#EAF3DE;--green-dark:#3B6D11;
   --amber:#BA7517;--amber-light:#FAEEDA;
   --blue:#185FA5;--blue-light:#E6F1FB;--blue-dark:#0C447C;
+  --purple:#6B4FA0;--purple-light:#F0EBFA;
   --bg:#F0F0EE;--surface:#fff;--line:#E0E0DE;--muted:#9a9a97;--text2:#5a5a57;--text:#1a1a18;
   --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
 }
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;}
 
-/* AUTH */
-.auth{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:999;}
+.auth{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999;}
 .auth.hidden{display:none;}
 .auth-box{background:#fff;border:1px solid var(--line);border-radius:14px;padding:30px;width:100%;max-width:360px;}
 .auth-box h1{font-size:19px;font-weight:700;margin-bottom:4px;}
 .auth-box .sub{font-size:13px;color:var(--muted);margin-bottom:22px;}
 .fld{margin-bottom:12px;}
 .fld label{font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em;}
-.fld input{width:100%;padding:11px 12px;background:#F4F4F2;border:1.5px solid var(--line);border-radius:8px;font-family:var(--font);font-size:14px;outline:none;}
-.fld input:focus{border-color:var(--red);background:#fff;}
+.fld input,.fld select{width:100%;padding:11px 12px;background:#F4F4F2;border:1.5px solid var(--line);border-radius:8px;font-family:var(--font);font-size:14px;outline:none;}
+.fld input:focus,.fld select:focus{border-color:var(--red);background:#fff;}
 .btn{width:100%;padding:12px;background:var(--red);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;}
 .err{color:var(--red);font-size:12px;text-align:center;margin-top:10px;min-height:16px;}
 
-/* APP */
 .app{display:none;flex-direction:column;height:100vh;overflow:hidden;}
 .app.active{display:flex;}
 .top{background:#fff;border-bottom:1px solid var(--line);padding:9px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0;}
-.top h1{font-size:15px;font-weight:700;color:var(--red);}
-.top .who{font-size:12px;color:var(--muted);}
+.top h1{font-size:15px;font-weight:700;color:var(--red);white-space:nowrap;}
+.top .who{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .top .right{margin-left:auto;display:flex;align-items:center;gap:12px;}
-.clock{font-family:var(--mono);font-size:12px;color:var(--text2);}
-.live{font-size:10px;font-weight:700;color:var(--green-dark);background:var(--green-light);padding:3px 9px;border-radius:99px;}
-.maplink{font-size:11px;font-weight:700;color:var(--blue);text-decoration:none;border:1px solid var(--blue);padding:4px 10px;border-radius:7px;}
-.maplink:hover{background:var(--blue-light);}
+.clock{font-family:var(--mono);font-size:12px;color:var(--text2);white-space:nowrap;}
+.live{font-size:10px;font-weight:700;color:var(--green-dark);background:var(--green-light);padding:3px 9px;border-radius:99px;white-space:nowrap;}
 .signout{font-size:11px;color:var(--muted);cursor:pointer;background:none;border:none;font-family:var(--font);text-decoration:underline;}
+@media(max-width:700px){.top .clock{display:none;}}
 
-/* LAYOUT — side by side */
+.mtabs{background:#fff;border-bottom:1px solid var(--line);display:flex;flex-shrink:0;overflow-x:auto;}
+.mtab{padding:10px 20px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2.5px solid transparent;white-space:nowrap;display:flex;align-items:center;gap:6px;user-select:none;}
+.mtab:hover{color:var(--text2);background:#fafaf9;}
+.mtab.active{color:var(--red);border-bottom-color:var(--red);}
+.mtab .badge{font-family:var(--mono);font-size:10px;font-weight:700;background:var(--red-light);color:var(--red-dark);padding:1px 6px;border-radius:99px;}
+
+.page{flex:1;display:none;overflow:hidden;min-height:0;}
+.page.active{display:flex;flex-direction:column;}
+.scroll{flex:1;overflow-y:auto;padding:12px;min-height:0;}
+
 .cols{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px;overflow:hidden;min-height:0;}
 .col{display:flex;flex-direction:column;gap:12px;overflow-y:auto;min-height:0;}
 @media(max-width:1100px){.cols{grid-template-columns:1fr;overflow-y:auto;}.col{overflow:visible;}}
 
 .panel{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;flex-shrink:0;}
-.ph{padding:9px 13px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;}
+.ph{padding:9px 13px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .ph h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;}
 .ph .n{margin-left:auto;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--muted);}
 .pbody{max-height:340px;overflow-y:auto;}
 .empty{padding:22px;text-align:center;font-size:12px;color:var(--muted);}
 
-/* DELIVERY ROWS */
 .row{padding:9px 13px;border-bottom:1px solid #f2f2f0;display:flex;align-items:center;gap:9px;}
 .row:last-child{border-bottom:none;}
 .row .info{flex:1;min-width:0;}
 .row .nm{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.row .meta{font-size:11px;color:var(--muted);margin-top:1px;}
+.row .meta{font-size:11px;color:var(--muted);margin-top:2px;}
 .row .lit{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green-dark);white-space:nowrap;}
 .mark{background:var(--green);color:#fff;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;white-space:nowrap;}
 .mark:hover{background:var(--green-dark);}
-.mark:disabled{background:var(--green-light);color:var(--green-dark);cursor:default;}
 .done{opacity:0.55;}
 .done .nm{text-decoration:line-through;}
 .pill{display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:5px;}
 .p-diesel{background:var(--blue-light);color:var(--blue-dark);}
 .p-petrol{background:var(--red-light);color:var(--red-dark);}
 .p-done{background:var(--green-light);color:var(--green-dark);}
+.p-place{background:#EFEFED;color:var(--text2);margin-left:0;margin-right:4px;}
 
-/* CHASE TABS */
 .tabs{display:flex;border-bottom:1px solid var(--line);}
-.tb{flex:1;padding:7px 4px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;}
+.tb{flex:1;padding:7px 4px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;user-select:none;}
 .tb.active{color:var(--red);border-bottom-color:var(--red);}
 .tb .c{display:block;font-family:var(--mono);font-size:14px;}
 .ro{padding:8px 13px;border-bottom:1px solid #f2f2f0;display:flex;align-items:center;gap:8px;}
@@ -85,20 +97,106 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .ro .i{flex:1;min-width:0;}
 .ro .i b{font-size:12px;font-weight:700;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ro .i span{font-size:10px;color:var(--muted);}
-.ro .pct{font-family:var(--mono);font-size:12px;font-weight:700;flex-shrink:0;}
-.ro .amt{font-family:var(--mono);font-size:11px;color:var(--blue);flex-shrink:0;text-align:right;min-width:56px;}
+.ro .pct{font-family:var(--mono);font-size:12px;font-weight:700;flex-shrink:0;min-width:34px;text-align:right;}
+.ro .amt{font-family:var(--mono);font-size:11px;color:var(--blue);flex-shrink:0;text-align:right;min-width:60px;}
 
-/* BOOK */
-.search{margin-left:auto;padding:5px 9px;border:1px solid var(--line);border-radius:7px;font-family:var(--font);font-size:12px;width:150px;outline:none;}
+.search{padding:5px 9px;border:1px solid var(--line);border-radius:7px;font-family:var(--font);font-size:12px;width:150px;outline:none;}
 table{width:100%;border-collapse:collapse;}
-th{padding:7px 10px;text-align:left;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;background:#fafaf9;position:sticky;top:0;}
+th{padding:7px 10px;text-align:left;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;background:#fafaf9;position:sticky;top:0;z-index:2;}
 th:hover{color:var(--red);}
 td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
 .mono{font-family:var(--mono);}
 .chips{padding:7px 13px;display:flex;gap:5px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--line);}
-.chip{font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;cursor:pointer;color:var(--muted);background:#F0F0EE;border:1px solid var(--line);}
+.chip{font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;cursor:pointer;color:var(--muted);background:#F0F0EE;border:1px solid var(--line);user-select:none;}
 .chip.active{background:var(--green-dark);color:#fff;border-color:var(--green-dark);}
-.note{padding:8px 13px;font-size:10px;color:var(--muted);border-top:1px solid var(--line);line-height:1.4;}
+.note{padding:8px 13px;font-size:10px;color:var(--muted);border-top:1px solid var(--line);line-height:1.5;}
+
+.rpick{display:flex;gap:6px;flex-wrap:wrap;padding:12px;background:#fff;border-bottom:1px solid var(--line);flex-shrink:0;}
+.rchip{font-size:12px;font-weight:700;padding:7px 14px;border-radius:99px;cursor:pointer;color:var(--text2);background:#F0F0EE;border:1.5px solid var(--line);user-select:none;}
+.rchip:hover{border-color:var(--muted);}
+.rchip.active{background:var(--red);color:#fff;border-color:var(--red);}
+.rchip .rn{font-family:var(--mono);font-size:10px;opacity:0.7;margin-left:5px;}
+
+.rgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+@media(max-width:1200px){.rgrid{grid-template-columns:1fr;}}
+.rcard{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;}
+.rcard .rh{padding:10px 13px;border-bottom:1px solid var(--line);}
+.rcard .rh h3{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;display:flex;align-items:center;gap:7px;}
+.rcard .rh .sub{font-size:10px;color:var(--muted);margin-top:3px;}
+.rcard .rb{overflow-y:auto;max-height:480px;}
+.rtot{padding:8px 13px;background:#fafaf9;border-top:1px solid var(--line);font-size:11px;font-weight:700;display:flex;justify-content:space-between;gap:8px;}
+
+.mapwrap{flex:1;display:grid;grid-template-columns:1fr 340px;min-height:0;}
+@media(max-width:1000px){.mapwrap{grid-template-columns:1fr;grid-template-rows:55vh auto;}}
+#map{height:100%;width:100%;background:#e8e8e6;min-height:240px;}
+.mside{border-left:1px solid var(--line);background:#fff;overflow-y:auto;display:flex;flex-direction:column;}
+@media(max-width:1000px){.mside{border-left:none;border-top:1px solid var(--line);}}
+.mbar{background:#fff;border-bottom:1px solid var(--line);padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex-shrink:0;}
+.tgl{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--text2);cursor:pointer;user-select:none;background:#F0F0EE;border:1.5px solid var(--line);border-radius:99px;padding:5px 11px;}
+.tgl.on{background:var(--purple-light);border-color:var(--purple);color:var(--purple);}
+.tgl input{margin:0;}
+.sbtn{font-size:11px;font-weight:700;padding:6px 12px;border-radius:7px;border:1.5px solid var(--line);background:#fff;color:var(--text2);cursor:pointer;font-family:var(--font);}
+.sbtn:hover{border-color:var(--muted);}
+.sbtn.primary{background:var(--green);border-color:var(--green);color:#fff;}
+.sbtn.primary:hover{background:var(--green-dark);border-color:var(--green-dark);}
+.sbtn.danger{background:#fff;border-color:var(--red);color:var(--red);}
+.sbtn:disabled{opacity:0.4;cursor:default;}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--muted);margin-left:auto;align-items:center;}
+.lg{display:flex;align-items:center;gap:4px;}
+.dot{width:9px;height:9px;border-radius:50%;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,0.15);flex-shrink:0;}
+
+.runsec{padding:12px;border-bottom:1px solid var(--line);}
+.runsec h3{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text2);margin-bottom:9px;}
+.trucks{display:flex;gap:5px;margin-bottom:10px;}
+.tk{flex:1;padding:7px 4px;text-align:center;border:1.5px solid var(--line);border-radius:8px;cursor:pointer;background:#fff;user-select:none;}
+.tk.active{border-color:var(--blue);background:var(--blue-light);}
+.tk b{display:block;font-size:11px;font-weight:700;}
+.tk span{font-size:9px;color:var(--muted);font-family:var(--mono);}
+.cap{height:8px;background:#F0F0EE;border-radius:99px;overflow:hidden;margin-bottom:5px;}
+.cap i{display:block;height:100%;background:var(--green);transition:width .25s;}
+.cap.over i{background:var(--red);}
+.capline{display:flex;justify-content:space-between;font-size:10px;font-family:var(--mono);color:var(--muted);}
+.capline .over{color:var(--red);font-weight:700;}
+.stop{padding:7px 9px;border:1px solid var(--line);border-radius:8px;margin-bottom:5px;display:flex;align-items:center;gap:7px;background:#fafaf9;}
+.stop .sn{width:17px;height:17px;border-radius:50%;background:var(--blue);color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:var(--mono);}
+.stop .si{flex:1;min-width:0;}
+.stop .si b{font-size:11px;font-weight:700;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.stop .si span{font-size:9px;color:var(--muted);}
+.stop input{width:58px;padding:3px 5px;border:1px solid var(--line);border-radius:5px;font-family:var(--mono);font-size:10px;text-align:right;outline:none;}
+.stop .x{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:0 2px;}
+.stop .x:hover{color:var(--red);}
+.costbox{background:var(--amber-light);border:1px solid var(--amber);border-radius:9px;padding:10px;}
+.costrow{display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;gap:8px;}
+.costrow.big{font-size:14px;font-weight:700;border-top:1px solid var(--amber);padding-top:6px;margin-top:6px;}
+.costrow .v{font-family:var(--mono);font-weight:700;white-space:nowrap;}
+
+.modal{position:fixed;inset:0;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;z-index:8000;padding:16px;}
+.modal.on{display:flex;}
+.mbox{background:#fff;border-radius:14px;padding:22px;width:100%;max-width:400px;max-height:90vh;overflow-y:auto;}
+.mbox h2{font-size:16px;font-weight:700;margin-bottom:3px;}
+.mbox .msub{font-size:12px;color:var(--muted);margin-bottom:16px;font-family:var(--mono);}
+.mrow{display:flex;gap:8px;margin-top:14px;}
+.mrow .btn{flex:1;}
+.btn.ghost{background:#fff;color:var(--text2);border:1.5px solid var(--line);}
+.sugg{border:1px solid var(--line);border-radius:0 0 8px 8px;max-height:130px;overflow-y:auto;background:#fff;display:none;margin-top:-1px;}
+.sugg.on{display:block;}
+.sugg div{padding:7px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f5f5f3;}
+.sugg div:hover{background:var(--blue-light);}
+
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px;align-items:start;}
+.sfld{margin-bottom:14px;}
+.sfld label{font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px;}
+.sfld .hint{font-size:10px;color:var(--muted);font-weight:400;margin-top:3px;line-height:1.45;}
+.sfld input{width:100%;padding:9px 11px;border:1.5px solid var(--line);border-radius:8px;font-family:var(--mono);font-size:14px;outline:none;}
+.sfld input:focus{border-color:var(--blue);}
+.saved{font-size:11px;font-weight:700;color:var(--green-dark);opacity:0;transition:opacity .3s;margin-left:auto;}
+.saved.on{opacity:1;}
+
+.leaflet-popup-content{margin:11px 13px;font-family:var(--font);font-size:12px;min-width:195px;}
+.leaflet-popup-content b{font-size:13px;}
+.pop-btn{width:100%;margin-top:8px;padding:6px;background:var(--green);color:#fff;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;}
+.pop-btn:hover{background:var(--green-dark);}
+.pop-btn.rm{background:var(--red);}
 </style>
 </head>
 <body>
@@ -119,55 +217,155 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
     <h1>⛽ Ops Planner</h1>
     <span class="who" id="who">—</span>
     <div class="right">
-      <a class="maplink" href="../logistics-map-live.html" target="_blank">🗺️ Map</a>
       <span class="clock" id="clock"></span>
       <span class="live">● Live</span>
       <button class="signout" onclick="signOut()">Sign out</button>
     </div>
   </div>
 
-  <div class="cols">
-    <!-- LEFT: deliveries -->
-    <div class="col">
-      <div class="panel">
-        <div class="ph"><h2 style="color:var(--red);">🚛 Today's deliveries</h2><span class="n" id="n-today">0</span></div>
-        <div class="pbody" id="today-list"><div class="empty">Loading…</div></div>
+  <div class="mtabs">
+    <div class="mtab active" data-p="today"  onclick="go('today')">🚛 Today <span class="badge" id="bg-today">0</span></div>
+    <div class="mtab"        data-p="routes" onclick="go('routes')">🛣️ Routes</div>
+    <div class="mtab"        data-p="map"    onclick="go('map')">🗺️ Map</div>
+    <div class="mtab"        data-p="book"   onclick="go('book')">📒 Book</div>
+    <div class="mtab"        data-p="set"    onclick="go('set')">⚙️ Settings</div>
+  </div>
+
+  <!-- ================= TODAY ================= -->
+  <div class="page active" id="p-today">
+    <div class="cols">
+      <div class="col">
+        <div class="panel">
+          <div class="ph"><h2 style="color:var(--red);">🚛 Today's deliveries</h2><span class="n" id="n-today">0</span></div>
+          <div class="pbody" id="today-list"><div class="empty">Loading…</div></div>
+        </div>
+        <div class="panel">
+          <div class="ph"><h2 style="color:var(--amber);">📅 Upcoming deliveries</h2><span class="n" id="n-up">0</span></div>
+          <div class="pbody" id="up-list"><div class="empty">Loading…</div></div>
+        </div>
       </div>
-      <div class="panel">
-        <div class="ph"><h2 style="color:var(--amber);">📅 Upcoming deliveries</h2><span class="n" id="n-up">0</span></div>
-        <div class="pbody" id="up-list"><div class="empty">Loading…</div></div>
-      </div>
-      <div class="panel">
-        <div class="ph"><h2 style="color:var(--green-dark);">✓ Delivered</h2><span class="n" id="n-done">0</span></div>
-        <div class="pbody" id="done-list"><div class="empty">Loading…</div></div>
+      <div class="col">
+        <div class="panel">
+          <div class="ph"><h2 style="color:var(--blue);">📞 Who to chase</h2>
+            <span class="n" style="font-weight:400;font-size:10px;">early delivery fills a truck</span></div>
+          <div class="tabs">
+            <div class="tb active" data-b="due_now"    onclick="setTab('due_now')">Due now<span class="c" id="c-due">–</span></div>
+            <div class="tb"        data-b="overdue"    onclick="setTab('overdue')">Overdue<span class="c" id="c-over">–</span></div>
+            <div class="tb"        data-b="gone_quiet" onclick="setTab('gone_quiet')">Gone quiet<span class="c" id="c-quiet">–</span></div>
+          </div>
+          <div class="pbody" id="chase-list"><div class="empty">Loading…</div></div>
+        </div>
+        <div class="panel">
+          <div class="ph"><h2 style="color:var(--green-dark);">✓ Delivered</h2><span class="n" id="n-done">0</span></div>
+          <div class="pbody" id="done-list"><div class="empty">Loading…</div></div>
+        </div>
       </div>
     </div>
+  </div>
 
-    <!-- RIGHT: customers -->
-    <div class="col">
-      <div class="panel">
-        <div class="ph"><h2 style="color:var(--blue);">📞 Who to chase</h2>
-          <span class="n" style="font-weight:400;font-size:10px;">ask sales to call — early delivery fills a truck</span></div>
-        <div class="tabs">
-          <div class="tb active" data-b="due_now" onclick="setTab('due_now')">Due now<span class="c" id="c-due">–</span></div>
-          <div class="tb" data-b="overdue" onclick="setTab('overdue')">Overdue<span class="c" id="c-over">–</span></div>
-          <div class="tb" data-b="gone_quiet" onclick="setTab('gone_quiet')">Gone quiet<span class="c" id="c-quiet">–</span></div>
+  <!-- ================= ROUTES ================= -->
+  <div class="page" id="p-routes">
+    <div class="rpick" id="rpick"></div>
+    <div class="scroll">
+      <div class="rgrid">
+        <div class="rcard">
+          <div class="rh">
+            <h3><span class="dot" style="background:#185FA5;"></span> Already going</h3>
+            <div class="sub">Confirmed deliveries on this road</div>
+          </div>
+          <div class="rb" id="rb-going"><div class="empty">Pick a route</div></div>
+          <div class="rtot"><span id="rt-going-n">—</span><span id="rt-going-l">—</span></div>
         </div>
-        <div class="pbody" id="chase-list"><div class="empty">Loading…</div></div>
+        <div class="rcard">
+          <div class="rh">
+            <h3><span class="dot" style="background:#3B6D11;"></span> Ring them today</h3>
+            <div class="sub">Due, overdue or gone quiet on this road</div>
+          </div>
+          <div class="rb" id="rb-ripe"><div class="empty">Pick a route</div></div>
+          <div class="rtot"><span id="rt-ripe-n">—</span><span id="rt-ripe-l">—</span></div>
+        </div>
+        <div class="rcard">
+          <div class="rh">
+            <h3><span class="dot" style="background:#c9c9c6;"></span> Not yet / never ordered</h3>
+            <div class="sub">Push these if the truck still has space</div>
+          </div>
+          <div class="rb" id="rb-cold"><div class="empty">Pick a route</div></div>
+          <div class="rtot"><span id="rt-cold-n">—</span><span id="rt-cold-l">—</span></div>
+        </div>
       </div>
+      <div style="font-size:11px;color:var(--muted);padding:14px 2px;line-height:1.6;">
+        A route means the <b>direction the truck travels</b>, not the tarmac. A mine 100&nbsp;km off the road still counts —
+        the truck goes that way to reach it. Places sitting on two roads (Nyabira, Marondera, Goromonzi) appear on both boards.
+      </div>
+    </div>
+  </div>
 
+  <!-- ================= MAP ================= -->
+  <div class="page" id="p-map">
+    <div class="mbar">
+      <select id="map-route" onchange="drawPins()" style="padding:6px 9px;border:1.5px solid var(--line);border-radius:7px;font-family:var(--font);font-size:11px;font-weight:700;outline:none;background:#fff;">
+        <option value="all">All routes</option>
+      </select>
+      <label class="tgl" id="drag-tgl"><input type="checkbox" id="drag-on" onchange="toggleDrag()"> ✋ Move pins</label>
+      <button class="sbtn" onclick="startAdd()" id="add-btn">➕ Add customer</button>
+      <div class="legend">
+        <span class="lg"><span class="dot" style="background:#D4180A;"></span>Gone quiet</span>
+        <span class="lg"><span class="dot" style="background:#BA7517;"></span>Overdue</span>
+        <span class="lg"><span class="dot" style="background:#3B6D11;"></span>Due now</span>
+        <span class="lg"><span class="dot" style="background:#185FA5;"></span>Due soon</span>
+        <span class="lg"><span class="dot" style="background:#c9c9c6;"></span>Not yet</span>
+      </div>
+    </div>
+    <div class="mapwrap">
+      <div id="map"></div>
+      <div class="mside">
+        <div class="runsec">
+          <h3>1 · Which truck?</h3>
+          <div class="trucks" id="trucks"></div>
+          <div class="cap" id="cap"><i id="cap-fill" style="width:0%"></i></div>
+          <div class="capline"><span id="cap-l">0 L</span><span id="cap-r">—</span></div>
+        </div>
+        <div class="runsec">
+          <h3>2 · Stops <span style="float:right;font-family:var(--mono);color:var(--muted);" id="stop-n">0</span></h3>
+          <div id="stops"><div class="empty" style="padding:14px;">Click a pin → <b>Add to run</b></div></div>
+        </div>
+        <div class="runsec" style="border-bottom:none;">
+          <h3>3 · What it costs</h3>
+          <div class="costbox">
+            <div class="costrow"><span>Distance (est.)</span><span class="v" id="c-km">— km</span></div>
+            <div class="costrow"><span>Rate</span><span class="v" id="c-rate">—</span></div>
+            <div class="costrow"><span>Litres on board</span><span class="v" id="c-lit">0 L</span></div>
+            <div class="costrow big"><span>Trip cost</span><span class="v" id="c-tot">$0</span></div>
+            <div class="costrow" style="margin-top:5px;"><span style="color:var(--text2);">Per litre</span><span class="v" id="c-per" style="color:var(--text2);">—</span></div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:9px;">
+            <button class="sbtn primary" style="flex:1;" onclick="openDirections()" id="dir-btn" disabled>🧭 Directions</button>
+            <button class="sbtn danger" onclick="clearRun()">Clear</button>
+          </div>
+          <div style="font-size:10px;color:var(--muted);line-height:1.5;padding-top:9px;">
+            Distance is straight-line from the depot and back, × the road factor. Good enough to compare
+            one running order against another — not a surveyed figure. Rates come from Settings.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= BOOK ================= -->
+  <div class="page" id="p-book">
+    <div class="scroll">
       <div class="panel">
         <div class="ph"><h2 style="color:var(--green-dark);">📒 All customers</h2>
-          <input type="text" class="search" id="bk-search" placeholder="Search..." oninput="renderBook()"></div>
+          <input type="text" class="search" id="bk-search" placeholder="Search..." oninput="renderBook()" style="margin-left:auto;"></div>
         <div class="chips">
-          <span class="chip active" data-p="all" onclick="setPat('all')">All</span>
-          <span class="chip" data-p="very_frequent" onclick="setPat('very_frequent')">Very frequent</span>
-          <span class="chip" data-p="monthly_ish" onclick="setPat('monthly_ish')">Monthly</span>
-          <span class="chip" data-p="quarterly_ish" onclick="setPat('quarterly_ish')">Quarterly</span>
-          <span class="chip" data-p="occasional" onclick="setPat('occasional')">Occasional</span>
+          <span class="chip active" data-p="all"           onclick="setPat('all')">All</span>
+          <span class="chip"        data-p="very_frequent" onclick="setPat('very_frequent')">Very frequent</span>
+          <span class="chip"        data-p="monthly_ish"   onclick="setPat('monthly_ish')">Monthly</span>
+          <span class="chip"        data-p="quarterly_ish" onclick="setPat('quarterly_ish')">Quarterly</span>
+          <span class="chip"        data-p="occasional"    onclick="setPat('occasional')">Occasional</span>
           <span style="margin-left:auto;font-size:10px;color:var(--muted);" id="bk-count">—</span>
         </div>
-        <div class="pbody" style="max-height:420px;">
+        <div style="max-height:calc(100vh - 270px);overflow-y:auto;">
           <table>
             <thead><tr>
               <th onclick="sortBook('customer')">Customer</th>
@@ -184,6 +382,66 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
       </div>
     </div>
   </div>
+
+  <!-- ================= SETTINGS ================= -->
+  <div class="page" id="p-set">
+    <div class="scroll">
+      <div class="sgrid">
+        <div class="panel">
+          <div class="ph"><h2 style="color:var(--blue);">🚚 Truck costs</h2><span class="saved" id="sv-truck">Saved</span></div>
+          <div style="padding:14px;" id="truck-set"><div class="empty">Loading…</div></div>
+          <div class="note">Cost per km covers the whole trip for that truck — fuel, driver, wear. Change it here and every route cost in the app updates, for everyone.</div>
+        </div>
+        <div class="panel">
+          <div class="ph"><h2 style="color:var(--amber);">📏 Distance</h2><span class="saved" id="sv-set">Saved</span></div>
+          <div style="padding:14px;">
+            <div class="sfld">
+              <label>Road factor</label>
+              <input type="number" id="s-road" step="0.05" min="1" max="3">
+              <div class="hint">Straight-line distance × this ≈ real road km. 1.3 is a sensible starting point. Raise it if the app keeps under-reading against your odometer.</div>
+            </div>
+            <button class="btn" style="background:var(--blue);" onclick="saveSettings()">Save</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="ph"><h2 style="color:var(--muted);">ℹ️ What the numbers mean</h2></div>
+          <div style="padding:14px;font-size:12px;line-height:1.65;color:var(--text2);">
+            <p style="margin-bottom:10px;"><b>Ripeness</b> — how far through their usual gap between orders a customer is. 100% means they're due, on past behaviour. It's a prompt to ring, not a forecast.</p>
+            <p style="margin-bottom:10px;"><b>Route</b> — the direction out of Harare, not which tarmac. A mine off the road still sits on the route the truck takes to reach it.</p>
+            <p style="margin-bottom:10px;"><b>Trip cost</b> — straight-line km × road factor × the truck's rate, depot out and back. Use it to compare running orders, not to quote a customer.</p>
+            <p><b>History</b> — cycles are built on roughly 6.5 months of orders. Enough to spot a rhythm. Not enough to see a season.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD CUSTOMER MODAL -->
+<div class="modal" id="addm">
+  <div class="mbox">
+    <h2>Add a customer</h2>
+    <div class="msub" id="add-coords">—</div>
+    <div class="fld" style="margin-bottom:6px;">
+      <label>Customer name</label>
+      <input type="text" id="a-name" autocomplete="off" oninput="suggest()" placeholder="Start typing…">
+      <div class="sugg" id="a-sugg"></div>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-bottom:12px;line-height:1.45;" id="a-hint">Use the exact name accounts uses, so orders link up.</div>
+    <div class="fld">
+      <label>Nearest place</label>
+      <select id="a-place"></select>
+    </div>
+    <div class="fld">
+      <label>Typical order (litres)</label>
+      <input type="number" id="a-litres" placeholder="e.g. 5000">
+    </div>
+    <div class="mrow">
+      <button class="btn ghost" onclick="closeAdd()">Cancel</button>
+      <button class="btn" style="background:var(--green);" onclick="saveCustomer()">Save pin</button>
+    </div>
+    <div class="err" id="a-err"></div>
+  </div>
 </div>
 
 <script>
@@ -191,10 +449,19 @@ const SUPABASE_URL='https://lkaotuavapyvqfuuyzft.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYW90dWF2YXB5dnFmdXV5emZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MzU4NzcsImV4cCI6MjA5NzQxMTg3N30.he7Ah-TVyzZZAMiCHglIzP-UbdnxDw-CW4V9mYYJBDU';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
-let SALES=[], CHASE={due_now:[],overdue:[],gone_quiet:[]}, BOOK=[];
-let tab='due_now', pat='all', bkSort={k:'ripeness_pct',d:-1};
+const DEPOT={lat:-17.8419,lng:31.1183,name:'Msasa depot'};
 
-// ---- AUTH (ops + admin only) ----
+let SALES=[], CHASE={due_now:[],overdue:[],gone_quiet:[]}, BOOK=[];
+let BOARD=[], ROUTES=[], PLACES=[], TRUCKS=[], SETTINGS={road_factor:1.3}, CUSTNAMES=[];
+let tab='due_now', pat='all', bkSort={k:'ripeness_pct',d:-1};
+let curRoute=null, page='today';
+let map=null, pinLayer=null, dragLayer=null, markers={}, mapReady=false;
+let RUN=[], truckKey=null, dragMode=false, addMode=false, pendingLatLng=null, runLine=null;
+
+const STATUS_COL={gone_quiet:'#D4180A',overdue:'#BA7517',due_now:'#3B6D11',due_soon:'#185FA5',not_yet:'#c9c9c6',never_ordered:'#c9c9c6',unknown:'#c9c9c6'};
+const STATUS_LBL={gone_quiet:'Gone quiet',overdue:'Overdue',due_now:'Due now',due_soon:'Due soon',not_yet:'Not yet due',never_ordered:'Never ordered',unknown:'No history'};
+
+/* ============ AUTH ============ */
 async function signIn(){
   const email=document.getElementById('em').value.trim();
   const password=document.getElementById('pw').value;
@@ -211,14 +478,12 @@ async function signIn(){
   }
   start(p);
 }
-
 async function signOut(){
   await sb.auth.signOut();
   document.getElementById('app').classList.remove('active');
   document.getElementById('auth').classList.remove('hidden');
   document.getElementById('pw').value='';
 }
-
 function start(p){
   document.getElementById('who').textContent=p.full_name||'';
   document.getElementById('auth').classList.add('hidden');
@@ -226,16 +491,55 @@ function start(p){
   loadAll();
 }
 
-// ---- DATA ----
+/* ============ TABS ============ */
+function go(p){
+  page=p;
+  [...document.querySelectorAll('.mtab')].forEach(x=>x.classList.toggle('active',x.dataset.p===p));
+  [...document.querySelectorAll('.page')].forEach(x=>x.classList.remove('active'));
+  document.getElementById('p-'+p).classList.add('active');
+  if(p==='map'){ initMap(); setTimeout(()=>{ if(map) map.invalidateSize(); },80); }
+  if(p==='routes' && !curRoute && ROUTES.length) pickRoute(ROUTES[0].route_key);
+}
+
+/* ============ DATA ============ */
 async function loadAll(){
-  await Promise.all([loadSales(), loadChase(), loadBook()]);
+  await loadRefs();
+  await Promise.all([loadSales(), loadChase(), loadBook(), loadBoard()]);
+}
+
+async function loadRefs(){
+  try{
+    const [r,p,t,s,c]=await Promise.all([
+      sb.from('routes').select('*').order('sort_order'),
+      sb.from('place_coords').select('*').order('place'),
+      sb.from('trucks').select('*').eq('active',true).order('sort_order'),
+      sb.from('app_settings').select('*').eq('id',1).maybeSingle(),
+      sb.from('customer_locations').select('id,invoice_name').order('invoice_name')
+    ]);
+    ROUTES=r.data||[]; PLACES=p.data||[]; TRUCKS=t.data||[];
+    if(s.data) SETTINGS=s.data;
+    CUSTNAMES=c.data||[];
+    if(!truckKey && TRUCKS.length) truckKey=TRUCKS[TRUCKS.length-1].truck_key;
+    renderRoutePicker(); renderTrucks(); renderSettings(); fillMapRoutes(); fillPlaceSelect();
+  }catch(e){ console.warn('refs',e); }
+}
+
+async function loadBoard(){
+  try{
+    const {data,error}=await sb.from('app_route_board').select('*');
+    if(error) throw error;
+    BOARD=data||[];
+    renderRoutePicker();
+    if(page==='routes'&&curRoute) renderRoute();
+    if(mapReady) drawPins();
+  }catch(e){ console.warn('board',e); }
 }
 
 async function loadSales(){
   try{
     const from=new Date(); from.setDate(from.getDate()-60);
     const {data,error}=await sb.from('sales')
-      .select('id,customer,location,litres,fuel_type,sale_date,delivery_date,status,delivered_at,notes,rep_name')
+      .select('id,customer,customer_id,location,litres,fuel_type,sale_date,delivery_date,status,delivered_at,notes,rep_name')
       .gte('sale_date',from.toISOString().split('T')[0])
       .neq('status','cancelled')
       .order('delivery_date',{ascending:true});
@@ -246,6 +550,7 @@ async function loadSales(){
     try{ SALES=JSON.parse(localStorage.getItem('ops_sales')||'[]'); }catch(_){ SALES=[]; }
   }
   renderDeliveries();
+  if(page==='routes'&&curRoute) renderRoute();
 }
 
 async function loadChase(){
@@ -278,7 +583,23 @@ async function loadBook(){
   }
 }
 
-// ---- DELIVERIES ----
+/* ============ HELPERS ============ */
+function fmt(d){
+  if(!d) return '—';
+  const x=new Date((d+'').split('T')[0]+'T00:00:00');
+  if(isNaN(x)) return '—';
+  const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return x.getDate()+' '+M[x.getMonth()]+' '+x.getFullYear();
+}
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function haversine(a,b,c,d){
+  const R=6371,t=x=>x*Math.PI/180;
+  const dLa=t(c-a),dLo=t(d-b);
+  const h=Math.sin(dLa/2)**2+Math.cos(t(a))*Math.cos(t(c))*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+
+/* ============ DELIVERIES ============ */
 async function markDelivered(id){
   const s=SALES.find(x=>x.id===id);
   if(!s) return;
@@ -288,25 +609,18 @@ async function markDelivered(id){
   await loadSales();
 }
 
-function fmt(d){
-  if(!d) return '—';
-  const x=new Date((d+'').split('T')[0]+'T00:00:00');
-  if(isNaN(x)) return '—';
-  const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return x.getDate()+' '+M[x.getMonth()]+' '+x.getFullYear();
-}
-
 function row(s,opts){
   const done = s.status==='delivered';
-  const fp = s.fuel_type?'<span class="pill '+(s.fuel_type==='Petrol'?'p-petrol':'p-diesel')+'">'+s.fuel_type+'</span>':'';
+  const fp = s.fuel_type?'<span class="pill '+(s.fuel_type==='Petrol'?'p-petrol':'p-diesel')+'">'+esc(s.fuel_type)+'</span>':'';
   const dp = done?'<span class="pill p-done">✓</span>':'';
   const btn = (!done && opts.showBtn)
     ? '<button class="mark" onclick="markDelivered('+s.id+')">Mark delivered</button>' : '';
+  const loc = s.location ? '<span class="pill p-place">📍 '+esc(s.location)+'</span>' : '';
   return '<div class="row'+(done?' done':'')+'">'+
     '<div class="info">'+
-      '<div class="nm">'+s.customer+fp+dp+'</div>'+
-      '<div class="meta">'+(s.location||'—')+' · '+fmt(s.delivery_date)+(s.rep_name?' · '+s.rep_name:'')+
-        (s.notes?' · <i>'+s.notes+'</i>':'')+'</div>'+
+      '<div class="nm">'+esc(s.customer)+fp+dp+'</div>'+
+      '<div class="meta">'+loc+fmt(s.delivery_date)+(s.rep_name?' · '+esc(s.rep_name):'')+
+        (s.notes?' · <i>'+esc(s.notes)+'</i>':'')+'</div>'+
     '</div>'+
     '<div class="lit">'+(s.litres||0).toLocaleString()+' L</div>'+
     btn+
@@ -316,26 +630,16 @@ function row(s,opts){
 function renderDeliveries(){
   const today=new Date().toISOString().split('T')[0];
   const dd=s=>(s.delivery_date||'').split('T')[0];
+  const todays   = SALES.filter(s=>dd(s)===today && s.status!=='delivered');
+  const upcoming = SALES.filter(s=>dd(s)>today && s.status!=='delivered').sort((a,b)=>dd(a).localeCompare(dd(b)));
+  const delivered= SALES.filter(s=>s.status==='delivered').sort((a,b)=>(b.delivered_at||'').localeCompare(a.delivered_at||'')).slice(0,25);
+  const late     = SALES.filter(s=>dd(s) && dd(s)<today && s.status!=='delivered').sort((a,b)=>dd(a).localeCompare(dd(b)));
 
-  const todays = SALES.filter(s=>dd(s)===today && s.status!=='delivered');
-  const upcoming = SALES.filter(s=>dd(s)>today && s.status!=='delivered')
-                        .sort((a,b)=>dd(a).localeCompare(dd(b)));
-  const delivered = SALES.filter(s=>s.status==='delivered')
-                        .sort((a,b)=>(b.delivered_at||'').localeCompare(a.delivered_at||''))
-                        .slice(0,25);
-  // overdue deliveries (past date, not marked) go at the top of today's
-  const late = SALES.filter(s=>dd(s) && dd(s)<today && s.status!=='delivered')
-                    .sort((a,b)=>dd(a).localeCompare(dd(b)));
-
-  const t=document.getElementById('today-list');
   const all=[...late,...todays];
   document.getElementById('n-today').textContent=all.length;
-  t.innerHTML = all.length
-    ? all.map(s=>{
-        const isLate = dd(s)<today;
-        return (isLate?'<div style="border-left:3px solid var(--red);">':'<div>')+
-               row(s,{showBtn:true})+'</div>';
-      }).join('')
+  document.getElementById('bg-today').textContent=all.length;
+  document.getElementById('today-list').innerHTML = all.length
+    ? all.map(s=>(dd(s)<today?'<div style="border-left:3px solid var(--red);">':'<div>')+row(s,{showBtn:true})+'</div>').join('')
     : '<div class="empty">Nothing due today</div>';
 
   document.getElementById('n-up').textContent=upcoming.length;
@@ -349,13 +653,12 @@ function renderDeliveries(){
     : '<div class="empty">Nothing delivered yet</div>';
 }
 
-// ---- CHASE ----
+/* ============ CHASE ============ */
 function setTab(b){
   tab=b;
   [...document.querySelectorAll('.tb')].forEach(x=>x.classList.toggle('active',x.dataset.b===b));
   renderChase();
 }
-
 function renderChase(){
   const rows=CHASE[tab]||[];
   const el=document.getElementById('chase-list');
@@ -364,10 +667,10 @@ function renderChase(){
     return;
   }
   el.innerHTML=rows.map(r=>{
-    const col=r.status==='gone_quiet'?'var(--red)':r.status==='overdue'?'var(--amber)':'var(--green-dark)';
+    const col=STATUS_COL[r.status]||'#9a9a97';
     const lit=r.avg_litres?Math.round(r.avg_litres):0;
     return '<div class="ro">'+
-      '<div class="i"><b>'+r.customer+'</b>'+
+      '<div class="i"><b>'+esc(r.customer)+'</b>'+
         '<span>every '+(r.avg_cycle_days||'?')+'d · '+(r.days_since_last||0)+'d ago · last '+fmt(r.last_order)+'</span></div>'+
       '<div class="amt">'+(lit?lit.toLocaleString()+' L':'—')+'</div>'+
       '<div class="pct" style="color:'+col+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</div>'+
@@ -375,18 +678,16 @@ function renderChase(){
   }).join('');
 }
 
-// ---- BOOK ----
+/* ============ BOOK ============ */
 function setPat(p){
   pat=p;
   [...document.querySelectorAll('.chip')].forEach(x=>x.classList.toggle('active',x.dataset.p===p));
   renderBook();
 }
-
 function sortBook(k){
   if(bkSort.k===k) bkSort.d*=-1; else {bkSort.k=k;bkSort.d=-1;}
   renderBook();
 }
-
 function renderBook(){
   const q=(document.getElementById('bk-search')?.value||'').toLowerCase().trim();
   let rows=BOOK.filter(r=>{
@@ -406,9 +707,9 @@ function renderBook(){
   const pl={very_frequent:'Very frequent',monthly_ish:'Monthly',quarterly_ish:'Quarterly',occasional:'Occasional',unknown:'—'};
   const pc={very_frequent:'var(--green-dark)',monthly_ish:'var(--blue)',quarterly_ish:'var(--amber)',occasional:'var(--muted)',unknown:'var(--muted)'};
   b.innerHTML=rows.map(r=>{
-    const col=r.status==='gone_quiet'?'var(--red)':r.status==='overdue'?'var(--amber)':r.status==='due_now'?'var(--green-dark)':'var(--muted)';
+    const col=STATUS_COL[r.status]||'#9a9a97';
     return '<tr>'+
-      '<td style="font-weight:700;">'+r.customer+
+      '<td style="font-weight:700;">'+esc(r.customer)+
         '<div style="font-size:9px;font-weight:600;color:'+(pc[r.buying_pattern]||'var(--muted)')+';">'+(pl[r.buying_pattern]||'—')+'</div></td>'+
       '<td class="mono">'+(r.order_count||0)+'</td>'+
       '<td class="mono">'+(r.avg_cycle_days?r.avg_cycle_days+'d':'—')+'</td>'+
@@ -419,7 +720,432 @@ function renderBook(){
   }).join('');
 }
 
-// ---- CLOCK + INIT ----
+/* ============ ROUTES PAGE ============ */
+function renderRoutePicker(){
+  const el=document.getElementById('rpick');
+  if(!el) return;
+  el.innerHTML=ROUTES.map(r=>{
+    const n=new Set(BOARD.filter(b=>b.route_key===r.route_key).map(b=>b.site_id)).size;
+    return '<span class="rchip'+(curRoute===r.route_key?' active':'')+'" data-r="'+r.route_key+'" onclick="pickRoute(\''+r.route_key+'\')">'+
+      esc(r.route_name)+'<span class="rn">'+n+'</span></span>';
+  }).join('');
+}
+function pickRoute(k){
+  curRoute=k;
+  [...document.querySelectorAll('.rchip')].forEach(x=>x.classList.toggle('active',x.dataset.r===k));
+  renderRoute();
+}
+function placesOnRoute(k){
+  const s=new Set();
+  BOARD.filter(b=>b.route_key===k).forEach(b=>s.add((b.place||'').toLowerCase()));
+  return s;
+}
+
+function renderRoute(){
+  if(!curRoute) return;
+  const rows=BOARD.filter(b=>b.route_key===curRoute);
+  const places=placesOnRoute(curRoute);
+  const today=new Date().toISOString().split('T')[0];
+
+  // 1 — already going
+  const going=SALES.filter(s=>{
+    if(s.status==='delivered') return false;
+    const dd=(s.delivery_date||'').split('T')[0];
+    if(!dd || dd<today) return false;
+    return places.has((s.location||'').trim().toLowerCase());
+  }).sort((a,b)=>(a.delivery_date||'').localeCompare(b.delivery_date||''));
+  const goingNames=new Set(going.map(s=>(s.customer||'').toLowerCase()));
+
+  // 2 — ripe
+  const ripe=rows.filter(r=>['due_now','overdue','gone_quiet'].includes(r.board_status))
+                 .filter(r=>!goingNames.has((r.name||'').toLowerCase()))
+                 .sort((a,b)=>(b.ripeness_pct||0)-(a.ripeness_pct||0));
+
+  // 3 — cold
+  const cold=rows.filter(r=>['not_yet','due_soon','never_ordered','unknown'].includes(r.board_status))
+                 .filter(r=>!goingNames.has((r.name||'').toLowerCase()))
+                 .sort((a,b)=>{
+                    if((a.board_status==='never_ordered')!==(b.board_status==='never_ordered'))
+                      return a.board_status==='never_ordered'?1:-1;
+                    return (b.total_litres||0)-(a.total_litres||0);
+                 });
+
+  const g=document.getElementById('rb-going');
+  g.innerHTML=going.length
+    ? going.map(s=>'<div class="ro"><div class="i"><b>'+esc(s.customer)+'</b>'+
+        '<span>📍 '+esc(s.location||'—')+' · '+fmt(s.delivery_date)+(s.rep_name?' · '+esc(s.rep_name):'')+'</span></div>'+
+        '<div class="amt" style="color:var(--green-dark);font-weight:700;">'+(s.litres||0).toLocaleString()+' L</div></div>').join('')
+    : '<div class="empty">Nothing booked this way</div>';
+  document.getElementById('rt-going-n').textContent=going.length+' stop'+(going.length===1?'':'s');
+  document.getElementById('rt-going-l').textContent=going.reduce((t,s)=>t+(s.litres||0),0).toLocaleString()+' L';
+
+  const rp=document.getElementById('rb-ripe');
+  rp.innerHTML=ripe.length
+    ? ripe.map(r=>{
+        const col=STATUS_COL[r.board_status]||'#9a9a97';
+        return '<div class="ro"><div class="i"><b>'+esc(r.name)+'</b>'+
+          '<span>📍 '+esc(r.place)+' · every '+(r.avg_cycle_days||'?')+'d · '+(r.days_since_last||0)+'d ago · <b style="color:'+col+'">'+(STATUS_LBL[r.board_status]||'')+'</b></span></div>'+
+          '<div class="amt">'+(r.avg_litres?Math.round(r.avg_litres).toLocaleString()+' L':'—')+'</div>'+
+          '<div class="pct" style="color:'+col+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</div></div>';
+      }).join('')
+    : '<div class="empty">Nobody due on this road</div>';
+  document.getElementById('rt-ripe-n').textContent=ripe.length+' to ring';
+  document.getElementById('rt-ripe-l').textContent='~'+Math.round(ripe.reduce((t,r)=>t+(r.avg_litres||0),0)).toLocaleString()+' L available';
+
+  const c=document.getElementById('rb-cold');
+  c.innerHTML=cold.length
+    ? cold.map(r=>{
+        const never=r.board_status==='never_ordered';
+        return '<div class="ro"><div class="i"><b>'+esc(r.name)+'</b>'+
+          '<span>📍 '+esc(r.place)+' · '+(never?'<b style="color:var(--purple);">never ordered</b>':
+            'every '+(r.avg_cycle_days||'?')+'d · '+(r.days_since_last||0)+'d ago')+'</span></div>'+
+          '<div class="amt">'+(r.avg_litres?Math.round(r.avg_litres).toLocaleString()+' L':'—')+'</div>'+
+          '<div class="pct" style="color:#9a9a97">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</div></div>';
+      }).join('')
+    : '<div class="empty">Nobody else on this road</div>';
+  document.getElementById('rt-cold-n').textContent=cold.length+' customer'+(cold.length===1?'':'s');
+  document.getElementById('rt-cold-l').textContent='~'+Math.round(cold.reduce((t,r)=>t+(r.avg_litres||0),0)).toLocaleString()+' L potential';
+}
+
+/* ============ MAP ============ */
+function initMap(){
+  if(mapReady) return;
+  map=L.map('map',{zoomControl:true}).setView([-18.3,30.5],7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
+  pinLayer=L.layerGroup().addTo(map);
+  L.circleMarker([DEPOT.lat,DEPOT.lng],{radius:8,color:'#fff',weight:2,fillColor:'#1a1a18',fillOpacity:1})
+    .addTo(map).bindTooltip('Msasa depot');
+  map.on('click',e=>{ if(addMode) dropPin(e.latlng); });
+  mapReady=true;
+  drawPins();
+}
+
+function fillMapRoutes(){
+  const s=document.getElementById('map-route');
+  if(!s) return;
+  const cur=s.value;
+  s.innerHTML='<option value="all">All routes</option>'+
+    ROUTES.map(r=>'<option value="'+r.route_key+'">'+esc(r.route_name)+'</option>').join('');
+  s.value=cur||'all';
+}
+function fillPlaceSelect(){
+  const s=document.getElementById('a-place');
+  if(!s) return;
+  s.innerHTML=PLACES.map(p=>'<option value="'+esc(p.place)+'">'+esc(p.place)+(p.parent?' ('+esc(p.parent)+')':'')+'</option>').join('');
+}
+
+function sitesForMap(){
+  const rk=document.getElementById('map-route')?.value||'all';
+  const seen={};
+  BOARD.forEach(b=>{
+    if(rk!=='all' && b.route_key!==rk) return;
+    if(b.lat==null||b.lng==null) return;
+    if(!seen[b.site_id]) seen[b.site_id]=b;
+  });
+  return Object.values(seen);
+}
+
+function drawPins(){
+  if(!mapReady) return;
+  pinLayer.clearLayers(); markers={};
+  if(dragLayer){ map.removeLayer(dragLayer); dragLayer=null; }
+
+  sitesForMap().forEach(b=>{
+    const col=STATUS_COL[b.board_status]||'#c9c9c6';
+    if(dragMode){
+      const icon=L.divIcon({className:'',
+        html:'<div style="width:17px;height:17px;border-radius:50%;background:'+col+';border:2.5px solid #6B4FA0;box-shadow:0 1px 4px rgba(0,0,0,.4);cursor:grab;"></div>',
+        iconSize:[17,17],iconAnchor:[8.5,8.5]});
+      if(!dragLayer) dragLayer=L.layerGroup().addTo(map);
+      const m=L.marker([b.lat,b.lng],{icon,draggable:true}).addTo(dragLayer);
+      m._site=b;
+      m.bindTooltip(b.name,{direction:'top'});
+      m.on('dragend',async ev=>{
+        const ll=ev.target.getLatLng();
+        await savePinPos(b.site_id,ll.lat,ll.lng,b.name);
+      });
+      markers[b.site_id]=m;
+    }else{
+      const r=b.board_status==='gone_quiet'?8:6;
+      const m=L.circleMarker([b.lat,b.lng],{radius:r,color:'#fff',weight:1.5,fillColor:col,fillOpacity:0.92}).addTo(pinLayer);
+      m._site=b;
+      m.bindPopup(popupHTML(b));
+      markers[b.site_id]=m;
+    }
+  });
+  if(RUN.length) drawRunLine();
+}
+
+function popupHTML(b){
+  const inRun=RUN.some(s=>s.site_id===b.site_id);
+  const lbl=STATUS_LBL[b.board_status]||'—';
+  const col=STATUS_COL[b.board_status]||'#9a9a97';
+  const routes=[...new Set(BOARD.filter(x=>x.site_id===b.site_id).map(x=>x.route_name))].join(', ');
+  return '<b>'+esc(b.name)+'</b><br>'+
+    '<span style="color:#9a9a97;font-size:11px;">📍 '+esc(b.place)+(b.parent_town?' · '+esc(b.parent_town):'')+'</span><br>'+
+    '<span style="color:#9a9a97;font-size:10px;">🛣️ '+esc(routes)+'</span>'+
+    '<div style="margin:7px 0;padding:6px 0;border-top:1px solid #eee;border-bottom:1px solid #eee;font-size:11px;line-height:1.6;">'+
+      '<b style="color:'+col+'">'+lbl+'</b>'+(b.ripeness_pct!=null?' · '+b.ripeness_pct+'% ripe':'')+'<br>'+
+      (b.avg_cycle_days?'Every '+b.avg_cycle_days+' days · ':'')+
+      (b.days_since_last!=null?b.days_since_last+' days ago<br>':'<br>')+
+      (b.avg_litres?'Typical: <b>'+Math.round(b.avg_litres).toLocaleString()+' L</b>':'No order history')+
+    '</div>'+
+    (inRun
+      ? '<button class="pop-btn rm" onclick="removeStop('+b.site_id+')">− Remove from run</button>'
+      : '<button class="pop-btn" onclick="addStop('+b.site_id+')">+ Add to run</button>');
+}
+
+function toggleDrag(){
+  dragMode=document.getElementById('drag-on').checked;
+  document.getElementById('drag-tgl').classList.toggle('on',dragMode);
+  if(addMode) startAdd();
+  drawPins();
+}
+
+async function savePinPos(site_id,lat,lng,name){
+  const {error}=await sb.from('customer_sites').update({latitude:lat,longitude:lng}).eq('id',site_id);
+  if(error){ alert('Could not move '+name+': '+error.message); drawPins(); return; }
+  BOARD.filter(x=>x.site_id===site_id).forEach(x=>{ x.lat=lat; x.lng=lng; });
+  RUN.forEach(s=>{ if(s.site_id===site_id){ s.lat=lat; s.lng=lng; } });
+  if(RUN.length) renderRun();
+}
+
+/* ---- add customer ---- */
+function startAdd(){
+  addMode=!addMode;
+  if(addMode && dragMode){
+    document.getElementById('drag-on').checked=false;
+    dragMode=false;
+    document.getElementById('drag-tgl').classList.remove('on');
+    drawPins();
+  }
+  const b=document.getElementById('add-btn');
+  b.textContent=addMode?'✕ Cancel — now click the map':'➕ Add customer';
+  b.style.background=addMode?'var(--amber-light)':'#fff';
+  b.style.borderColor=addMode?'var(--amber)':'var(--line)';
+  b.style.color=addMode?'var(--amber)':'var(--text2)';
+  if(map) map.getContainer().style.cursor=addMode?'crosshair':'';
+}
+
+function dropPin(ll){
+  pendingLatLng=ll;
+  document.getElementById('add-coords').textContent=ll.lat.toFixed(4)+', '+ll.lng.toFixed(4);
+  const n=document.getElementById('a-name');
+  n.value=''; delete n.dataset.cid;
+  document.getElementById('a-litres').value='';
+  document.getElementById('a-err').textContent='';
+  document.getElementById('a-hint').textContent='Use the exact name accounts uses, so orders link up.';
+  document.getElementById('a-sugg').classList.remove('on');
+  let best=null,bd=1e9;
+  PLACES.forEach(p=>{
+    const d=haversine(ll.lat,ll.lng,+p.latitude,+p.longitude);
+    if(d<bd){bd=d;best=p.place;}
+  });
+  if(best) document.getElementById('a-place').value=best;
+  document.getElementById('addm').classList.add('on');
+  startAdd();
+  setTimeout(()=>n.focus(),80);
+}
+function closeAdd(){ document.getElementById('addm').classList.remove('on'); pendingLatLng=null; }
+
+function suggest(){
+  const el=document.getElementById('a-sugg');
+  const hint=document.getElementById('a-hint');
+  const inp=document.getElementById('a-name');
+  delete inp.dataset.cid;
+  const q=inp.value.toLowerCase().trim();
+  if(q.length<2){ el.classList.remove('on'); hint.textContent='Use the exact name accounts uses, so orders link up.'; return; }
+  const hits=CUSTNAMES.filter(c=>(c.invoice_name||'').toLowerCase().includes(q)).slice(0,7);
+  if(!hits.length){
+    el.classList.remove('on');
+    hint.innerHTML='<b style="color:#3B6D11;">New customer</b> — no match in the book. Saving creates a new record.';
+    return;
+  }
+  hint.innerHTML='<b style="color:#BA7517;">'+hits.length+' similar name'+(hits.length===1?'':'s')+' already in the book</b> — pick one to add a site to it, or keep typing to create a new customer.';
+  el.innerHTML=hits.map(c=>'<div onclick="pickName(\''+String(c.id)+'\')">'+esc(c.invoice_name)+'</div>').join('');
+  el.classList.add('on');
+}
+function pickName(id){
+  const c=CUSTNAMES.find(x=>String(x.id)===String(id));
+  if(!c) return;
+  const inp=document.getElementById('a-name');
+  inp.value=c.invoice_name;
+  inp.dataset.cid=c.id;
+  document.getElementById('a-sugg').classList.remove('on');
+  document.getElementById('a-hint').innerHTML='<b style="color:#185FA5;">Adding a site to an existing customer</b> — their order history carries over.';
+}
+
+async function saveCustomer(){
+  const err=document.getElementById('a-err');
+  err.textContent='';
+  const inp=document.getElementById('a-name');
+  const name=inp.value.trim();
+  const place=document.getElementById('a-place').value;
+  const litres=parseInt(document.getElementById('a-litres').value)||null;
+  if(!name){ err.textContent='Name is required.'; return; }
+  if(!place){ err.textContent='Pick a nearest place.'; return; }
+  if(!pendingLatLng){ err.textContent='No map position.'; return; }
+
+  try{
+    let cid=inp.dataset.cid?parseInt(inp.dataset.cid):null;
+    if(!cid){
+      const exact=CUSTNAMES.find(c=>(c.invoice_name||'').toLowerCase()===name.toLowerCase());
+      if(exact) cid=exact.id;
+    }
+    if(!cid){
+      const {data,error}=await sb.from('customer_locations')
+        .insert({invoice_name:name, delivery_type:'delivery'})
+        .select('id,invoice_name').single();
+      if(error) throw error;
+      cid=data.id; CUSTNAMES.push(data);
+    }
+    const {error:e2}=await sb.from('customer_sites').upsert({
+      customer_id:cid, place, latitude:pendingLatLng.lat, longitude:pendingLatLng.lng,
+      notes: litres?('typical ~'+litres+'L'):null
+    },{onConflict:'customer_id,place'});
+    if(e2) throw e2;
+    closeAdd();
+    await loadBoard();
+  }catch(e){ err.textContent=e.message||String(e); }
+}
+
+/* ============ RUN BUILDER ============ */
+function renderTrucks(){
+  const el=document.getElementById('trucks');
+  if(!el) return;
+  el.innerHTML=TRUCKS.map(t=>
+    '<div class="tk'+(truckKey===t.truck_key?' active':'')+'" data-t="'+t.truck_key+'" onclick="pickTruck(\''+t.truck_key+'\')">'+
+      '<b>'+esc(t.truck_name)+'</b><span>'+(t.capacity_l/1000)+'k · $'+(+t.cost_per_km).toFixed(2)+'/km</span>'+
+    '</div>').join('');
+  renderRun();
+}
+function pickTruck(k){
+  truckKey=k;
+  [...document.querySelectorAll('.tk')].forEach(x=>x.classList.toggle('active',x.dataset.t===k));
+  renderRun();
+}
+function addStop(site_id){
+  const b=BOARD.find(x=>x.site_id===site_id);
+  if(!b) return;
+  if(RUN.some(s=>s.site_id===site_id)) return;
+  RUN.push({site_id:b.site_id,name:b.name,place:b.place,lat:+b.lat,lng:+b.lng,
+            litres:b.avg_litres?Math.round(b.avg_litres):0});
+  renderRun(); refreshPopups();
+}
+function removeStop(site_id){
+  RUN=RUN.filter(s=>s.site_id!==site_id);
+  renderRun(); refreshPopups();
+}
+function setStopLitres(site_id,v){
+  const s=RUN.find(x=>x.site_id===site_id);
+  if(s){ s.litres=parseInt(v)||0; renderRun(); }
+}
+function clearRun(){ RUN=[]; renderRun(); refreshPopups(); }
+function refreshPopups(){
+  Object.values(markers).forEach(m=>{ if(m._site && m.getPopup) { if(m.getPopup()) m.setPopupContent(popupHTML(m._site)); } });
+}
+
+function runKm(){
+  if(!RUN.length) return 0;
+  let km=0, prev=[DEPOT.lat,DEPOT.lng];
+  RUN.forEach(s=>{ km+=haversine(prev[0],prev[1],s.lat,s.lng); prev=[s.lat,s.lng]; });
+  km+=haversine(prev[0],prev[1],DEPOT.lat,DEPOT.lng);
+  return km*(+SETTINGS.road_factor||1.3);
+}
+
+function renderRun(){
+  const t=TRUCKS.find(x=>x.truck_key===truckKey);
+  const cap=t?t.capacity_l:40000;
+  const lit=RUN.reduce((a,s)=>a+(s.litres||0),0);
+  const pct=Math.min(100,cap?lit/cap*100:0);
+  const over=lit>cap;
+
+  document.getElementById('cap-fill').style.width=pct+'%';
+  document.getElementById('cap').classList.toggle('over',over);
+  document.getElementById('cap-l').textContent=lit.toLocaleString()+' L';
+  document.getElementById('cap-r').innerHTML=over
+    ? '<span class="over">'+(lit-cap).toLocaleString()+' L over the '+(t?esc(t.truck_name):'truck')+'</span>'
+    : (cap-lit).toLocaleString()+' L space';
+
+  document.getElementById('stop-n').textContent=RUN.length;
+  document.getElementById('stops').innerHTML=RUN.length
+    ? RUN.map((s,i)=>'<div class="stop">'+
+        '<span class="sn">'+(i+1)+'</span>'+
+        '<div class="si"><b>'+esc(s.name)+'</b><span>'+esc(s.place)+'</span></div>'+
+        '<input type="number" value="'+(s.litres||0)+'" onchange="setStopLitres('+s.site_id+',this.value)">'+
+        '<span style="font-size:9px;color:var(--muted);">L</span>'+
+        '<button class="x" onclick="removeStop('+s.site_id+')">✕</button>'+
+      '</div>').join('')
+    : '<div class="empty" style="padding:14px;">Click a pin → <b>Add to run</b></div>';
+
+  const km=runKm();
+  const rate=t?+t.cost_per_km:0;
+  const tot=km*rate;
+  document.getElementById('c-km').textContent=km?Math.round(km).toLocaleString()+' km':'— km';
+  document.getElementById('c-rate').textContent=t?'$'+rate.toFixed(2)+'/km':'—';
+  document.getElementById('c-lit').textContent=lit.toLocaleString()+' L';
+  document.getElementById('c-tot').textContent='$'+Math.round(tot).toLocaleString();
+  document.getElementById('c-per').textContent=lit?'$'+(tot/lit).toFixed(3)+'/L':'—';
+  document.getElementById('dir-btn').disabled=!RUN.length;
+  drawRunLine();
+}
+
+function drawRunLine(){
+  if(!mapReady) return;
+  if(runLine){ map.removeLayer(runLine); runLine=null; }
+  if(!RUN.length) return;
+  const pts=[[DEPOT.lat,DEPOT.lng],...RUN.map(s=>[s.lat,s.lng]),[DEPOT.lat,DEPOT.lng]];
+  runLine=L.polyline(pts,{color:'#185FA5',weight:2.5,opacity:0.75,dashArray:'6,5'}).addTo(map);
+}
+
+function openDirections(){
+  if(!RUN.length) return;
+  const o=DEPOT.lat+','+DEPOT.lng;
+  const wp=RUN.map(s=>s.lat+','+s.lng);
+  const dest=wp.pop();
+  let url='https://www.google.com/maps/dir/?api=1&origin='+o+'&destination='+dest+'&travelmode=driving';
+  if(wp.length) url+='&waypoints='+encodeURIComponent(wp.join('|'));
+  window.open(url,'_blank');
+}
+
+/* ============ SETTINGS ============ */
+function renderSettings(){
+  const el=document.getElementById('truck-set');
+  if(!el) return;
+  el.innerHTML=TRUCKS.length ? TRUCKS.map(t=>
+    '<div class="sfld">'+
+      '<label>'+esc(t.truck_name)+' — '+(t.capacity_l).toLocaleString()+' L</label>'+
+      '<input type="number" step="0.05" min="0" value="'+(+t.cost_per_km).toFixed(2)+'" '+
+        'onchange="saveTruck(\''+t.truck_key+'\',this.value)">'+
+      '<div class="hint">USD per km</div>'+
+    '</div>').join('') : '<div class="empty">No trucks — run SQL 17.</div>';
+  const r=document.getElementById('s-road');
+  if(r) r.value=+SETTINGS.road_factor||1.3;
+}
+async function saveTruck(k,v){
+  const val=parseFloat(v);
+  if(isNaN(val)||val<0){ alert('Enter a number.'); return; }
+  const {error}=await sb.from('trucks').update({cost_per_km:val}).eq('truck_key',k);
+  if(error){ alert('Could not save: '+error.message); return; }
+  const t=TRUCKS.find(x=>x.truck_key===k); if(t) t.cost_per_km=val;
+  flash('sv-truck'); renderTrucks();
+}
+async function saveSettings(){
+  const rf=parseFloat(document.getElementById('s-road').value);
+  if(isNaN(rf)||rf<1){ alert('Road factor must be 1 or more.'); return; }
+  const {error}=await sb.from('app_settings').update({road_factor:rf,updated_at:new Date().toISOString()}).eq('id',1);
+  if(error){ alert('Could not save: '+error.message); return; }
+  SETTINGS.road_factor=rf;
+  flash('sv-set'); renderRun();
+}
+function flash(id){
+  const e=document.getElementById(id);
+  if(!e) return;
+  e.classList.add('on');
+  setTimeout(()=>e.classList.remove('on'),1600);
+}
+
+/* ============ CLOCK + INIT ============ */
 function tick(){
   const n=new Date();
   document.getElementById('clock').textContent=
@@ -437,7 +1163,11 @@ sb.auth.getSession().then(async ({data})=>{
   }
 }).catch(()=>{});
 
-setInterval(()=>{ if(document.getElementById('app').classList.contains('active')) loadAll(); },60000);
+setInterval(()=>{
+  if(document.getElementById('app').classList.contains('active') && !dragMode && !addMode){
+    loadSales(); loadChase();
+  }
+},60000);
 
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 </script>
