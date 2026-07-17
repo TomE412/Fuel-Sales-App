@@ -1,52 +1,107 @@
 // ============================================================
 // SKELSEE REP APP — Service Worker (CACHE-FIRST)
-// App shell loads instantly from cache, always.
-// Network is only used to update the cache in the background.
+// v11 — FIXES THE OFFLINE BUG
+//
+// v10 bug: return cached || networkFetch || caches.match('index.html')
+// networkFetch is a PROMISE and promises are always truthy, so the
+// index.html fallback was unreachable. Offline it resolved to null,
+// and respondWith(null) = "site can't be reached".
+//
+// Also: addAll() is atomic. One missing icon = nothing cached at all,
+// and the .catch() hid it. Files now cache individually.
 // ============================================================
-const CACHE = 'fuel-v10';
-const CORE = ['./', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+const CACHE = 'fuel-v11';
+
+const CORE = [
+  './',
+  'index.html',
+  'manifest.json',
+  'icon-192.png',
+  'icon-512.png',
+  'apple-touch-icon.png'
+];
 
 self.addEventListener('install', e => {
   self.skipWaiting();
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).catch(() => {}));
+  e.waitUntil(
+    caches.open(CACHE).then(async cache => {
+      await Promise.all(CORE.map(async url => {
+        try {
+          const res = await fetch(url, { cache: 'reload' });
+          if (res && res.ok) await cache.put(url, res);
+          else console.warn('[sw] skipped (not ok):', url, res && res.status);
+        } catch (err) {
+          console.warn('[sw] skipped (failed):', url, err.message);
+        }
+      }));
+    })
+  );
 });
 
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())
+    caches.keys()
+      .then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', e => {
-  const url = e.request.url;
+  const req = e.request;
+  const url = req.url;
 
-  // NEVER touch Supabase / CDNs / fonts — these must hit the network directly
   if (url.includes('supabase.co') ||
       url.includes('jsdelivr') ||
       url.includes('cdnjs') ||
+      url.includes('unpkg') ||
       url.includes('fonts.googleapis') ||
       url.includes('fonts.gstatic')) {
-    return; // browser handles normally
+    return;
   }
 
-  // Only handle GET requests
-  if (e.request.method !== 'GET') return;
+  if (req.method !== 'GET') return;
 
-  // CACHE-FIRST for everything (the app shell)
-  // Serve from cache instantly if available; fetch in background to update.
-  e.respondWith(
-    caches.match(e.request).then(cached => {
-      // Background fetch to refresh the cache for next time
-      const networkFetch = fetch(e.request).then(response => {
-        if (response && response.status === 200) {
-          const clone = response.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
+  if (req.mode === 'navigate') {
+    e.respondWith((async () => {
+      try {
+        const fresh = await fetch(req);
+        if (fresh && fresh.ok) {
+          const c = await caches.open(CACHE);
+          c.put('index.html', fresh.clone());
         }
-        return response;
-      }).catch(() => null);
+        return fresh;
+      } catch (err) {
+        const cache = await caches.open(CACHE);
+        return (await cache.match('index.html'))
+            || (await cache.match('./'))
+            || new Response(
+                 '<h1>Offline</h1><p>Open the app once while online, then it will work offline.</p>',
+                 { headers: { 'Content-Type': 'text/html' }, status: 503 }
+               );
+      }
+    })());
+    return;
+  }
 
-      // Return cached immediately if we have it, otherwise wait for network
-      return cached || networkFetch || caches.match('index.html');
-    })
-  );
+  e.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    const cached = await cache.match(req);
+
+    if (cached) {
+      fetch(req).then(res => {
+        if (res && res.ok) cache.put(req, res.clone());
+      }).catch(() => {});
+      return cached;
+    }
+
+    try {
+      const res = await fetch(req);
+      if (res && res.ok) cache.put(req, res.clone());
+      return res;
+    } catch (err) {
+      const shell = await cache.match('index.html');
+      if (shell) return shell;
+      return new Response('', { status: 504, statusText: 'Offline' });
+    }
+  })());
 });
