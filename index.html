@@ -687,12 +687,46 @@ async function signIn() {
 
 async function loadUser(user, showLock = false) {
   currentUser = user;
-  const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
+
+  // Try to get the profile. When online this refreshes from the DB and
+  // caches it. When offline we must NOT hang on this fetch — we fall back
+  // to the cached profile so the app can still open and reach the PIN screen.
+  let profile = null;
+
+  const cachedRaw = localStorage.getItem('cached_profile');
+  const cachedProfile = cachedRaw ? JSON.parse(cachedRaw) : null;
+
+  if (navigator.onLine) {
+    try {
+      // Race the DB call against a short timeout so a flaky cellular
+      // connection can't leave us stuck forever on startup.
+      const fetchProfile = sb.from('profiles').select('*').eq('id', user.id).single();
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000));
+      const { data } = await Promise.race([
+        fetchProfile,
+        timeout.then(() => { throw new Error('timeout'); })
+      ]);
+      if (data) {
+        profile = data;
+        // Cache for offline starts
+        localStorage.setItem('cached_profile', JSON.stringify(profile));
+        localStorage.setItem('cached_user_id', user.id);
+      }
+    } catch (e) {
+      // Network was there in theory but the call failed/timed out.
+      // Use whatever we cached last time.
+      profile = cachedProfile;
+    }
+  } else {
+    // Genuinely offline — use cache, never touch the network.
+    profile = cachedProfile;
+  }
+
   currentProfile = profile;
 
-  document.getElementById('user-name-display').textContent = profile?.full_name || user.email;
+  document.getElementById('user-name-display').textContent = profile?.full_name || user.email || 'Rep';
   document.getElementById('more-name').textContent = profile?.full_name || '—';
-  document.getElementById('more-email').textContent = user.email;
+  document.getElementById('more-email').textContent = user.email || '—';
   document.getElementById('more-role').textContent = 'Role: ' + (profile?.role || 'rep');
 
   document.getElementById('screen-auth').classList.remove('active');
@@ -705,7 +739,8 @@ async function loadUser(user, showLock = false) {
     localStorage.setItem(getPinKey(user.id), DEFAULT_PIN);
   }
 
-  // Customer autocomplete: wire the input and load the canonical list
+  // Customer autocomplete: wire the input and load the canonical list.
+  // These are safe to call offline — they handle their own failures.
   initCustomerAutocomplete();
   loadCustomerList();
 
@@ -1655,11 +1690,31 @@ function setSyncBadge(state) {
 // ---- INIT ----
 // Check for existing session on load
 sb.auth.getSession().then(async ({ data }) => {
+  // NOTE: getSession() reads from local storage and SUCCEEDS even when
+  // offline — it does not throw. So all offline handling has to live
+  // HERE, not in .catch(). (That was the old bug: the offline PIN-resume
+  // code sat in .catch() and never ran, and loadUser hung on a live
+  // profile fetch that never returned on cellular/airplane mode.)
   if (data.session?.user) {
+    // We have a session (cached or live). loadUser is now offline-safe.
     await loadUser(data.session.user, true);
+  } else {
+    // No session. If we have a cached profile, let them PIN back in offline.
+    const cachedUserId = localStorage.getItem('cached_user_id');
+    const cachedProfile = localStorage.getItem('cached_profile');
+    if (cachedUserId && cachedProfile) {
+      currentUser = { id: cachedUserId };
+      currentProfile = JSON.parse(cachedProfile);
+      document.getElementById('user-name-display').textContent = currentProfile.full_name;
+      document.getElementById('more-name').textContent = currentProfile.full_name;
+      document.getElementById('more-role').textContent = 'Role: ' + currentProfile.role;
+      showLockScreen();
+    } else {
+      document.getElementById('screen-auth').classList.add('active');
+    }
   }
 }).catch(() => {
-  // If offline and no session, try to work with cached PIN
+  // Genuine error path. Try cached PIN resume as a last resort.
   const cachedUserId = localStorage.getItem('cached_user_id');
   const cachedProfile = localStorage.getItem('cached_profile');
   if (cachedUserId && cachedProfile) {
@@ -1670,7 +1725,6 @@ sb.auth.getSession().then(async ({ data }) => {
     document.getElementById('more-role').textContent = 'Role: ' + currentProfile.role;
     showLockScreen();
   } else {
-    // No cache either — show login
     document.getElementById('screen-auth').classList.add('active');
   }
 });
