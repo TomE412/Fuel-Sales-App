@@ -84,6 +84,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 /* LOST SALE */
 .lost-btn{padding:5px 10px;background:#fff;border:1.5px solid var(--red);color:var(--red);border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
 .lost-btn:hover{background:var(--red);color:#fff;}
+.upd-cell{display:flex;gap:5px;flex-wrap:wrap;}
+.conf-btn{padding:5px 10px;background:#fff;border:1.5px solid var(--green,#2e7d32);color:var(--green-dark,#2e7d32);border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.conf-btn:hover{background:var(--green,#2e7d32);color:#fff;}
+.conf-btn:disabled{opacity:0.5;cursor:default;}
 .lostflag{display:inline-block;font-size:8px;font-weight:700;padding:1px 5px;border-radius:99px;background:var(--red-light);color:var(--red-dark);margin-left:5px;vertical-align:middle;}
 .lmodal{position:fixed;inset:0;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;z-index:9000;padding:16px;}
 .lmodal.on{display:flex;}
@@ -956,7 +960,10 @@ function renderRetention(){
       '<td class="mono">'+(r.avg_cycle_days||'?')+'d</td>'+
       '<td class="mono" style="font-weight:700;color:'+pctCol+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</td>'+
       '<td class="mono">'+Math.round(r.total_litres||0).toLocaleString()+'</td>'+
-      '<td><button class="lost-btn" onclick="openLost(\''+cust+'\')">Lost sale</button></td>'+
+      '<td><div class="upd-cell">'+
+        '<button class="lost-btn" onclick="openLost(\''+cust+'\')">Lost sale</button>'+
+        (r.lost_last_round?'<button class="conf-btn" onclick="confirmSale(\''+cust+'\')">Sale confirmed</button>':'')+
+      '</div></td>'+
     '</tr>';
   }).join('');
 }
@@ -1025,6 +1032,27 @@ async function saveLost(){
     await loadRetention();
     if(typeof loadBook==='function') await loadBook();
   }catch(e){ err.textContent=e.message||String(e); }
+}
+
+// "Sale confirmed" — they turned out to have bought after all. Hard-delete
+// the most recent lost_sales entry for this customer so the "lost last" flag
+// drops and their reorder clock reflects the real purchase.
+async function confirmSale(customer){
+  if(!confirm('Confirm that "'+customer+'" did buy from us?\n\nThis removes their most recent lost-sale entry.')) return;
+  try{
+    // Find the newest lost entry for this customer by name.
+    const {data:rows,error:e1}=await sb.from('lost_sales')
+      .select('id,lost_date')
+      .ilike('customer',customer)
+      .order('lost_date',{ascending:false})
+      .limit(1);
+    if(e1) throw e1;
+    if(!rows||!rows.length){ alert('No lost-sale entry found to remove.'); await loadRetention(); return; }
+    const {error:e2}=await sb.from('lost_sales').delete().eq('id',rows[0].id);
+    if(e2) throw e2;
+    await loadRetention();
+    if(typeof loadBook==='function') await loadBook();
+  }catch(e){ alert('Could not confirm sale: '+(e.message||e)); }
 }
 </script>
 

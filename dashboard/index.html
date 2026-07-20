@@ -84,6 +84,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .order-row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--gray-light);}
 .order-row:last-child{border-bottom:none;}
 .order-row.delivered{opacity:0.5;}
+.deliver-btn{padding:6px 12px;background:var(--green,#2e7d32);color:#fff;border:none;border-radius:7px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.deliver-btn:hover{filter:brightness(1.08);}
+.deliver-btn:active{transform:scale(0.97);}
+.deliver-btn:disabled{opacity:0.5;cursor:default;}
 .date-box{border-radius:7px;padding:4px 7px;text-align:center;flex-shrink:0;min-width:44px;background:var(--green-light);border:1px solid var(--green);}
 .date-box.today{background:var(--red-light);border-color:var(--red);}
 .date-num{font-size:13px;font-weight:700;font-family:var(--mono);color:var(--green-dark);line-height:1;}
@@ -209,10 +213,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
       </div>
       <div class="panel">
         <div class="ph">
-          <div class="ph-title" style="color:var(--amber);">💰 Payments to chase this week</div>
-          <span class="ph-count" id="pay-count" style="background:var(--amber-light);color:var(--amber);">0</span>
+          <div class="ph-title" style="color:var(--green-dark);">🌱 Due to reorder soon</div>
+          <span class="ph-count" id="due-count" style="background:var(--green-light);color:var(--green-dark);">0</span>
         </div>
-        <div id="pay-list"><div class="empty-msg">No payments due this week</div></div>
+        <div id="due-list"><div class="empty-msg">Loading…</div></div>
       </div>
 
       <div class="panel">
@@ -308,6 +312,74 @@ async function dashSignIn() {
 }
 
 // FETCH from Supabase
+// DUE TO REORDER SOON — reads the retention view, shows customers whose
+// ripeness says they're approaching their usual reorder point. Ordered by
+// predicted date so the soonest sits at the top.
+async function loadDueSoon() {
+  const el = document.getElementById('due-list');
+  const countEl = document.getElementById('due-count');
+  try {
+    const { data, error } = await sb.from('app_customer_retention')
+      .select('customer,ripeness_pct,next_due_date,avg_litres,status,days_since_last,avg_cycle_days')
+      .in('status', ['due_soon','due_now','overdue'])
+      .order('ripeness_pct', { ascending: false })
+      .limit(12);
+    if (error) throw error;
+    const rows = data || [];
+    countEl.textContent = rows.length;
+    if (!rows.length) { el.innerHTML = '<div class="empty-msg">Nobody due just yet</div>'; return; }
+
+    const fmtWk = (iso) => {
+      if (!iso) return '—';
+      const d = new Date(iso + 'T00:00:00');
+      if (isNaN(d)) return '—';
+      const today0 = new Date(); today0.setHours(0,0,0,0);
+      const diff = Math.round((d - today0)/86400000);
+      if (diff <= 0)  return 'now';
+      if (diff <= 7)  return 'this week';
+      if (diff <= 14) return 'next week';
+      const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return 'wk of ' + String(d.getDate()).padStart(2,'0') + ' ' + MN[d.getMonth()];
+    };
+    const col = (st) => st==='overdue' ? 'var(--red)' : st==='due_now' ? 'var(--amber)' : 'var(--green-dark)';
+
+    el.innerHTML = rows.map(r => `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--gray-light);">
+        <div style="min-width:64px;text-align:center;">
+          <div style="font-size:11px;font-weight:800;color:${col(r.status)};">${r.ripeness_pct!=null?r.ripeness_pct+'%':'—'}</div>
+          <div style="font-size:9px;color:var(--gray-text);">${fmtWk(r.next_due_date)}</div>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;font-weight:700;">${r.customer}</div>
+          <div style="font-size:10px;color:var(--gray-text);">every ${r.avg_cycle_days||'?'}d · last ${r.days_since_last||0}d ago</div>
+        </div>
+        <div style="font-size:11px;font-weight:700;font-family:var(--mono);color:${col(r.status)};">${r.avg_litres?Math.round(r.avg_litres).toLocaleString()+' L':'—'}</div>
+      </div>`).join('');
+  } catch (e) {
+    el.innerHTML = '<div class="empty-msg">Due-soon data unavailable</div>';
+    countEl.textContent = '0';
+  }
+}
+
+// Munya marks a delivery complete. Writes a timestamp (delivered_at) AND
+// sets status='delivered' so the existing upcoming/delivered split keeps
+// working. This is what clears the upcoming list — the fix for stale data.
+async function markDelivered(id) {
+  if (!confirm('Mark this delivery as done?')) return;
+  const btns = document.querySelectorAll('.deliver-btn');
+  btns.forEach(b => b.disabled = true);
+  try {
+    const { error } = await sb.from('sales')
+      .update({ delivered_at: new Date().toISOString(), status: 'delivered' })
+      .eq('id', id);
+    if (error) throw error;
+    await fetchData();   // refresh immediately so it drops off upcoming
+  } catch (e) {
+    alert('Could not mark delivered: ' + (e.message || e));
+    btns.forEach(b => b.disabled = false);
+  }
+}
+
 async function fetchData() {
   try {
     // SECURITY: Only fetch fields needed for dashboard, limit to last 90 days
@@ -470,7 +542,10 @@ function renderAll() {
           ${ts?`<div class="order-time">Received: ${ts}</div>`:''}
           ${s.notes?`<div style="font-size:11px;color:var(--text2);margin-top:3px;background:var(--gray-light);padding:4px 6px;border-radius:4px;border-left:2px solid var(--amber);">📝 ${s.notes}</div>`:''}
         </div>
-        <div class="order-litres">${(s.litres||0).toLocaleString()} L</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+          <div class="order-litres">${(s.litres||0).toLocaleString()} L</div>
+          ${s.delivered?'':`<button class="deliver-btn" onclick="markDelivered('${s.id}')">✓ Mark delivered</button>`}
+        </div>
       </div>`;
     }).join('');
   } else {
@@ -555,41 +630,8 @@ function renderAll() {
     repEl.innerHTML = '<div class="empty-msg">No sales this month yet</div>';
   }
 
-  // PAYMENTS DUE THIS WEEK
-  const in7 = new Date(now.getTime() + 7*86400000);
-  const in7Str = in7.toISOString().split('T')[0];
-  const paymentsDue = activeSales.filter(s => {
-    if (s.paid) return false;
-    if (!s.payment_due) return false;
-    if (s.payment_term === 'COD') return false;
-    const pd = (s.payment_due||'').split('T')[0];
-    if (!pd) return false;
-    // Only upcoming, not overdue
-    return pd >= today && pd <= in7Str;
-  }).sort((a,b) => (a.payment_due||'').localeCompare(b.payment_due||''));
-
-  document.getElementById('pay-count').textContent = paymentsDue.length;
-  const payEl = document.getElementById('pay-list');
-  if (paymentsDue.length) {
-    payEl.innerHTML = paymentsDue.map(s => {
-      const pd = (s.payment_due||'').split('T')[0];
-      const d = pd ? new Date(pd+'T00:00:00') : null;
-      const daysUntil = d ? Math.round((d - now)/86400000) : 0;
-      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--gray-light);">
-        <div style="min-width:40px;text-align:center;">
-          <div style="font-size:11px;font-weight:700;color:var(--amber);">${daysUntil}d</div>
-          <div style="font-size:9px;color:var(--gray-text);">${d?String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'):'—'}</div>
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:12px;font-weight:700;">${s.customer}</div>
-          <div style="font-size:10px;color:var(--gray-text);">${s.rep}</div>
-        </div>
-        <div style="font-size:11px;font-weight:700;font-family:var(--mono);color:var(--amber);">${(s.litres||0).toLocaleString()} L</div>
-      </div>`;
-    }).join('');
-  } else {
-    payEl.innerHTML = '<div class="empty-msg">No payments due this week</div>';
-  }
+  // DUE TO REORDER SOON — handled by its own fetch (loadDueSoon), runs on the
+  // same 30s cycle. Kept separate because it reads the retention view, not sales.
 
   // TICKER — only upcoming (not delivered)
   const tickerSales = activeSales.filter(s => !s.delivered).slice(0,12);
@@ -641,6 +683,8 @@ sb.auth.getSession().then(async ({ data }) => {
 
 // Auto-refresh every 30s
 setInterval(fetchData, 30000);
+setInterval(loadDueSoon, 30000);
+loadDueSoon();
 
 // Service worker
 if ('serviceWorker' in navigator) {

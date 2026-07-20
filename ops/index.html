@@ -397,7 +397,7 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
     <div class="scroll">
       <div class="panel">
         <div class="ph"><h2 style="color:var(--green-dark);">📒 All customers</h2>
-          <input type="text" class="search" id="bk-search" placeholder="Search..." oninput="renderBook()" style="margin-left:auto;"></div>
+          <input type="text" class="search" id="bk-search" placeholder="Search name or place..." oninput="renderBook()" style="margin-left:auto;"></div>
         <div class="chips">
           <span class="chip active" data-p="all"           onclick="setPat('all')">All</span>
           <span class="chip"        data-p="very_frequent" onclick="setPat('very_frequent')">Very frequent</span>
@@ -414,7 +414,7 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
               <th onclick="sortBook('avg_cycle_days')">Every</th>
               <th onclick="sortBook('avg_litres')">Typical</th>
               <th onclick="sortBook('days_since_last')">Since</th>
-              <th onclick="sortBook('ripeness_pct')">Ripe</th>
+              <th onclick="sortBook('ripeness_pct')">Ripe · due</th>
             </tr></thead>
             <tbody id="bk-body"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
           </table>
@@ -670,12 +670,12 @@ async function loadChase(){
 async function loadBook(){
   try{
     const {data,error}=await sb.from('app_customer_book')
-      .select('customer,order_count,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,status,buying_pattern,lost_last_round,lost_count');
+      .select('customer,order_count,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,next_due_date,status,buying_pattern,lost_last_round,lost_count');
     if(error) throw error;
     BOOK=data||[];
     renderBook();
   }catch(e){
-    document.getElementById('bk-body').innerHTML='<tr><td colspan="6" class="empty">Book unavailable ('+(e.message||e)+')</td></tr>';
+    document.getElementById('bk-body').innerHTML='<tr><td colspan="7" class="empty">Book unavailable ('+(e.message||e)+')</td></tr>';
   }
 }
 
@@ -788,9 +788,25 @@ function sortBook(k){
 }
 function renderBook(){
   const q=(document.getElementById('bk-search')?.value||'').toLowerCase().trim();
+
+  // Customer-name -> place lookup, from the route board (built once per render).
+  const idToName={}; CUSTNAMES.forEach(c=>{ idToName[c.id]=(c.invoice_name||'').trim().toLowerCase(); });
+  const locBy={};
+  BOARD.forEach(bd=>{
+    if(bd.customer_id!=null && bd.place){
+      const nm=idToName[bd.customer_id];
+      if(nm && !locBy[nm]) locBy[nm]=bd.place;
+    }
+  });
+  const placeFor=(name)=>locBy[(name||'').trim().toLowerCase()]||null;
+
   let rows=BOOK.filter(r=>{
     if(pat!=='all' && r.buying_pattern!==pat) return false;
-    if(q && !(r.customer||'').toLowerCase().includes(q)) return false;
+    if(q){
+      const inName=(r.customer||'').toLowerCase().includes(q);
+      const inLoc=(placeFor(r.customer)||'').toLowerCase().includes(q);
+      if(!inName && !inLoc) return false;
+    }
     return true;
   });
   const k=bkSort.k,d=bkSort.d;
@@ -804,18 +820,36 @@ function renderBook(){
   if(!rows.length){b.innerHTML='<tr><td colspan="6" class="empty">No match</td></tr>';return;}
   const pl={very_frequent:'Very frequent',monthly_ish:'Monthly',quarterly_ish:'Quarterly',occasional:'Occasional',unknown:'—'};
   const pc={very_frequent:'var(--green-dark)',monthly_ish:'var(--blue)',quarterly_ish:'var(--amber)',occasional:'var(--muted)',unknown:'var(--muted)'};
+
+  // Turn a predicted date into a human "week of" label.
+  const wkLabel=(iso)=>{
+    if(!iso) return null;
+    const d=new Date(iso+'T00:00:00'); if(isNaN(d)) return null;
+    const t0=new Date(); t0.setHours(0,0,0,0);
+    const diff=Math.round((d-t0)/86400000);
+    if(diff<=0)  return 'due now';
+    if(diff<=7)  return 'this week';
+    if(diff<=14) return 'next week';
+    const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return 'wk '+String(d.getDate()).padStart(2,'0')+' '+MN[d.getMonth()];
+  };
+
   b.innerHTML=rows.map(r=>{
     const col=STATUS_COL[r.status]||'#9a9a97';
     const flag=r.lost_last_round?'<span class="lostflag">lost last</span>':'';
     const lc=r.lost_count>0?'<span style="font-size:9px;color:var(--red-dark);"> · '+r.lost_count+' lost</span>':'';
+    const place=placeFor(r.customer);
+    const locLine=place?'<div style="font-size:9px;font-weight:600;color:var(--muted);">📍 '+esc(place)+'</div>':'';
+    const wk=wkLabel(r.next_due_date);
+    const wkCell=wk?'<div style="font-size:9px;color:'+col+';font-weight:600;">'+wk+'</div>':'';
     return '<tr>'+
       '<td style="font-weight:700;">'+esc(r.customer)+flag+
-        '<div style="font-size:9px;font-weight:600;color:'+(pc[r.buying_pattern]||'var(--muted)')+';">'+(pl[r.buying_pattern]||'—')+lc+'</div></td>'+
+        '<div style="font-size:9px;font-weight:600;color:'+(pc[r.buying_pattern]||'var(--muted)')+';">'+(pl[r.buying_pattern]||'—')+lc+'</div>'+locLine+'</td>'+
       '<td class="mono">'+(r.order_count||0)+'</td>'+
       '<td class="mono">'+(r.avg_cycle_days?r.avg_cycle_days+'d':'—')+'</td>'+
       '<td class="mono">'+Math.round(r.avg_litres||0).toLocaleString()+'</td>'+
       '<td class="mono">'+(r.days_since_last!=null?r.days_since_last+'d':'—')+'</td>'+
-      '<td class="mono" style="font-weight:700;color:'+col+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</td>'+
+      '<td class="mono" style="font-weight:700;color:'+col+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+wkCell+'</td>'+
     '</tr>';
   }).join('');
 }
