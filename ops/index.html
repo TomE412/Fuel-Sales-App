@@ -175,6 +175,13 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
 .lost{background:#fff;border:1.5px solid var(--red);color:var(--red);border-radius:6px;font-family:var(--font);font-size:10px;font-weight:700;padding:5px 9px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
 .lost:hover{background:var(--red);color:#fff;}
 .lostflag{display:inline-block;font-size:8px;font-weight:700;padding:1px 5px;border-radius:99px;background:var(--red-light);color:var(--red-dark);margin-left:5px;vertical-align:middle;}
+.riperow{padding:8px 13px;border-bottom:1px solid #f2f2f0;}
+.ripetop{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;}
+.ripename{font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ripepct{font-family:var(--mono);font-size:12px;font-weight:700;flex-shrink:0;}
+.ripebar{height:5px;background:#eee;border-radius:99px;overflow:hidden;margin-bottom:4px;}
+.ripebar>div{height:100%;border-radius:99px;}
+.ripemeta{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;color:var(--muted);}
 .reasons{display:flex;gap:6px;margin-bottom:4px;}
 .rsn{flex:1;padding:9px 4px;text-align:center;border:1.5px solid var(--line);border-radius:8px;cursor:pointer;background:#fff;user-select:none;font-size:12px;font-weight:700;color:var(--text2);}
 .rsn.active{border-color:var(--red);background:var(--red-light);color:var(--red-dark);}
@@ -258,7 +265,7 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
   </div>
 
   <div class="mtabs">
-    <div class="mtab active" data-p="today"  onclick="go('today')">🚛 Today <span class="badge" id="bg-today">0</span></div>
+    <div class="mtab active" data-p="today"  onclick="go('today')">📊 Dash <span class="badge" id="bg-today">0</span></div>
     <div class="mtab"        data-p="routes" onclick="go('routes')">🛣️ Routes</div>
     <div class="mtab"        data-p="map"    onclick="go('map')">🗺️ Map</div>
     <div class="mtab"        data-p="book"   onclick="go('book')">📒 Book</div>
@@ -280,14 +287,10 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
       </div>
       <div class="col">
         <div class="panel">
-          <div class="ph"><h2 style="color:var(--blue);">📞 Who to chase</h2>
-            <span class="n" style="font-weight:400;font-size:10px;">early delivery fills a truck</span></div>
-          <div class="tabs">
-            <div class="tb active" data-b="due_now"    onclick="setTab('due_now')">Due now<span class="c" id="c-due">–</span></div>
-            <div class="tb"        data-b="overdue"    onclick="setTab('overdue')">Overdue<span class="c" id="c-over">–</span></div>
-            <div class="tb"        data-b="gone_quiet" onclick="setTab('gone_quiet')">Gone quiet<span class="c" id="c-quiet">–</span></div>
-          </div>
-          <div class="pbody" id="chase-list"><div class="empty">Loading…</div></div>
+          <div class="ph"><h2 style="color:var(--green-dark);">🌱 Ripe to pair — due now &amp; overdue</h2>
+            <span class="n" id="n-ripe">0</span></div>
+          <div class="ph-sub" style="padding:0 12px 6px;font-size:10px;color:var(--muted);">Customers near their reorder point — pair them onto a truck already heading their way.</div>
+          <div class="pbody" id="ripe-list"><div class="empty">Loading…</div></div>
         </div>
         <div class="panel">
           <div class="ph"><h2 style="color:var(--green-dark);">✓ Delivered</h2><span class="n" id="n-done">0</span></div>
@@ -541,7 +544,7 @@ function DEPOT(){
   return d?{lat:+d.latitude,lng:+d.longitude,name:d.depot_name}:{lat:-17.8419,lng:31.1183,name:'Msasa depot'};
 }
 
-let SALES=[], CHASE={due_now:[],overdue:[],gone_quiet:[]}, BOOK=[];
+let SALES=[], CHASE={due_now:[],overdue:[]}, RIPE=[], BOOK=[];
 let BOARD=[], ROUTES=[], PLACES=[], TRUCKS=[], SETTINGS={road_factor:1.3,ors_key:null}, CUSTNAMES=[];
 let tab='due_now', pat='all', bkSort={k:'ripeness_pct',d:-1};
 let curRoute=null, page='today';
@@ -628,6 +631,7 @@ async function loadBoard(){
     renderRoutePicker();
     if(page==='routes'&&curRoute) renderRoute();
     if(mapReady) drawPins();
+    if(RIPE.length) renderChase();  // fill in locations now board data is here
   }catch(e){ console.warn('board',e); }
 }
 
@@ -652,18 +656,18 @@ async function loadSales(){
 async function loadChase(){
   try{
     const {data,error}=await sb.from('app_customer_retention')
-      .select('customer,order_count,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,status,lost_last_round,lost_count')
-      .in('status',['due_now','overdue','gone_quiet']);
+      .select('customer,order_count,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,next_due_date,status,lost_last_round,lost_count')
+      .in('status',['due_now','overdue']);
     if(error) throw error;
-    CHASE={due_now:[],overdue:[],gone_quiet:[]};
+    // Due now + overdue together, most ripe first — these are the ones worth
+    // pairing onto a truck already heading their way.
+    CHASE={due_now:[],overdue:[]};
     (data||[]).forEach(r=>{ if(CHASE[r.status]) CHASE[r.status].push(r); });
-    Object.keys(CHASE).forEach(k=>CHASE[k].sort((a,b)=>(b.total_litres||0)-(a.total_litres||0)));
-    document.getElementById('c-due').textContent=CHASE.due_now.length;
-    document.getElementById('c-over').textContent=CHASE.overdue.length;
-    document.getElementById('c-quiet').textContent=CHASE.gone_quiet.length;
+    RIPE=[...CHASE.overdue,...CHASE.due_now].sort((a,b)=>(b.ripeness_pct||0)-(a.ripeness_pct||0));
+    document.getElementById('n-ripe').textContent=RIPE.length;
     renderChase();
   }catch(e){
-    document.getElementById('chase-list').innerHTML='<div class="empty">Chase list unavailable ('+(e.message||e)+')</div>';
+    document.getElementById('ripe-list').innerHTML='<div class="empty">Ripeness list unavailable ('+(e.message||e)+')</div>';
   }
 }
 
@@ -749,29 +753,42 @@ function renderDeliveries(){
     : '<div class="empty">Nothing delivered yet</div>';
 }
 
-/* ============ CHASE ============ */
-function setTab(b){
-  tab=b;
-  [...document.querySelectorAll('.tb')].forEach(x=>x.classList.toggle('active',x.dataset.b===b));
-  renderChase();
-}
+/* ============ RIPE TO PAIR ============ */
 function renderChase(){
-  const rows=CHASE[tab]||[];
-  const el=document.getElementById('chase-list');
-  if(!rows.length){
-    el.innerHTML='<div class="empty">'+(tab==='gone_quiet'?'Nobody has gone quiet — good sign.':'Nobody in this bucket.')+'</div>';
+  const el=document.getElementById('ripe-list');
+  if(!RIPE.length){
+    el.innerHTML='<div class="empty">Nobody due right now — nothing to pair.</div>';
     return;
   }
-  el.innerHTML=rows.map(r=>{
+  // Location lookup from the route board (customer_id -> place, via CUSTNAMES).
+  const idToName={}; CUSTNAMES.forEach(c=>{ idToName[c.id]=(c.invoice_name||'').trim().toLowerCase(); });
+  const locBy={};
+  BOARD.forEach(bd=>{
+    if(bd.customer_id!=null && bd.place){
+      const nm=idToName[bd.customer_id];
+      if(nm && !locBy[nm]) locBy[nm]=bd.place;
+    }
+  });
+  const placeFor=(name)=>locBy[(name||'').trim().toLowerCase()]||null;
+
+  el.innerHTML=RIPE.map(r=>{
     const col=STATUS_COL[r.status]||'#9a9a97';
     const lit=r.avg_litres?Math.round(r.avg_litres):0;
     const flag=r.lost_last_round?'<span class="lostflag">lost last</span>':'';
-    return '<div class="ro">'+
-      '<div class="i"><b>'+esc(r.customer)+flag+'</b>'+
-        '<span>every '+(r.avg_cycle_days||'?')+'d · '+(r.days_since_last||0)+'d ago · last '+fmt(r.last_order)+'</span></div>'+
-      '<div class="amt">'+(lit?lit.toLocaleString()+' L':'—')+'</div>'+
-      '<div class="pct" style="color:'+col+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</div>'+
-      '<button class="lost" onclick="openLost(\''+esc(r.customer).replace(/'/g,"\\'")+'\')">Lost sale</button>'+
+    const place=placeFor(r.customer);
+    const pct=r.ripeness_pct!=null?r.ripeness_pct:0;
+    const barW=Math.max(4,Math.min(100,pct));
+    const label=r.status==='overdue'?'overdue':'due now';
+    return '<div class="riperow">'+
+      '<div class="ripetop">'+
+        '<span class="ripename"><b>'+esc(r.customer)+'</b>'+flag+'</span>'+
+        '<span class="ripepct" style="color:'+col+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</span>'+
+      '</div>'+
+      '<div class="ripebar"><div style="width:'+barW+'%;background:'+col+';"></div></div>'+
+      '<div class="ripemeta">'+
+        '<span>📍 '+(place?esc(place):'—')+(lit?' · ~'+lit.toLocaleString()+' L':'')+'</span>'+
+        '<span style="color:'+col+'">'+label+'</span>'+
+      '</div>'+
     '</div>';
   }).join('');
 }
