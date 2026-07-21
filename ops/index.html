@@ -182,6 +182,8 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
 .ripebar{height:5px;background:#eee;border-radius:99px;overflow:hidden;margin-bottom:4px;}
 .ripebar>div{height:100%;border-radius:99px;}
 .ripemeta{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;color:var(--muted);}
+.ripehdr{padding:5px 12px;font-size:10px;font-weight:700;background:var(--green-light,#EAF3DE);color:var(--green-dark);border-bottom:1px solid #f2f2f0;}
+.ripehdr.sub{background:#f7f7f5;color:var(--muted);}
 .reasons{display:flex;gap:6px;margin-bottom:4px;}
 .rsn{flex:1;padding:9px 4px;text-align:center;border:1.5px solid var(--line);border-radius:8px;cursor:pointer;background:#fff;user-select:none;font-size:12px;font-weight:700;color:var(--text2);}
 .rsn.active{border-color:var(--red);background:var(--red-light);color:var(--red-dark);}
@@ -760,37 +762,110 @@ function renderChase(){
     el.innerHTML='<div class="empty">Nobody due right now — nothing to pair.</div>';
     return;
   }
-  // Location lookup from the route board (customer_id -> place, via CUSTNAMES).
+
+  // ---- Location + route lookups from the route board ----
   const idToName={}; CUSTNAMES.forEach(c=>{ idToName[c.id]=(c.invoice_name||'').trim().toLowerCase(); });
-  const locBy={};
+  const locBy={};            // customer name -> place
+  const routeOfPlace={};     // place (lower) -> {key, name}
   BOARD.forEach(bd=>{
-    if(bd.customer_id!=null && bd.place){
-      const nm=idToName[bd.customer_id];
-      if(nm && !locBy[nm]) locBy[nm]=bd.place;
+    if(bd.place){
+      const pl=bd.place.trim().toLowerCase();
+      if(bd.route_key && !routeOfPlace[pl]) routeOfPlace[pl]={key:bd.route_key,name:bd.route_name};
+      if(bd.customer_id!=null){
+        const nm=idToName[bd.customer_id];
+        if(nm && !locBy[nm]) locBy[nm]=bd.place;
+      }
     }
   });
   const placeFor=(name)=>locBy[(name||'').trim().toLowerCase()]||null;
 
-  el.innerHTML=RIPE.map(r=>{
+  // ---- What's already scheduled: today + upcoming, not delivered ----
+  // Build sets of places and routes a truck is heading to, with the soonest
+  // matching delivery's date + rep for the label.
+  const today=new Date().toISOString().split('T')[0];
+  const dd=s=>(s.delivery_date||'').split('T')[0];
+  const schedPlace={};   // place(lower) -> {date, rep}
+  const schedRoute={};   // route_key    -> {date, rep, place}
+  SALES.filter(s=>s.status!=='delivered' && dd(s) && dd(s)>=today).forEach(s=>{
+    const loc=(s.location||'').trim().toLowerCase();
+    if(!loc) return;
+    const when=dd(s), rep=s.rep_name||'';
+    if(!schedPlace[loc] || when<schedPlace[loc].date) schedPlace[loc]={date:when,rep};
+    const rt=routeOfPlace[loc];
+    if(rt && (!schedRoute[rt.key] || when<schedRoute[rt.key].date))
+      schedRoute[rt.key]={date:when,rep,place:s.location.trim()};
+  });
+
+  const dayLabel=(iso)=>{
+    if(!iso) return '';
+    if(iso===today) return 'today';
+    const d=new Date(iso+'T00:00:00'), t0=new Date(); t0.setHours(0,0,0,0);
+    const diff=Math.round((d-t0)/86400000);
+    if(diff===1) return 'tomorrow';
+    const DN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    if(diff>1 && diff<=6) return DN[d.getDay()];
+    return fmt(iso);
+  };
+
+  // ---- Classify each ripe customer ----
+  const matched=[], rest=[];
+  RIPE.forEach(r=>{
+    const place=placeFor(r.customer);
+    const pl=(place||'').toLowerCase();
+    let match=null; // {kind:'place'|'road', date, rep, via}
+    if(pl && schedPlace[pl]){
+      match={kind:'place', date:schedPlace[pl].date, rep:schedPlace[pl].rep};
+    } else if(pl && routeOfPlace[pl] && schedRoute[routeOfPlace[pl].key]){
+      const sr=schedRoute[routeOfPlace[pl].key];
+      match={kind:'road', date:sr.date, rep:sr.rep, via:sr.place};
+    }
+    if(match){ r._match=match; r._place=place; matched.push(r); }
+    else { r._place=place; rest.push(r); }
+  });
+  // Matched: exact-place before same-road, then by ripeness.
+  matched.sort((a,b)=>{
+    if((a._match.kind==='place')!==(b._match.kind==='place')) return a._match.kind==='place'?-1:1;
+    return (b.ripeness_pct||0)-(a.ripeness_pct||0);
+  });
+
+  const rowHtml=(r,highlight)=>{
     const col=STATUS_COL[r.status]||'#9a9a97';
     const lit=r.avg_litres?Math.round(r.avg_litres):0;
     const flag=r.lost_last_round?'<span class="lostflag">lost last</span>':'';
-    const place=placeFor(r.customer);
-    const pct=r.ripeness_pct!=null?r.ripeness_pct:0;
-    const barW=Math.max(4,Math.min(100,pct));
-    const label=r.status==='overdue'?'overdue':'due now';
-    return '<div class="riperow">'+
+    const barW=Math.max(4,Math.min(100,r.ripeness_pct!=null?r.ripeness_pct:0));
+    let right;
+    if(r._match){
+      const m=r._match, rep=m.rep?esc(m.rep.split(' ')[0]):'Truck';
+      right = m.kind==='place'
+        ? '<span style="color:#3B6D11;font-weight:700;">'+rep+' → '+esc(r._place)+' '+dayLabel(m.date)+'</span>'
+        : '<span style="color:#63991B;">same road · '+dayLabel(m.date)+'</span>';
+    } else {
+      right = '<span style="color:'+col+'">'+(r.status==='overdue'?'overdue':'due now')+'</span>';
+    }
+    const edge = highlight ? (r._match.kind==='place'?'#639922':'#97C459') : null;
+    return '<div class="riperow"'+(edge?' style="border-left:3px solid '+edge+';"':'')+'>'+
       '<div class="ripetop">'+
         '<span class="ripename"><b>'+esc(r.customer)+'</b>'+flag+'</span>'+
         '<span class="ripepct" style="color:'+col+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</span>'+
       '</div>'+
       '<div class="ripebar"><div style="width:'+barW+'%;background:'+col+';"></div></div>'+
       '<div class="ripemeta">'+
-        '<span>📍 '+(place?esc(place):'—')+(lit?' · ~'+lit.toLocaleString()+' L':'')+'</span>'+
-        '<span style="color:'+col+'">'+label+'</span>'+
+        '<span>📍 '+(r._place?esc(r._place):'—')+(lit?' · ~'+lit.toLocaleString()+' L':'')+'</span>'+
+        right+
       '</div>'+
     '</div>';
-  }).join('');
+  };
+
+  let html='';
+  if(matched.length){
+    html+='<div class="ripehdr">🚛 On a run already scheduled</div>';
+    html+=matched.map(r=>rowHtml(r,true)).join('');
+  }
+  if(rest.length){
+    if(matched.length) html+='<div class="ripehdr sub">Everyone else</div>';
+    html+=rest.map(r=>rowHtml(r,false)).join('');
+  }
+  el.innerHTML=html;
 }
 
 /* ============ BOOK ============ */
