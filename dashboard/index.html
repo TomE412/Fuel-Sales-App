@@ -213,7 +213,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
       </div>
       <div class="panel">
         <div class="ph">
-          <div class="ph-title" style="color:var(--green-dark);">🌱 Due to reorder soon</div>
+          <div class="ph-title" style="color:var(--green-dark);">🌱 Due to reorder soon <span style="font-weight:400;font-size:10px;color:var(--gray-text);">80–130%</span></div>
           <span class="ph-count" id="due-count" style="background:var(--green-light);color:var(--green-dark);">0</span>
         </div>
         <div id="due-list"><div class="empty-msg">Loading…</div></div>
@@ -319,15 +319,21 @@ async function loadDueSoon() {
   const el = document.getElementById('due-list');
   const countEl = document.getElementById('due-count');
   try {
+    // Filter on the actual PERCENTAGE, not the status label.
+    // The 'overdue' status covers everything from 125% upwards — including
+    // customers sitting at 300%+ who have effectively gone quiet. That is why
+    // filtering by status let them through. 80–130% is the genuine sweet spot:
+    // approaching or just past their reorder point, still worth a call.
     const { data, error } = await sb.from('app_customer_retention')
       .select('customer,ripeness_pct,next_due_date,avg_litres,status,days_since_last,avg_cycle_days')
-      .in('status', ['due_soon','due_now','overdue'])
+      .gte('ripeness_pct', 80)
+      .lte('ripeness_pct', 130)
       .order('ripeness_pct', { ascending: false })
       .limit(12);
     if (error) throw error;
     const rows = data || [];
     countEl.textContent = rows.length;
-    if (!rows.length) { el.innerHTML = '<div class="empty-msg">Nobody due just yet</div>'; return; }
+    if (!rows.length) { el.innerHTML = '<div class="empty-msg">Nobody in the 80–130% window right now</div>'; return; }
 
     const fmtWk = (iso) => {
       if (!iso) return '—';
@@ -341,19 +347,24 @@ async function loadDueSoon() {
       const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       return 'wk of ' + String(d.getDate()).padStart(2,'0') + ' ' + MN[d.getMonth()];
     };
-    const col = (st) => st==='overdue' ? 'var(--red)' : st==='due_now' ? 'var(--amber)' : 'var(--green-dark)';
+    // Colour by where they sit in the 80–130 band, since every row here is
+    // now within that range and the status label no longer distinguishes them.
+    //   80–99   approaching      green
+    //   100–114 at the point     amber
+    //   115–130 just past it     red
+    const col = (pct) => pct >= 115 ? 'var(--red)' : pct >= 100 ? 'var(--amber)' : 'var(--green-dark)';
 
     el.innerHTML = rows.map(r => `
       <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--gray-light);">
         <div style="min-width:64px;text-align:center;">
-          <div style="font-size:11px;font-weight:800;color:${col(r.status)};">${r.ripeness_pct!=null?r.ripeness_pct+'%':'—'}</div>
+          <div style="font-size:11px;font-weight:800;color:${col(r.ripeness_pct)};">${r.ripeness_pct!=null?r.ripeness_pct+'%':'—'}</div>
           <div style="font-size:9px;color:var(--gray-text);">${fmtWk(r.next_due_date)}</div>
         </div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:12px;font-weight:700;">${r.customer}</div>
           <div style="font-size:10px;color:var(--gray-text);">every ${r.avg_cycle_days||'?'}d · last ${r.days_since_last||0}d ago</div>
         </div>
-        <div style="font-size:11px;font-weight:700;font-family:var(--mono);color:${col(r.status)};">${r.avg_litres?Math.round(r.avg_litres).toLocaleString()+' L':'—'}</div>
+        <div style="font-size:11px;font-weight:700;font-family:var(--mono);color:${col(r.ripeness_pct)};">${r.avg_litres?Math.round(r.avg_litres).toLocaleString()+' L':'—'}</div>
       </div>`).join('');
   } catch (e) {
     el.innerHTML = '<div class="empty-msg">Due-soon data unavailable</div>';
