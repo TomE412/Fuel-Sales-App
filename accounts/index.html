@@ -85,6 +85,16 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .lost-btn{padding:5px 10px;background:#fff;border:1.5px solid var(--red);color:var(--red);border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
 .lost-btn:hover{background:var(--red);color:#fff;}
 .upd-cell{display:flex;gap:5px;flex-wrap:wrap;}
+.upd-btn{padding:5px 12px;background:#fff;border:1.5px solid var(--blue);color:var(--blue);border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.upd-btn:hover{background:var(--blue);color:#fff;}
+.uchoice{display:flex;flex-direction:column;gap:8px;margin-bottom:4px;}
+.uopt{display:flex;gap:10px;align-items:flex-start;padding:12px;border:1.5px solid var(--gray-border);border-radius:9px;cursor:pointer;background:#fff;text-align:left;font-family:var(--font);}
+.uopt:hover{border-color:var(--blue);background:var(--blue-light);}
+.uopt .ico{font-size:17px;line-height:1.1;flex-shrink:0;}
+.uopt .t{font-size:13px;font-weight:700;color:var(--text);}
+.uopt .d{font-size:11px;color:var(--gray-text);line-height:1.45;margin-top:2px;}
+.uback{background:none;border:none;color:var(--gray-text);font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;padding:0;margin-bottom:10px;}
+.uback:hover{color:var(--text);}
 .conf-btn{padding:5px 10px;background:#fff;border:1.5px solid var(--green,#2e7d32);color:var(--green-dark,#2e7d32);border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
 .conf-btn:hover{background:var(--green,#2e7d32);color:#fff;}
 .conf-btn:disabled{opacity:0.5;cursor:default;}
@@ -960,10 +970,7 @@ function renderRetention(){
       '<td class="mono">'+(r.avg_cycle_days||'?')+'d</td>'+
       '<td class="mono" style="font-weight:700;color:'+pctCol+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</td>'+
       '<td class="mono">'+Math.round(r.total_litres||0).toLocaleString()+'</td>'+
-      '<td><div class="upd-cell">'+
-        '<button class="lost-btn" onclick="openLost(\''+cust+'\')">Lost sale</button>'+
-        (r.lost_last_round?'<button class="conf-btn" onclick="confirmSale(\''+cust+'\')">Sale confirmed</button>':'')+
-      '</div></td>'+
+      '<td><button class="upd-btn" onclick="openUpdate(\''+cust+'\')">Update</button></td>'+
     '</tr>';
   }).join('');
 }
@@ -971,6 +978,182 @@ function renderRetention(){
 setInterval(()=>{if(document.getElementById('acc-wrap').classList.contains('active'))fetchData();},60000);
 
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
+
+// ===== UPDATE (three-way: sold / lost / link name) =====
+let updCustomer=null;
+
+function openUpdate(customer){
+  updCustomer=customer;
+  document.getElementById('upd-who').textContent=customer;
+  document.getElementById('usold-who').textContent=customer;
+  document.getElementById('ulink-who').textContent=customer;
+  uShow('choose');
+  document.getElementById('updm').classList.add('on');
+}
+function closeUpdate(){
+  document.getElementById('updm').classList.remove('on');
+  updCustomer=null;
+}
+function uShow(pane){
+  ['choose','sold','link'].forEach(p=>{
+    document.getElementById('upane-'+p).style.display = (p===pane)?'block':'none';
+  });
+}
+function uBack(){ uShow('choose'); }
+
+async function uGo(what){
+  if(what==='lost'){
+    // Hand off to the existing lost-sale modal.
+    const c=updCustomer;
+    closeUpdate();
+    openLost(c);
+    return;
+  }
+  if(what==='sold'){
+    document.getElementById('usold-date').value=new Date().toISOString().split('T')[0];
+    document.getElementById('usold-litres').value='';
+    document.getElementById('usold-price').value='';
+    document.getElementById('usold-notes').value='';
+    document.getElementById('usold-tba').checked=false;
+    document.getElementById('usold-price').disabled=false;
+    document.getElementById('usold-err').textContent='';
+    await loadRepPicker();
+    uShow('sold');
+    return;
+  }
+  if(what==='link'){
+    document.getElementById('ulink-alias').value='';
+    document.getElementById('ulink-err').textContent='';
+    document.getElementById('ulink-current').textContent='';
+    // Show what (if anything) is already linked for this customer.
+    try{
+      const {data}=await sb.from('customer_locations')
+        .select('app_name').ilike('invoice_name',updCustomer).limit(1).maybeSingle();
+      if(data&&data.app_name){
+        document.getElementById('ulink-current').innerHTML=
+          'Currently linked to: <b>'+data.app_name+'</b>. Saving will replace it.';
+      }
+    }catch(_){}
+    uShow('link');
+    return;
+  }
+}
+
+function uTBA(){
+  const on=document.getElementById('usold-tba').checked;
+  const p=document.getElementById('usold-price');
+  p.disabled=on;
+  if(on) p.value='';
+}
+
+// Load the rep list into the back-entry picker. Values are "id|name" so we
+// can set both rep_id (for commission) and rep_name (for display).
+let REPS=[];
+async function loadRepPicker(){
+  const sel=document.getElementById('usold-rep');
+  if(REPS.length){ return; }
+  try{
+    const {data,error}=await sb.from('profiles')
+      .select('id,full_name,role').eq('role','rep').order('full_name');
+    if(error) throw error;
+    REPS=data||[];
+    sel.innerHTML = REPS.length
+      ? REPS.map(r=>'<option value="'+r.id+'">'+(r.full_name||'(unnamed rep)')+'</option>').join('')
+      : '<option value="">No reps found</option>';
+  }catch(e){
+    sel.innerHTML='<option value="">Could not load reps</option>';
+  }
+}
+
+// Record a sale that happened but was never logged by the rep.
+async function saveSold(){
+  const err=document.getElementById('usold-err');
+  err.textContent='';
+  if(!updCustomer){ err.textContent='No customer.'; return; }
+
+  const d=document.getElementById('usold-date').value;
+  const litres=parseFloat(document.getElementById('usold-litres').value);
+  const tba=document.getElementById('usold-tba').checked;
+  const price=parseFloat(document.getElementById('usold-price').value);
+  const notes=(document.getElementById('usold-notes').value||'').trim()||null;
+  const repId=document.getElementById('usold-rep').value||null;
+
+  if(!d){ err.textContent='Pick the date of the sale.'; return; }
+  if(d>new Date().toISOString().split('T')[0]){ err.textContent='That date is in the future.'; return; }
+  if(!litres||litres<=0){ err.textContent='Enter how many litres.'; return; }
+  if(!tba && (!price||price<=0)){ err.textContent='Enter the price, or tick TBA.'; return; }
+  if(!repId){ err.textContent='Pick which rep made the sale.'; return; }
+
+  const rep=REPS.find(r=>r.id===repId);
+  const repName=(rep&&rep.full_name)?rep.full_name:'Unknown rep';
+
+  try{
+    let cid=null;
+    try{
+      const {data:cl}=await sb.from('customer_locations')
+        .select('id').ilike('invoice_name',updCustomer).limit(1).maybeSingle();
+      if(cl) cid=cl.id;
+    }catch(_){}
+
+    // Who is actually keying this in (for the audit trail).
+    const {data:{user}}=await sb.auth.getUser();
+    let enteredBy=null;
+    if(user){
+      const {data:prof}=await sb.from('profiles').select('full_name').eq('id',user.id).maybeSingle();
+      enteredBy=prof?.full_name||user.email||null;
+    }
+
+    const {error}=await sb.from('sales').insert({
+      rep_id: repId,
+      rep_name: repName,
+      customer:updCustomer,
+      customer_id:cid,
+      sale_date:d,
+      litres:litres,
+      price_per_litre: tba?0:price,
+      price_tba: tba,
+      back_entered:true,
+      back_entered_by: enteredBy||'Accounts',
+      notes:notes,
+      payment_term:'COD',
+      paid:true,
+      status:'confirmed'
+    });
+    if(error) throw error;
+
+    closeUpdate();
+    await loadRetention();
+    if(typeof loadBook==='function') await loadBook();
+    await fetchData();
+  }catch(e){ err.textContent=e.message||String(e); }
+}
+
+// Link the name reps type in the app to this canonical customer.
+async function saveLink(){
+  const err=document.getElementById('ulink-err');
+  err.textContent='';
+  if(!updCustomer){ err.textContent='No customer.'; return; }
+  const alias=(document.getElementById('ulink-alias').value||'').trim();
+  if(!alias){ err.textContent='Enter the name the reps use.'; return; }
+  if(alias.toLowerCase()===updCustomer.toLowerCase()){
+    err.textContent='That is already this customer\u2019s name — no link needed.';
+    return;
+  }
+  try{
+    const {data:cl,error:e1}=await sb.from('customer_locations')
+      .select('id').ilike('invoice_name',updCustomer).limit(1).maybeSingle();
+    if(e1) throw e1;
+    if(!cl){ err.textContent='This customer is not in the canonical list, so there is nothing to link to.'; return; }
+
+    const {error:e2}=await sb.from('customer_locations')
+      .update({app_name:alias}).eq('id',cl.id);
+    if(e2) throw e2;
+
+    closeUpdate();
+    await loadRetention();
+    if(typeof loadBook==='function') await loadBook();
+  }catch(e){ err.textContent=e.message||String(e); }
+}
 
 // ===== LOST SALE =====
 let lostCustomer=null, lostReason='pricing';
@@ -1055,6 +1238,99 @@ async function confirmSale(customer){
   }catch(e){ alert('Could not confirm sale: '+(e.message||e)); }
 }
 </script>
+
+<!-- UPDATE MODAL -->
+<div class="lmodal" id="updm">
+  <div class="lbox">
+
+    <!-- PANE 1: choose what happened -->
+    <div id="upane-choose">
+      <h2>Update</h2>
+      <div class="lsub" id="upd-who">—</div>
+      <div class="uchoice">
+        <button class="uopt" onclick="uGo('sold')">
+          <span class="ico">✅</span>
+          <span><span class="t">We sold to them</span>
+          <span class="d">The sale happened, the rep just didn't log it. Records a real sale — fixes their reorder clock and counts toward volume.</span></span>
+        </button>
+        <button class="uopt" onclick="uGo('lost')">
+          <span class="ico">❌</span>
+          <span><span class="t">We lost the sale</span>
+          <span class="d">They bought, but not from us. Keeps their rhythm alive without adding litres.</span></span>
+        </button>
+        <button class="uopt" onclick="uGo('link')">
+          <span class="ico">🔗</span>
+          <span><span class="t">Reps use a different name for them</span>
+          <span class="d">Their sales are being logged under another spelling, so they look quiet. Link it once and past and future sales both match.</span></span>
+        </button>
+      </div>
+      <div class="lrow"><button class="no" onclick="closeUpdate()">Cancel</button></div>
+    </div>
+
+    <!-- PANE 2: record a sale we made -->
+    <div id="upane-sold" style="display:none;">
+      <button class="uback" onclick="uBack()">‹ Back</button>
+      <h2>Record a sale</h2>
+      <div class="lsub" id="usold-who">—</div>
+      <div style="background:var(--green-light);border:1px solid var(--green-dark);border-radius:9px;padding:10px;font-size:11px;line-height:1.55;color:var(--green-dark);margin-bottom:16px;">
+        For a sale that <b>did happen</b> but never made it into the app. It counts as a normal sale for volume and resets their clock — and is flagged as back-entered so you can see how often logging gets missed.
+      </div>
+      <div class="lfld">
+        <label>Date of the sale</label>
+        <input type="date" id="usold-date">
+      </div>
+      <div class="lfld">
+        <label>Litres</label>
+        <input type="number" id="usold-litres" placeholder="e.g. 5000">
+      </div>
+      <div class="lfld">
+        <label>Price / litre ($)</label>
+        <input type="number" id="usold-price" step="0.001" placeholder="e.g. 1.94">
+        <label class="uchk" style="display:flex;align-items:center;gap:7px;margin-top:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:600;color:var(--gray-text);">
+          <input type="checkbox" id="usold-tba" onchange="uTBA()" style="width:auto;margin:0;">
+          <span style="font-size:11px;">Price still to be agreed (TBA)</span>
+        </label>
+      </div>
+      <div class="lfld">
+        <label>Which rep made this sale?</label>
+        <select id="usold-rep" style="width:100%;padding:10px 11px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;font-family:var(--font);font-size:13px;outline:none;"></select>
+        <div style="font-size:10px;color:var(--gray-text);margin-top:4px;">Commission follows the rep, so pick the person who actually made the sale.</div>
+      </div>
+      <div class="lfld">
+        <label>Notes</label>
+        <input type="text" id="usold-notes" placeholder="optional, e.g. phoned in, rep on leave">
+      </div>
+      <div class="lrow">
+        <button class="no" onclick="closeUpdate()">Cancel</button>
+        <button class="go" style="background:var(--green-dark);" onclick="saveSold()">Record sale</button>
+      </div>
+      <div class="lerr" id="usold-err"></div>
+    </div>
+
+    <!-- PANE 3: link a name -->
+    <div id="upane-link" style="display:none;">
+      <button class="uback" onclick="uBack()">‹ Back</button>
+      <h2>Link a name</h2>
+      <div class="lsub" id="ulink-who">—</div>
+      <div style="background:var(--blue-light);border:1px solid var(--blue);border-radius:9px;padding:10px;font-size:11px;line-height:1.55;color:var(--blue-dark);margin-bottom:16px;">
+        If reps type this customer's name differently in the app, their sales don't match up and the customer looks quiet.
+        Enter <b>exactly what the reps type</b> and it will be linked to this customer from now on — and their past sales will match too.
+      </div>
+      <div class="lfld">
+        <label>Name the reps use in the app</label>
+        <input type="text" id="ulink-alias" placeholder="e.g. Border Timber Ltd">
+        <div style="font-size:10px;color:var(--gray-text);margin-top:4px;">Spelling matters, but capitals and extra spaces don't.</div>
+      </div>
+      <div id="ulink-current" style="font-size:11px;color:var(--gray-text);margin-bottom:10px;"></div>
+      <div class="lrow">
+        <button class="no" onclick="closeUpdate()">Cancel</button>
+        <button class="go" style="background:var(--blue);" onclick="saveLink()">Link it</button>
+      </div>
+      <div class="lerr" id="ulink-err"></div>
+    </div>
+
+  </div>
+</div>
 
 <!-- LOST SALE MODAL -->
 <div class="lmodal" id="lostm">
