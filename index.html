@@ -88,6 +88,8 @@ textarea:focus{border-color:var(--red);background:#fff;}
 .sale-customer{font-size:15px;font-weight:700;}
 .sale-meta{font-size:12px;color:var(--text3);margin-top:3px;}
 .sale-litres{font-size:16px;font-weight:700;font-family:var(--mono);color:var(--green-dark);}
+.sale-price{font-size:13px;font-weight:700;font-family:var(--mono);color:var(--text);margin-top:1px;}
+.sale-unit{font-size:10px;font-weight:600;font-family:var(--mono);color:var(--text3);margin-top:1px;}
 .pill{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:5px;vertical-align:middle;}
 .p-diesel{background:var(--blue-light);color:#0C447C;}
 .p-petrol{background:var(--red-light);color:var(--red-dark);}
@@ -1392,6 +1394,21 @@ async function markDelivered(id) {
 }
 
 // ---- RENDER ----
+// Price shown under the litres on each sale row: total value, with the
+// unit price beneath it. A TBA sale has no agreed price yet, so show that
+// rather than a misleading $0.
+function salePriceHtml(litres, price, tba) {
+  if (tba) {
+    return `<div class="sale-price" style="color:var(--amber);">Price TBA</div>`;
+  }
+  const p = parseFloat(price) || 0;
+  const l = parseFloat(litres) || 0;
+  if (!p) return '';
+  const value = l * p;
+  return `<div class="sale-price">$${value.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+          <div class="sale-unit">$${p.toFixed(3)}/L</div>`;
+}
+
 function renderSales() {
   const el = document.getElementById('sales-list');
 
@@ -1404,7 +1421,10 @@ function renderSales() {
     return `<div class="sale-row" style="border-left:3px solid var(--amber);">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div class="sale-customer">${p.customer}${fuelPill}${pendingPill}</div>
-        <div class="sale-litres">${(p.litres||0).toLocaleString()} L</div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div class="sale-litres">${(p.litres||0).toLocaleString()} L</div>
+          ${salePriceHtml(p.litres, p.price_per_litre, p.price_tba)}
+        </div>
       </div>
       <div class="sale-meta">${p.location||'—'} · ${fmtDate(p.sale_date)} · ${p.payment_term}</div>
       <div class="sale-meta">Del: ${fmtDate(p.delivery_date)} · Pay due: ${fmtDate(p.payment_due)}</div>
@@ -1424,6 +1444,7 @@ function renderSales() {
     const cancelledPill = s.status === 'cancelled' ? `<span class="pill" style="background:#F0F0EE;color:#5a5a57;">✗ Cancelled</span>` : '';
     const tbaPill = s.price_tba ? `<span class="pill" style="background:#FBE7CF;color:#8a5a10;">⏳ Price TBA</span>` : '';
     const isCancelled = s.status === 'cancelled';
+    const priceHtml = salePriceHtml(s.litres, s.price_per_litre, s.price_tba);
     const delBtn = !delivered && !isCancelled && s.delivery_date ?
       `<button class="del-btn" onclick="markDelivered(${s.id})">🚛 Mark as delivered</button>` : '';
     const paidBtn = !s.paid && !isCancelled && s.payment_term !== 'COD' ?
@@ -1433,7 +1454,10 @@ function renderSales() {
     return `<div class="sale-row" style="opacity:${(delivered||isCancelled)?'0.6':'1'}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div class="sale-customer" style="${(delivered||isCancelled)?'text-decoration:line-through;color:var(--text3);':''}">${s.customer}${fuelPill}${delPill}${paidPill}${cancelledPill}${tbaPill}</div>
-        <div class="sale-litres">${(s.litres||0).toLocaleString()} L</div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div class="sale-litres">${(s.litres||0).toLocaleString()} L</div>
+          ${priceHtml}
+        </div>
       </div>
       <div class="sale-meta">${s.location||'—'} · ${fmtDate(s.sale_date)} · ${s.payment_term}</div>
       <div class="sale-meta">Del: ${fmtDate(s.delivery_date)} · Pay due: ${fmtDate(s.payment_due)}</div>
