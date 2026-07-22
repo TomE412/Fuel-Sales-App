@@ -225,7 +225,7 @@ textarea:focus{border-color:var(--red);background:#fff;}
       <div class="topbar-title">⛽ Fuel Sales</div>
       <div class="topbar-user" id="user-name-display">—</div>
     </div>
-    <div id="sync-badge" class="sync-badge">Ready</div>
+    <div id="sync-badge" class="sync-badge" onclick="retrySync()" style="cursor:pointer;" title="Tap to try uploading now">Ready</div>
   </div>
   <div class="tabs" style="grid-template-columns:repeat(5,1fr);">
     <div class="tab active" onclick="showTab('record',this)">📝 Record</div>
@@ -389,6 +389,7 @@ textarea:focus{border-color:var(--red);background:#fff;}
       <div style="font-size:14px;color:var(--text2);margin-bottom:4px;" id="more-name">—</div>
       <div style="font-size:12px;color:var(--text3);" id="more-email">—</div>
       <div style="font-size:12px;color:var(--text3);margin-top:2px;" id="more-role">—</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px;font-family:var(--mono);" id="more-version">—</div>
     </div>
 
     <div class="card" id="report-card" style="display:none;">
@@ -537,6 +538,12 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let currentUser = null;
 let currentProfile = null;
 let allSales = [];
+// ---- APP VERSION ----
+// Bump this on every release. It shows in the More tab, so when a rep
+// reports a problem you can ask what it says and know instantly whether
+// they are on the current build or a stale cached one.
+const APP_VERSION = 'v12 — 21 Jul 2026';
+
 let curFuel = 'Diesel';
 let curTerm = 'COD';
 let curFollowup = 'none';
@@ -1342,21 +1349,68 @@ function queueSale(payload) {
   saveQueue(q);
 }
 
+// Tapping the sync badge forces an upload attempt. This is what someone
+// naturally does when they see a stuck hourglass, so make it actually work
+// and always give a clear answer.
+async function retrySync() {
+  const n = getQueue().length;
+  if (!n) {
+    alert('Nothing waiting to upload — everything is saved to the system.');
+    return;
+  }
+  // Clear the one-time warnings so a real problem is reported again.
+  syncQueue._warned = false;
+  syncQueue._authWarned = false;
+  setSyncBadge('loading');
+  await syncQueue();
+  const left = getQueue().length;
+  if (left === 0) {
+    alert('Uploaded. ' + n + (n === 1 ? ' sale is' : ' sales are') + ' now in the system.');
+  } else if (left < n) {
+    alert('Uploaded ' + (n - left) + ' of ' + n + '. ' + left + ' still waiting.');
+  }
+  // If nothing uploaded, syncQueue has already explained why.
+}
+
 async function syncQueue() {
   const q = getQueue();
   if (!q.length) return;
   if (!currentUser) return;
 
-  // Make sure we still have a valid auth session before writing
+  // Make sure we still have a valid auth session before writing.
+  // A rep who unlocks with a PIN can go days without a fresh login, so the
+  // token may have expired. Try to refresh it rather than silently giving up
+  // (which would leave the hourglass stuck forever on a perfect connection).
   let sess;
   try {
     ({ data: sess } = await withTimeout(sb.auth.getSession(), 6000));
   } catch (e) { return; }  // couldn't check — try again later
-  if (!sess || !sess.session) return; // not authenticated — try again later
+
+  if (!sess || !sess.session) {
+    try {
+      const { data: refreshed } = await withTimeout(sb.auth.refreshSession(), 8000);
+      if (refreshed && refreshed.session) {
+        sess = refreshed;
+      } else {
+        throw new Error('no session');
+      }
+    } catch (e) {
+      // Genuinely signed out. Tell them once — the sales are still safe.
+      setSyncBadge('queued');
+      if (!syncQueue._authWarned) {
+        syncQueue._authWarned = true;
+        alert('Your session has expired, so saved sales cannot upload yet.\n\n' +
+              'Nothing is lost — please sign in with your email and password ' +
+              'from the More menu, and they will upload automatically.');
+      }
+      return;
+    }
+  }
 
   const remaining = [];
   let syncedCount = 0;
   let networkDown = false;
+  let lastError = null;
 
   for (const item of q) {
     // If the connection has already proved dead, don't sit through a timeout
@@ -1367,9 +1421,19 @@ async function syncQueue() {
       if (error) throw error;
       syncedCount++;
     } catch (e) {
-      remaining.push(item);
-      // A timeout means the network is the problem, not this particular sale.
-      if (e && /timeout/i.test(e.message || '')) networkDown = true;
+      const msg = (e && e.message) || String(e);
+      if (/timeout/i.test(msg)) {
+        // Network problem, not this sale. Keep everything and retry later.
+        networkDown = true;
+        remaining.push(item);
+      } else {
+        // The server actively REJECTED this sale. Retrying will never fix it,
+        // so record why and mark it, rather than silently looping forever.
+        item._error = msg;
+        item._attempts = (item._attempts || 0) + 1;
+        lastError = msg;
+        remaining.push(item);
+      }
     }
   }
 
@@ -1381,6 +1445,18 @@ async function syncQueue() {
     await loadSales();
   }
   setSyncBadge(remaining.length === 0 ? 'synced' : 'queued');
+  renderSales();
+
+  // If a sale is being rejected (not just offline), say so once — otherwise
+  // the rep stares at an hourglass with no idea anything is wrong.
+  if (lastError && !networkDown) {
+    console.warn('Sync rejected:', lastError);
+    if (!syncQueue._warned) {
+      syncQueue._warned = true;
+      alert('A saved sale could not be uploaded:\n\n' + lastError +
+            '\n\nIt is still stored on this phone. Please show this message to Tom.');
+    }
+  }
 }
 
 async function markDelivered(id) {
@@ -1798,6 +1874,13 @@ function setSyncBadge(state) {
 
 // ---- INIT ----
 // Check for existing session on load
+// Show the build version immediately, however the app was opened
+// (fresh login, PIN unlock, or offline resume).
+(function(){
+  const v = document.getElementById('more-version');
+  if (v) v.textContent = APP_VERSION;
+})();
+
 sb.auth.getSession().then(async ({ data }) => {
   // NOTE: getSession() reads from local storage and SUCCEEDS even when
   // offline — it does not throw. So all offline handling has to live
