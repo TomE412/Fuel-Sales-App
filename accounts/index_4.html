@@ -127,7 +127,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .repgrp{border-bottom:1px solid var(--gray-border);}
 .repgrp:last-child{border-bottom:none;}
 .rephdr{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 16px;background:var(--gray-light);font-size:12px;font-weight:700;flex-wrap:wrap;}
-.gaprow{display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--gray-light);}
+.gaprow{display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--gray-light);cursor:pointer;}
+.mpill{display:inline-block;font-size:8px;font-weight:700;padding:1px 5px;border-radius:99px;background:var(--blue-light);color:var(--blue-dark);margin-left:5px;vertical-align:middle;}
 .gaprow:last-child{border-bottom:none;}
 .gaprow:hover{background:#FAFAF8;}
 .gaprow.bought{background:#F2F8EA;border-left:3px solid var(--green-dark);}
@@ -959,6 +960,122 @@ function switchView(v){
   if(v==='reps' && !gapsLoaded){ loadGaps(); }
 }
 
+// ===== CUSTOMER EDITOR (rep assignment + details) =====
+let ceCustomer = null, ceRow = null, CE_PLACES = [];
+
+async function openCustEdit(customer){
+  ceCustomer = customer;
+  document.getElementById('ce-who').textContent = customer;
+  document.getElementById('ce-err').textContent = '';
+  document.getElementById('custm').classList.add('on');
+
+  // Reps for the dropdown (reuse the same loader as back-entry).
+  await loadRepPicker();
+  const gap = GAPS.find(g=>g.customer===customer);
+  const sel = document.getElementById('ce-rep');
+  const calc = gap && gap.calculated_rep ? gap.calculated_rep : null;
+  sel.innerHTML =
+    '<option value="">Automatic'+(calc?' — currently '+calc:' — no sales yet')+'</option>' +
+    REPS.map(r=>'<option value="'+(r.full_name||'')+'">'+(r.full_name||'(unnamed)')+'</option>').join('');
+
+  // Places for the main-location dropdown.
+  if(!CE_PLACES.length){
+    try{
+      const {data} = await sb.from('place_coords').select('place').order('place');
+      CE_PLACES = (data||[]).map(p=>p.place);
+    }catch(_){ CE_PLACES = []; }
+  }
+
+  // Load this customer's current stored details.
+  try{
+    const {data, error} = await sb.from('app_customer_edit')
+      .select('id,invoice_name,assigned_rep,town,delivery_type,primary_place,site_count')
+      .ilike('invoice_name', customer).limit(1).maybeSingle();
+    if(error) throw error;
+
+    if(!data){
+      ceRow = null;
+      document.getElementById('ce-err').textContent =
+        'This customer is not in the canonical list, so details cannot be saved yet.';
+      document.getElementById('ce-town').value = '';
+      document.getElementById('ce-place').innerHTML = '<option value="">—</option>';
+      return;
+    }
+    ceRow = data;
+    sel.value = data.assigned_rep || '';
+    document.getElementById('ce-town').value = data.town || '';
+    document.getElementById('ce-delivery').value = data.delivery_type || 'delivery';
+
+    // Their existing sites first, then every other known place.
+    const {data:sites} = await sb.from('customer_sites')
+      .select('place').eq('customer_id', data.id).order('is_primary',{ascending:false});
+    const theirs = (sites||[]).map(s=>s.place);
+    const others = CE_PLACES.filter(p=>!theirs.includes(p));
+    document.getElementById('ce-place').innerHTML =
+      '<option value="">— none set —</option>' +
+      (theirs.length?'<optgroup label="Their sites">'+theirs.map(p=>'<option>'+p+'</option>').join('')+'</optgroup>':'') +
+      (others.length?'<optgroup label="All places">'+others.map(p=>'<option>'+p+'</option>').join('')+'</optgroup>':'');
+    document.getElementById('ce-place').value = data.primary_place || '';
+
+    document.getElementById('ce-rep-hint').textContent = data.assigned_rep
+      ? 'Manually assigned. Choose "Automatic" to go back to whoever sells to them most.'
+      : 'Automatic uses whoever has sold to them most often. Pick a rep to override that.';
+  }catch(e){
+    document.getElementById('ce-err').textContent = e.message||String(e);
+  }
+}
+
+function closeCustEdit(){
+  document.getElementById('custm').classList.remove('on');
+  ceCustomer = null; ceRow = null;
+}
+
+async function saveCustEdit(){
+  const err = document.getElementById('ce-err');
+  err.textContent = '';
+  if(!ceRow){ err.textContent = 'Nothing to save for this customer.'; return; }
+
+  const rep      = document.getElementById('ce-rep').value || null;
+  const town     = (document.getElementById('ce-town').value||'').trim() || null;
+  const delivery = document.getElementById('ce-delivery').value || 'delivery';
+  const place    = document.getElementById('ce-place').value || null;
+
+  try{
+    const {data:{user}} = await sb.auth.getUser();
+    let who = null;
+    if(user){
+      const {data:prof} = await sb.from('profiles').select('full_name').eq('id',user.id).maybeSingle();
+      who = prof?.full_name || user.email || null;
+    }
+    const repId = rep ? (REPS.find(r=>r.full_name===rep)?.id || null) : null;
+
+    const {error} = await sb.from('customer_locations').update({
+      assigned_rep:    rep,
+      assigned_rep_id: repId,
+      assigned_at:     rep ? new Date().toISOString() : null,
+      assigned_by:     rep ? who : null,
+      town:            town,
+      delivery_type:   delivery
+    }).eq('id', ceRow.id);
+    if(error) throw error;
+
+    // Main location: flag the chosen site as primary, clear the others.
+    if(place){
+      await sb.from('customer_sites').update({is_primary:false}).eq('customer_id', ceRow.id);
+      const {data:existing} = await sb.from('customer_sites')
+        .select('id').eq('customer_id', ceRow.id).eq('place', place).limit(1).maybeSingle();
+      if(existing){
+        await sb.from('customer_sites').update({is_primary:true}).eq('id', existing.id);
+      }else{
+        await sb.from('customer_sites').insert({customer_id:ceRow.id, place:place, is_primary:true});
+      }
+    }
+
+    closeCustEdit();
+    await loadGaps();
+  }catch(e){ err.textContent = e.message||String(e); }
+}
+
 // ===== BY REP — WHO HASN'T BOUGHT THIS MONTH =====
 let GAPS = [];
 let gapsLoaded = false;
@@ -967,7 +1084,7 @@ let gapFilter = 'all';
 async function loadGaps(){
   try{
     const { data, error } = await sb.from('app_rep_gaps')
-      .select('customer,rep,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,next_due_date,order_count,lost_last_round,bought_this_month,gap_status');
+      .select('customer,rep,rep_is_manual,calculated_rep,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,next_due_date,order_count,lost_last_round,bought_this_month,gap_status');
     if(error) throw error;
     GAPS = data||[];
     gapsLoaded = true;
@@ -1051,9 +1168,11 @@ function renderGaps(){
         '</span>'+
       '</div>'+
       list.map(r=>
-        '<div class="gaprow'+(r.bought_this_month?' bought':'')+'">'+
+        '<div class="gaprow'+(r.bought_this_month?' bought':'')+'" onclick="openCustEdit(\''+
+          (r.customer||'').replace(/'/g,"\\'").replace(/"/g,'&quot;')+'\')">'+
           '<div style="flex:1;min-width:0;">'+
             '<div style="font-weight:700;font-size:13px;">'+r.customer+
+              (r.rep_is_manual?'<span class="mpill" title="Manually assigned">assigned</span>':'')+
               (r.lost_last_round?'<span class="lostflag">lost last</span>':'')+'</div>'+
             '<div style="font-size:11px;color:var(--gray-text);">'+
               'last '+fmtD(r.last_order)+' · '+(r.days_since_last||0)+'d ago'+
@@ -1410,6 +1529,48 @@ async function confirmSale(customer){
   }catch(e){ alert('Could not confirm sale: '+(e.message||e)); }
 }
 </script>
+
+<!-- CUSTOMER EDIT MODAL -->
+<div class="lmodal" id="custm">
+  <div class="lbox">
+    <h2>Customer details</h2>
+    <div class="lsub" id="ce-who">—</div>
+
+    <div class="lfld">
+      <label>Assigned rep</label>
+      <select id="ce-rep" style="width:100%;padding:10px 11px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;font-family:var(--font);font-size:13px;outline:none;"></select>
+      <div style="font-size:10px;color:var(--gray-text);margin-top:4px;line-height:1.45;" id="ce-rep-hint"></div>
+    </div>
+
+    <div class="lfld">
+      <label>Town</label>
+      <input type="text" id="ce-town" placeholder="e.g. Mutare">
+    </div>
+
+    <div class="lfld">
+      <label>Delivery type</label>
+      <select id="ce-delivery" style="width:100%;padding:10px 11px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;font-family:var(--font);font-size:13px;outline:none;">
+        <option value="delivery">Delivery</option>
+        <option value="collection">Collection</option>
+      </select>
+      <div style="font-size:10px;color:var(--gray-text);margin-top:4px;">Collection customers are left off the route map.</div>
+    </div>
+
+    <div class="lfld">
+      <label>Main location</label>
+      <select id="ce-place" style="width:100%;padding:10px 11px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;font-family:var(--font);font-size:13px;outline:none;"></select>
+      <div style="font-size:10px;color:var(--gray-text);margin-top:4px;line-height:1.45;">
+        Sets which of their sites is the main one. To add a brand-new place, use the ➕ on the ops map.
+      </div>
+    </div>
+
+    <div class="lrow">
+      <button class="no" onclick="closeCustEdit()">Cancel</button>
+      <button class="go" style="background:var(--blue);" onclick="saveCustEdit()">Save</button>
+    </div>
+    <div class="lerr" id="ce-err"></div>
+  </div>
+</div>
 
 <!-- UPDATE MODAL -->
 <div class="lmodal" id="updm">
