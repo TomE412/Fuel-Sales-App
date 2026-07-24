@@ -124,6 +124,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .mark-paid-btn{padding:5px 10px;background:var(--green);color:#fff;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
 
 .empty-msg{padding:24px;text-align:center;color:var(--gray-text);font-size:13px;}
+.repgrp{border-bottom:1px solid var(--gray-border);}
+.repgrp:last-child{border-bottom:none;}
+.rephdr{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 16px;background:var(--gray-light);font-size:12px;font-weight:700;flex-wrap:wrap;}
+.gaprow{display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--gray-light);}
+.gaprow:last-child{border-bottom:none;}
+.gaprow:hover{background:#FAFAF8;}
+.gaprow.bought{background:#F2F8EA;border-left:3px solid var(--green-dark);}
+.gaprow.bought:hover{background:#EAF3DE;}
+.gpill{display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;}
 
 /* REPORT CARD */
 .report-controls{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;padding:14px 16px;}
@@ -177,6 +186,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
     <div class="view-tabs">
       <button class="view-tab active" id="vt-receivables" onclick="switchView('receivables')">💰 Receivables</button>
       <button class="view-tab" id="vt-retention" onclick="switchView('retention')">📉 Customer retention</button>
+      <button class="view-tab" id="vt-reps" onclick="switchView('reps')">👥 By rep</button>
     </div>
 
     <!-- ===== RECEIVABLES VIEW ===== -->
@@ -402,6 +412,50 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
         </div>
       </div>
     </div><!-- /view-retention -->
+
+    <!-- ===== BY REP VIEW ===== -->
+    <div id="view-reps" style="display:none;">
+      <div class="summary-grid" style="margin-bottom:14px;">
+        <div class="sum-card">
+          <div class="sum-label">Bought this month</div>
+          <div class="sum-value" id="g-bought" style="color:var(--green-dark);">0</div>
+          <div class="sum-sub">customers we have sold to</div>
+        </div>
+        <div class="sum-card">
+          <div class="sum-label">Not yet</div>
+          <div class="sum-value" id="g-not" style="color:var(--gray-text);">0</div>
+          <div class="sum-sub">no sale since the 1st</div>
+        </div>
+        <div class="sum-card">
+          <div class="sum-label">Overdue</div>
+          <div class="sum-value" id="g-overdue" style="color:var(--red);">0</div>
+          <div class="sum-sub">past their usual cycle</div>
+        </div>
+        <div class="sum-card">
+          <div class="sum-label">Due now</div>
+          <div class="sum-value" id="g-due" style="color:var(--amber);">0</div>
+          <div class="sum-sub">at their reorder point</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title" style="color:var(--blue);">👥 Customer list by rep</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-left:auto;">
+            <span class="bk-chip active" data-g="all" onclick="setGapFilter('all')">Everyone</span>
+            <span class="bk-chip" data-g="notyet" onclick="setGapFilter('notyet')">Not bought yet</span>
+            <span class="bk-chip" data-g="needs" onclick="setGapFilter('needs')">Needs a call</span>
+            <input type="text" id="gap-search" placeholder="Search customer..." oninput="renderGaps()"
+              style="padding:6px 10px;border:1px solid var(--gray-light);border-radius:7px;font-family:inherit;font-size:12px;width:170px;outline:none;">
+          </div>
+        </div>
+        <div style="padding:9px 16px;font-size:11px;color:var(--gray-text);border-bottom:1px solid var(--gray-light);line-height:1.5;">
+          Every customer, grouped by the rep who sells to them most often. Green rows have bought since the 1st.
+          <b>"Needs a call"</b> narrows to those with no sale this month who are also past their reorder point.
+        </div>
+        <div id="gap-groups"><div class="empty-msg">Loading…</div></div>
+      </div>
+    </div><!-- /view-reps -->
   </div>
 </div>
 
@@ -847,7 +901,9 @@ async function loadBook(){
 
 function setBookFilter(p){
   bookFilter = p;
-  [...document.querySelectorAll('.bk-chip')].forEach(x=>x.classList.toggle('active', x.dataset.p===p));
+  // Scoped to [data-p] so this does not clear the By-rep chips, which are
+  // also .bk-chip but use [data-g].
+  [...document.querySelectorAll('.bk-chip[data-p]')].forEach(x=>x.classList.toggle('active', x.dataset.p===p));
   renderBook();
 }
 
@@ -895,11 +951,127 @@ function renderBook(){
 function switchView(v){
   document.getElementById('view-receivables').style.display = v==='receivables'?'block':'none';
   document.getElementById('view-retention').style.display   = v==='retention'?'block':'none';
+  document.getElementById('view-reps').style.display        = v==='reps'?'block':'none';
   document.getElementById('vt-receivables').classList.toggle('active', v==='receivables');
   document.getElementById('vt-retention').classList.toggle('active', v==='retention');
+  document.getElementById('vt-reps').classList.toggle('active', v==='reps');
   if(v==='retention' && !retentionLoaded){ loadRetention(); loadMonthly(); loadBook(); }
+  if(v==='reps' && !gapsLoaded){ loadGaps(); }
 }
 
+// ===== BY REP — WHO HASN'T BOUGHT THIS MONTH =====
+let GAPS = [];
+let gapsLoaded = false;
+let gapFilter = 'all';
+
+async function loadGaps(){
+  try{
+    const { data, error } = await sb.from('app_rep_gaps')
+      .select('customer,rep,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,next_due_date,order_count,lost_last_round,bought_this_month,gap_status');
+    if(error) throw error;
+    GAPS = data||[];
+    gapsLoaded = true;
+    renderGaps();
+  }catch(e){
+    document.getElementById('gap-groups').innerHTML =
+      '<div class="empty-msg">Rep lists not available ('+(e.message||e)+')</div>';
+  }
+}
+
+function setGapFilter(g){
+  gapFilter = g;
+  [...document.querySelectorAll('.bk-chip[data-g]')].forEach(x=>x.classList.toggle('active', x.dataset.g===g));
+  renderGaps();
+}
+
+function renderGaps(){
+  const q = (document.getElementById('gap-search')?.value||'').toLowerCase().trim();
+
+  // Summary counts always reflect the WHOLE book, not the current filter,
+  // so the headline numbers don't move around as you click between chips.
+  const bought  = GAPS.filter(r=>r.bought_this_month).length;
+  const notYet  = GAPS.length - bought;
+  const overdue = GAPS.filter(r=>!r.bought_this_month && r.gap_status==='overdue').length;
+  const dueNow  = GAPS.filter(r=>!r.bought_this_month && r.gap_status==='due_now').length;
+  document.getElementById('g-bought').textContent  = bought;
+  document.getElementById('g-not').textContent     = notYet;
+  document.getElementById('g-overdue').textContent = overdue;
+  document.getElementById('g-due').textContent     = dueNow;
+
+  let rows = GAPS.filter(r=>{
+    if(q && !(r.customer||'').toLowerCase().includes(q)) return false;
+    if(gapFilter==='notyet') return !r.bought_this_month;
+    if(gapFilter==='needs')  return !r.bought_this_month && (r.gap_status==='overdue' || r.gap_status==='due_now');
+    return true;   // 'all' — the full book
+  });
+
+  const byRep = {};
+  rows.forEach(r=>{ (byRep[r.rep] = byRep[r.rep] || []).push(r); });
+
+  // Biggest books first; Unassigned always last.
+  const repNames = Object.keys(byRep).sort((a,b)=>{
+    if(a==='Unassigned') return 1;
+    if(b==='Unassigned') return -1;
+    return byRep[b].length - byRep[a].length;
+  });
+
+  const el = document.getElementById('gap-groups');
+  if(!repNames.length){
+    el.innerHTML = '<div class="empty-msg">'+(q?'No customer matches that search.':'No customers to show.')+'</div>';
+    return;
+  }
+
+  const statusPill = (r)=>{
+    if(r.bought_this_month) return '<span class="gpill" style="background:var(--green-light);color:var(--green-dark);">✓ bought</span>';
+    if(r.gap_status==='overdue')     return '<span class="gpill" style="background:var(--red-light);color:var(--red-dark);">overdue</span>';
+    if(r.gap_status==='due_now')     return '<span class="gpill" style="background:var(--amber-light);color:var(--amber);">due now</span>';
+    if(r.gap_status==='not_due_yet') return '<span class="gpill" style="background:var(--gray-light);color:var(--gray-text);">not due yet</span>';
+    return '<span class="gpill" style="background:var(--gray-light);color:var(--gray-text);">no pattern</span>';
+  };
+  const ripeCol = (r)=>{
+    if(r.ripeness_pct==null) return 'var(--gray-text)';
+    if(r.ripeness_pct>=125)  return 'var(--red)';
+    if(r.ripeness_pct>=85)   return 'var(--amber)';
+    return 'var(--green-dark)';
+  };
+
+  el.innerHTML = repNames.map(rep=>{
+    // Bought customers sink to the bottom of each rep's list, so the ones
+    // still needing attention are the first thing the eye lands on.
+    const list = byRep[rep].slice().sort((a,b)=>{
+      if(a.bought_this_month !== b.bought_this_month) return a.bought_this_month ? 1 : -1;
+      return (b.ripeness_pct||0)-(a.ripeness_pct||0);
+    });
+    const done = list.filter(r=>r.bought_this_month).length;
+    return '<div class="repgrp">'+
+      '<div class="rephdr">'+
+        '<span>'+(rep==='Unassigned'?'❓ Unassigned':'👤 '+rep)+'</span>'+
+        '<span style="font-weight:400;font-size:11px;color:var(--gray-text);">'+
+          done+' of '+list.length+' bought this month'+
+        '</span>'+
+      '</div>'+
+      list.map(r=>
+        '<div class="gaprow'+(r.bought_this_month?' bought':'')+'">'+
+          '<div style="flex:1;min-width:0;">'+
+            '<div style="font-weight:700;font-size:13px;">'+r.customer+
+              (r.lost_last_round?'<span class="lostflag">lost last</span>':'')+'</div>'+
+            '<div style="font-size:11px;color:var(--gray-text);">'+
+              'last '+fmtD(r.last_order)+' · '+(r.days_since_last||0)+'d ago'+
+              (r.avg_cycle_days?' · every '+r.avg_cycle_days+'d':'')+
+            '</div>'+
+          '</div>'+
+          '<div style="text-align:right;flex-shrink:0;min-width:78px;">'+
+            '<div class="mono" style="font-size:13px;font-weight:700;color:'+ripeCol(r)+';">'+
+              (r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</div>'+
+            '<div class="mono" style="font-size:10px;color:var(--gray-text);">'+
+              (r.avg_litres?Math.round(r.avg_litres).toLocaleString()+' L':'—')+'</div>'+
+          '</div>'+
+          '<div style="flex-shrink:0;min-width:74px;text-align:right;">'+statusPill(r)+'</div>'+
+        '</div>'
+      ).join('')+
+    '</div>';
+  }).join('');
+}
 // ===== CUSTOMER RETENTION =====
 let RETENTION = { gone_quiet:[], overdue:[], due_now:[], due_soon:[] };
 let retTab = 'gone_quiet';
