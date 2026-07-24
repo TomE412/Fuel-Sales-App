@@ -542,7 +542,7 @@ let allSales = [];
 // Bump this on every release. It shows in the More tab, so when a rep
 // reports a problem you can ask what it says and know instantly whether
 // they are on the current build or a stale cached one.
-const APP_VERSION = 'v12 — 21 Jul 2026';
+const APP_VERSION = 'v13 — 23 Jul 2026';
 
 let curFuel = 'Diesel';
 let curTerm = 'COD';
@@ -1836,9 +1836,10 @@ function setSyncBadge(state) {
     if (!admin) return;
     const rep = document.getElementById("rep-select");
     if (rep && !rep.dataset.filled) {
-      // Load rep names dynamically from profiles table (role = rep)
+      // Load rep names from profiles. Admins (Niel, Mack, Tom) sell fuel too,
+      // so they belong in this list alongside the dedicated reps.
       try {
-        const { data: repProfiles, error } = await sb.from('profiles').select('full_name').eq('role', 'rep').order('full_name');
+        const { data: repProfiles, error } = await sb.from('profiles').select('full_name').in('role', ['rep','admin']).order('full_name');
         if (!error && repProfiles && repProfiles.length) {
           REPS = repProfiles.map(p => p.full_name);
         } else {

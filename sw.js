@@ -13,7 +13,7 @@
 // and the .catch() hid it. Now each file is cached individually so a
 // missing icon can't take the whole app shell down with it.
 // ============================================================
-const CACHE = 'fuel-v12';
+const CACHE = 'fuel-v13';
 
 // index.html and './' are the same page but different cache keys — both needed.
 const CORE = [

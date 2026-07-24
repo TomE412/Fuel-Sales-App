@@ -741,7 +741,7 @@ async function setupReportControls(){
   // Load reps
   const rep=document.getElementById('rep-select');
   try{
-    const {data:reps}=await sb.from('profiles').select('full_name').eq('role','rep').order('full_name');
+    const {data:reps}=await sb.from('profiles').select('full_name').in('role',['rep','admin']).order('full_name');
     let names=(reps||[]).map(p=>p.full_name);
     if(!names.length){
       const {data:sr}=await sb.from('sales').select('rep_name');
@@ -1344,8 +1344,11 @@ async function loadRepPicker(){
   const sel=document.getElementById('usold-rep');
   if(REPS.length){ return; }
   try{
+    // Admins sell fuel too (Niel, Mack, Tom), so they belong in the rep
+    // lists alongside the dedicated reps — role is about permissions here,
+    // not about who does or doesn't sell.
     const {data,error}=await sb.from('profiles')
-      .select('id,full_name,role').eq('role','rep').order('full_name');
+      .select('id,full_name,role').in('role',['rep','admin']).order('full_name');
     if(error) throw error;
     REPS=data||[];
     sel.innerHTML = REPS.length
