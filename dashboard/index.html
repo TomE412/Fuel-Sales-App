@@ -52,13 +52,34 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 @media(max-width:767px){
   body{overflow-y:auto;}
   .wrap{display:flex;flex-direction:column;min-height:100vh;}
-  .main{display:flex;flex-direction:column;gap:10px;padding:10px;}
+  .main{display:flex;flex-direction:column;gap:10px;padding:8px;}
   .col-left,.col-right{display:flex;flex-direction:column;gap:10px;}
   .panel-body{overflow:visible;}
   .ticker{display:none;}
-  .header{padding:8px 12px!important;height:auto!important;}
-  .logo-img{height:36px!important;}
+  .header{padding:8px 12px!important;height:auto!important;flex-wrap:wrap;gap:6px;justify-content:center!important;}
+  .logo-img{height:32px!important;}
   .clock{font-size:18px!important;}
+  .date-txt{font-size:9px!important;}
+
+  /* The upcoming/delivered side-by-side split squishes badly on a phone —
+     stack it instead so each gets full width. */
+  .col-left > div[style*="grid-template-columns:1fr 1fr"]{
+    display:flex!important;flex-direction:column!important;
+  }
+
+  /* Cap the tall scrolling panels so the page doesn't become endless, but
+     give them enough room to be useful. */
+  .panel.scroll{max-height:60vh;}
+  .panel.scroll .panel-body{overflow-y:auto;max-height:52vh;}
+
+  /* Roomier tap targets — this is Munya marking deliveries with a thumb. */
+  .deliver-btn{padding:10px 14px!important;font-size:14px!important;}
+  .today-row,.order-row{padding:10px!important;}
+  .order-name{font-size:14px!important;}
+  .order-litres{font-size:15px!important;}
+
+  /* Let the wide summary grids wrap instead of overflowing. */
+  .summary-grid{grid-template-columns:1fr 1fr!important;}
 }
 
 .wrap{display:none;flex-direction:column;height:100vh;}
@@ -500,8 +521,12 @@ function renderAll() {
         <div style="flex:1;min-width:0;">
           <div class="order-name ${s.delivered?'delivered':''}">${s.customer}${fp}${dp}</div>
           <div class="order-meta">${s.location||'—'} · ${s.rep}</div>
+          ${s.notes?`<div style="font-size:11px;color:var(--text2);margin-top:3px;background:var(--gray-light);padding:4px 6px;border-radius:4px;border-left:2px solid var(--amber);">📝 ${s.notes}</div>`:''}
         </div>
-        <div class="order-litres" style="color:${s.delivered?'var(--gray-text)':'var(--green-dark)'}">${(s.litres||0).toLocaleString()} L</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+          <div class="order-litres" style="color:${s.delivered?'var(--gray-text)':'var(--green-dark)'}">${(s.litres||0).toLocaleString()} L</div>
+          ${s.delivered?'':`<button class="deliver-btn" onclick="markDelivered('${s.id}')">✓ Mark delivered</button>`}
+        </div>
       </div>`;
     }).join('');
   } else {
