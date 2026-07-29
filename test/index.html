@@ -281,6 +281,10 @@ textarea:focus{border-color:var(--red);background:#fff;}
         </div>
       </div>
       <div class="field">
+        <label>Cost price / litre ($) <span style="font-weight:400;color:var(--text3);">— optional, office use</span></label>
+        <input type="number" id="s-cost" placeholder="Leave blank if not known" inputmode="decimal" step="0.001">
+      </div>
+      <div class="field">
         <label>Fuel type</label>
         <div class="fuel-grid">
           <button class="term-btn selected" id="fuel-diesel" onclick="selectFuel('Diesel',this)">⛽ Diesel</button>
@@ -559,7 +563,7 @@ let allSales = [];
 // Bump this on every release. It shows in the More tab, so when a rep
 // reports a problem you can ask what it says and know instantly whether
 // they are on the current build or a stale cached one.
-const APP_VERSION = 'v14 — 29 Jul 2026';
+const APP_VERSION = 'v15 — 29 Jul 2026';
 
 let curFuel = 'Diesel';
 let curTerm = 'COD';
@@ -1195,6 +1199,11 @@ async function recordSale() {
   const delivery = document.getElementById('s-delivery').value;
   const notes = document.getElementById('s-notes').value.trim();
 
+  // Optional cost price. Blank stays blank (null) — it is never required and
+  // never blocks a sale. If they typed something, keep it; otherwise null.
+  const costRaw = document.getElementById('s-cost').value;
+  const costPrice = costRaw === '' ? null : parseFloat(costRaw);
+
   if (!date || !customer || !litres || (!price && !priceTBA)) {
     alert(priceTBA
       ? 'Please fill in date, customer and litres.'
@@ -1245,6 +1254,7 @@ async function recordSale() {
     fuel_type: curFuel,
     litres,
     price_per_litre: priceTBA ? 0 : price,
+    cost_price: costPrice,   // optional; null when the rep left it blank
     price_tba: priceTBA,
     delivery_date: delivery || null,
     followup_date: followupDate,
@@ -1282,6 +1292,7 @@ async function recordSale() {
   document.getElementById('s-location').value = '';
   document.getElementById('s-litres').value = '';
   document.getElementById('s-price').value = '';
+  document.getElementById('s-cost').value = '';
   if(priceTBA) toggleTBA();  // reset TBA back off for the next sale
   document.getElementById('s-delivery').value = '';
   document.getElementById('s-notes').value = '';
@@ -1757,7 +1768,14 @@ function updateLastSyncedLine() {
       set(r,1,S(sale.sale_date));
       set(r,2,S(sale.customer));
       set(r,3,N(Number(sale.litres),"#,##0"));
-      set(r,4,{t:"n", z:D4, s:{fill:{fgColor:{rgb:"FFFF00"}}}});
+      // Yellow Cost Price cell. If the rep/admin recorded a cost price at the
+      // time of sale, pre-fill it (still yellow, so Tom can see and overwrite).
+      // If not, leave it blank exactly as before for Tom to type in.
+      const cp = (sale.cost_price === null || sale.cost_price === undefined || sale.cost_price === '')
+        ? null : Number(sale.cost_price);
+      set(r,4, cp === null
+        ? {t:"n", z:D4, s:{fill:{fgColor:{rgb:"FFFF00"}}}}
+        : {t:"n", v:cp, z:D4, s:{fill:{fgColor:{rgb:"FFFF00"}}}});
       set(r,5,N(dist));
       set(r,6,F("E"+r+"*$B$3*2/C"+r,D4));
       set(r,7,F(g("$D"+r+"+F"+r),D4));
@@ -1817,7 +1835,7 @@ function updateLastSyncedLine() {
     try {
       if (typeof XLSX === "undefined") { alert("Spreadsheet library still loading — check your connection and try again."); return; }
       const { data: sales, error } = await sb.from("sales")
-        .select("sale_date, customer, location, litres, price_per_litre, paid, status")
+        .select("sale_date, customer, location, litres, price_per_litre, cost_price, paid, status")
         .eq("rep_name", repName)
         .gte("sale_date", start)
         .lt("sale_date", endEx)
