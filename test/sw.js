@@ -19,7 +19,7 @@
 //   - navigate requests fall back to the cached shell.
 //   - We AWAIT the network before returning (no truthy-promise bug).
 // ============================================================
-const CACHE = 'fuel-TEST-v15';
+const CACHE = 'fuel-TEST-v16';
 
 // The app's own files. index.html and './' are the same page but different
 // cache keys — both needed.
