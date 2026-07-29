@@ -1,21 +1,28 @@
 // ============================================================
 // SKELSEE REP APP — Service Worker (CACHE-FIRST)
 //
-// v11 — FIXES THE OFFLINE BUG
+// v14 — TRUE OFFLINE-FIRST STARTUP
 //
-// What was broken in v10:
-//   return cached || networkFetch || caches.match('index.html');
-// networkFetch is a PROMISE, and a promise is always truthy, so the
-// index.html fallback could never be reached. Offline, that promise
-// resolved to null and respondWith(null) = "site can't be reached".
+// What changed from v13:
+//   The two helper libraries (Supabase = database, XLSX = Excel reports)
+//   were loaded from an internet file-host (a CDN) and the service worker
+//   was told to SKIP them. That meant offline they never loaded, so the
+//   app died before it could show the PIN screen.
 //
-// Also: addAll() is atomic. One missing icon = nothing cached at all,
-// and the .catch() hid it. Now each file is cached individually so a
-// missing icon can't take the whole app shell down with it.
+//   Now: those two library files are saved into the cache on install and
+//   served from the cache when offline, just like the app's own files.
+//   The app itself (index.html) has also been rebuilt to open the PIN
+//   screen even if these libraries somehow fail — this is belt AND braces.
+//
+// Kept from v13:
+//   - Each file cached individually (one missing file can't sink the rest).
+//   - navigate requests fall back to the cached shell.
+//   - We AWAIT the network before returning (no truthy-promise bug).
 // ============================================================
-const CACHE = 'fuel-v13';
+const CACHE = 'fuel-v15';
 
-// index.html and './' are the same page but different cache keys — both needed.
+// The app's own files. index.html and './' are the same page but different
+// cache keys — both needed.
 const CORE = [
   './',
   'index.html',
@@ -25,12 +32,20 @@ const CORE = [
   'apple-touch-icon.png'
 ];
 
+// The borrowed helper libraries. These live on a CDN (internet file-host).
+// We now save copies so the app can use them with no connection.
+const LIBS = [
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
+  'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+];
+
 self.addEventListener('install', e => {
   self.skipWaiting();
   e.waitUntil(
     caches.open(CACHE).then(async cache => {
-      // Cache each file on its own. If an icon is missing, we still get the app.
-      await Promise.all(CORE.map(async url => {
+      // Cache each file on its own. If one file is missing or the CDN is
+      // slow, we still get everything else — the app never goes all-or-nothing.
+      await Promise.all([...CORE, ...LIBS].map(async url => {
         try {
           const res = await fetch(url, { cache: 'reload' });
           if (res && res.ok) await cache.put(url, res);
@@ -55,11 +70,12 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   const url = req.url;
 
-  // Never touch Supabase / CDNs / fonts — these must hit the network directly.
-  if (url.includes('supabase.co') ||
-      url.includes('jsdelivr') ||
-      url.includes('cdnjs') ||
+  // The two library CDNs are now handled by us (cache-first), so DON'T skip
+  // them any more. But the DATABASE itself and fonts must still hit the
+  // network directly — those are live data / styling, not app files.
+  if (url.includes('supabase.co') ||          // the live database API
       url.includes('unpkg') ||
+      url.includes('cdnjs') ||
       url.includes('fonts.googleapis') ||
       url.includes('fonts.gstatic')) {
     return; // browser handles normally
@@ -67,7 +83,7 @@ self.addEventListener('fetch', e => {
 
   if (req.method !== 'GET') return;
 
-  // Page loads (typing the URL, refreshing, opening the PWA):
+  // Page loads (typing the URL, refreshing, opening the installed app):
   // always answer with the app shell if the network is unavailable.
   if (req.mode === 'navigate') {
     e.respondWith((async () => {
@@ -79,7 +95,7 @@ self.addEventListener('fetch', e => {
         }
         return fresh;
       } catch (err) {
-        // Offline. Serve the shell.
+        // Offline. Serve the saved app shell.
         const cache = await caches.open(CACHE);
         return (await cache.match('index.html'))
             || (await cache.match('./'))
@@ -92,21 +108,21 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Everything else: cache-first, refresh in the background.
+  // Everything else (including the two libraries now): cache-first, and
+  // quietly refresh in the background for next time.
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const cached = await cache.match(req);
 
     if (cached) {
-      // Serve instantly, quietly refresh for next time.
+      // Serve instantly from the saved copy, quietly refresh for next time.
       fetch(req).then(res => {
         if (res && res.ok) cache.put(req, res.clone());
       }).catch(() => {});
       return cached;
     }
 
-    // Not cached — we must actually WAIT for the network here.
-    // (This is what v10 got wrong: it returned the unresolved promise.)
+    // Not saved yet — we must actually WAIT for the network here.
     try {
       const res = await fetch(req);
       if (res && res.ok) cache.put(req, res.clone());

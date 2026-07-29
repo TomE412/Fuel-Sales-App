@@ -225,7 +225,10 @@ textarea:focus{border-color:var(--red);background:#fff;}
       <div class="topbar-title">⛽ Fuel Sales</div>
       <div class="topbar-user" id="user-name-display">—</div>
     </div>
-    <div id="sync-badge" class="sync-badge" onclick="retrySync()" style="cursor:pointer;" title="Tap to try uploading now">Ready</div>
+    <div style="text-align:right;">
+      <div id="sync-badge" class="sync-badge" onclick="retrySync()" style="cursor:pointer;" title="Tap to try uploading now">Ready</div>
+      <div id="last-synced" style="font-size:10px;color:var(--text3);margin-top:3px;">&nbsp;</div>
+    </div>
   </div>
   <div class="tabs" style="grid-template-columns:repeat(5,1fr);">
     <div class="tab active" onclick="showTab('record',this)">📝 Record</div>
@@ -276,6 +279,10 @@ textarea:focus{border-color:var(--red);background:#fff;}
             <span class="tba-txt">Price TBA — send now, agree price later</span>
           </label>
         </div>
+      </div>
+      <div class="field">
+        <label>Cost price / litre ($) <span style="font-weight:400;color:var(--text3);">— optional, office use</span></label>
+        <input type="number" id="s-cost" placeholder="Leave blank if not known" inputmode="decimal" step="0.001">
       </div>
       <div class="field">
         <label>Fuel type</label>
@@ -533,7 +540,21 @@ textarea:focus{border-color:var(--red);background:#fff;}
 <script>
 const SUPABASE_URL = 'https://lkaotuavapyvqfuuyzft.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYW90dWF2YXB5dnFmdXV5emZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MzU4NzcsImV4cCI6MjA5NzQxMTg3N30.he7Ah-TVyzZZAMiCHglIzP-UbdnxDw-CW4V9mYYJBDU';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Create the database client. CRITICAL: if the database library failed to
+// load (e.g. a brand-new build opened for the very first time with no
+// connection, before the phone has saved its own copy), `supabase` won't
+// exist. We must NOT let that crash the whole app — the PIN screen has to
+// open regardless. So we guard it: on failure, `sb` is left undefined and
+// every function that uses the network already tolerates a failed call.
+// The app opens; syncing simply resumes after the next online reload.
+let sb;
+try {
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+} catch (e) {
+  console.warn('Database library not available yet — app will open offline, sync resumes after an online reload.');
+  sb = undefined;
+}
 
 let currentUser = null;
 let currentProfile = null;
@@ -542,7 +563,7 @@ let allSales = [];
 // Bump this on every release. It shows in the More tab, so when a rep
 // reports a problem you can ask what it says and know instantly whether
 // they are on the current build or a stale cached one.
-const APP_VERSION = 'v13 — 23 Jul 2026';
+const APP_VERSION = 'v15 — 29 Jul 2026';
 
 let curFuel = 'Diesel';
 let curTerm = 'COD';
@@ -758,42 +779,16 @@ async function signIn() {
 }
 
 async function loadUser(user, showLock = false) {
+  // Called after a fresh email/password sign-in. By definition we were just
+  // online, so a profile fetch is reasonable here — but we still NEVER let it
+  // block the screen. Render from what we have, refresh in the background.
   currentUser = user;
 
-  // Try to get the profile. When online this refreshes from the DB and
-  // caches it. When offline we must NOT hang on this fetch — we fall back
-  // to the cached profile so the app can still open and reach the PIN screen.
-  let profile = null;
-
   const cachedRaw = localStorage.getItem('cached_profile');
-  const cachedProfile = cachedRaw ? JSON.parse(cachedRaw) : null;
+  let profile = cachedRaw ? JSON.parse(cachedRaw) : null;
 
-  if (navigator.onLine) {
-    try {
-      // Race the DB call against a short timeout so a flaky cellular
-      // connection can't leave us stuck forever on startup.
-      const fetchProfile = sb.from('profiles').select('*').eq('id', user.id).single();
-      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000));
-      const { data } = await Promise.race([
-        fetchProfile,
-        timeout.then(() => { throw new Error('timeout'); })
-      ]);
-      if (data) {
-        profile = data;
-        // Cache for offline starts
-        localStorage.setItem('cached_profile', JSON.stringify(profile));
-        localStorage.setItem('cached_user_id', user.id);
-      }
-    } catch (e) {
-      // Network was there in theory but the call failed/timed out.
-      // Use whatever we cached last time.
-      profile = cachedProfile;
-    }
-  } else {
-    // Genuinely offline — use cache, never touch the network.
-    profile = cachedProfile;
-  }
-
+  // signIn() already cached a fresh profile a moment ago, so `profile` is
+  // usually current. Paint immediately with it.
   currentProfile = profile;
 
   document.getElementById('user-name-display').textContent = profile?.full_name || user.email || 'Rep';
@@ -802,23 +797,17 @@ async function loadUser(user, showLock = false) {
   document.getElementById('more-role').textContent = 'Role: ' + (profile?.role || 'rep');
 
   document.getElementById('screen-auth').classList.remove('active');
-
-  // Set today's date
   document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
 
-  // Store default PIN if not set for this user
   if (!localStorage.getItem(getPinKey(user.id))) {
     localStorage.setItem(getPinKey(user.id), DEFAULT_PIN);
   }
 
-  // Customer autocomplete: wire the input and load the canonical list.
-  // These are safe to call offline — they handle their own failures.
   initCustomerAutocomplete();
   loadCustomerList();
 
   if (showLock) {
     showLockScreen();
-    // Load sales in background so they're ready when unlocked
     loadSales();
   } else {
     document.getElementById('screen-app').classList.add('active');
@@ -1176,9 +1165,11 @@ async function loadSales() {
     if (error) throw error;
 
     allSales = data || [];
-    // Save fresh data to cache for offline use
+    // Save fresh data to cache for offline use, and stamp the time so the
+    // rep can see how fresh the on-screen data is (feature #2).
     try {
       localStorage.setItem('sales_cache_' + (currentUser?.id || 'x'), JSON.stringify(allSales));
+      localStorage.setItem('last_synced_at', new Date().toISOString());
     } catch(e) {}
     renderSales();
     renderDash();
@@ -1207,6 +1198,11 @@ async function recordSale() {
   const price = parseFloat(document.getElementById('s-price').value);
   const delivery = document.getElementById('s-delivery').value;
   const notes = document.getElementById('s-notes').value.trim();
+
+  // Optional cost price. Blank stays blank (null) — it is never required and
+  // never blocks a sale. If they typed something, keep it; otherwise null.
+  const costRaw = document.getElementById('s-cost').value;
+  const costPrice = costRaw === '' ? null : parseFloat(costRaw);
 
   if (!date || !customer || !litres || (!price && !priceTBA)) {
     alert(priceTBA
@@ -1258,6 +1254,7 @@ async function recordSale() {
     fuel_type: curFuel,
     litres,
     price_per_litre: priceTBA ? 0 : price,
+    cost_price: costPrice,   // optional; null when the rep left it blank
     price_tba: priceTBA,
     delivery_date: delivery || null,
     followup_date: followupDate,
@@ -1295,6 +1292,7 @@ async function recordSale() {
   document.getElementById('s-location').value = '';
   document.getElementById('s-litres').value = '';
   document.getElementById('s-price').value = '';
+  document.getElementById('s-cost').value = '';
   if(priceTBA) toggleTBA();  // reset TBA back off for the next sale
   document.getElementById('s-delivery').value = '';
   document.getElementById('s-notes').value = '';
@@ -1698,6 +1696,24 @@ function setSyncBadge(state) {
     el.className = n > 0 ? 'sync-badge pending' : 'sync-badge';
   }
   else if (state==='error') { el.textContent='Sync error'; el.className='sync-badge error'; }
+  updateLastSyncedLine();
+}
+
+// Feature #2 — show how fresh the on-screen data is. Offline, this tells the
+// rep whether they're looking at data from an hour ago or a week ago.
+function updateLastSyncedLine() {
+  const el = document.getElementById('last-synced');
+  if (!el) return;
+  const iso = localStorage.getItem('last_synced_at');
+  if (!iso) { el.innerHTML = '&nbsp;'; return; }
+  const then = new Date(iso);
+  const mins = Math.round((Date.now() - then.getTime()) / 60000);
+  let txt;
+  if (mins < 1) txt = 'Updated just now';
+  else if (mins < 60) txt = 'Updated ' + mins + 'm ago';
+  else if (mins < 1440) txt = 'Updated ' + Math.round(mins / 60) + 'h ago';
+  else txt = 'Updated ' + Math.round(mins / 1440) + 'd ago';
+  el.textContent = txt;
 }
 
 // ---- COMMISSION REPORT (admin only) ----
@@ -1752,7 +1768,14 @@ function setSyncBadge(state) {
       set(r,1,S(sale.sale_date));
       set(r,2,S(sale.customer));
       set(r,3,N(Number(sale.litres),"#,##0"));
-      set(r,4,{t:"n", z:D4, s:{fill:{fgColor:{rgb:"FFFF00"}}}});
+      // Yellow Cost Price cell. If the rep/admin recorded a cost price at the
+      // time of sale, pre-fill it (still yellow, so Tom can see and overwrite).
+      // If not, leave it blank exactly as before for Tom to type in.
+      const cp = (sale.cost_price === null || sale.cost_price === undefined || sale.cost_price === '')
+        ? null : Number(sale.cost_price);
+      set(r,4, cp === null
+        ? {t:"n", z:D4, s:{fill:{fgColor:{rgb:"FFFF00"}}}}
+        : {t:"n", v:cp, z:D4, s:{fill:{fgColor:{rgb:"FFFF00"}}}});
       set(r,5,N(dist));
       set(r,6,F("E"+r+"*$B$3*2/C"+r,D4));
       set(r,7,F(g("$D"+r+"+F"+r),D4));
@@ -1812,7 +1835,7 @@ function setSyncBadge(state) {
     try {
       if (typeof XLSX === "undefined") { alert("Spreadsheet library still loading — check your connection and try again."); return; }
       const { data: sales, error } = await sb.from("sales")
-        .select("sale_date, customer, location, litres, price_per_litre, paid, status")
+        .select("sale_date, customer, location, litres, price_per_litre, cost_price, paid, status")
         .eq("rep_name", repName)
         .gte("sale_date", start)
         .lt("sale_date", endEx)
@@ -1882,45 +1905,103 @@ function setSyncBadge(state) {
   if (v) v.textContent = APP_VERSION;
 })();
 
-sb.auth.getSession().then(async ({ data }) => {
-  // NOTE: getSession() reads from local storage and SUCCEEDS even when
-  // offline — it does not throw. So all offline handling has to live
-  // HERE, not in .catch(). (That was the old bug: the offline PIN-resume
-  // code sat in .catch() and never ran, and loadUser hung on a live
-  // profile fetch that never returned on cellular/airplane mode.)
-  if (data.session?.user) {
-    // We have a session (cached or live). loadUser is now offline-safe.
-    await loadUser(data.session.user, true);
-  } else {
-    // No session. If we have a cached profile, let them PIN back in offline.
-    const cachedUserId = localStorage.getItem('cached_user_id');
-    const cachedProfile = localStorage.getItem('cached_profile');
-    if (cachedUserId && cachedProfile) {
-      currentUser = { id: cachedUserId };
-      currentProfile = JSON.parse(cachedProfile);
-      document.getElementById('user-name-display').textContent = currentProfile.full_name;
-      document.getElementById('more-name').textContent = currentProfile.full_name;
-      document.getElementById('more-role').textContent = 'Role: ' + currentProfile.role;
-      showLockScreen();
-    } else {
-      document.getElementById('screen-auth').classList.add('active');
-    }
-  }
-}).catch(() => {
-  // Genuine error path. Try cached PIN resume as a last resort.
+// ============================================================
+// STARTUP — OFFLINE-FIRST, ZERO NETWORK CALLS
+// ============================================================
+// The golden rule (same as Spotify): decide which screen to show using
+// ONLY data already saved on the phone. Never wait on the internet — or
+// even on the database library — to pick a screen. The network is a
+// background job that runs AFTER a screen is already visible.
+//
+// Why the app used to reach the login screen offline:
+//   The very first thing startup did was talk to the database (sb.auth...).
+//   The database tool is borrowed from the internet; with no connection it
+//   isn't there, so that first line threw an error and the whole app died
+//   before it could show anything. All the offline handling below it never
+//   got a chance to run.
+//
+// The fix: this block uses ONLY localStorage (saved-on-phone data) and does
+// not touch `sb` at all. It runs the instant the page opens.
+
+function startupFromCache() {
+  // Read the saved identity from the phone. No network, no database tool.
   const cachedUserId = localStorage.getItem('cached_user_id');
-  const cachedProfile = localStorage.getItem('cached_profile');
-  if (cachedUserId && cachedProfile) {
-    currentUser = { id: cachedUserId };
-    currentProfile = JSON.parse(cachedProfile);
-    document.getElementById('user-name-display').textContent = currentProfile.full_name;
-    document.getElementById('more-name').textContent = currentProfile.full_name;
-    document.getElementById('more-role').textContent = 'Role: ' + currentProfile.role;
+  const cachedProfileRaw = localStorage.getItem('cached_profile');
+
+  if (cachedUserId && cachedProfileRaw) {
+    // We know who this is from a previous online sign-in → straight to PIN.
+    try {
+      currentUser = { id: cachedUserId };
+      currentProfile = JSON.parse(cachedProfileRaw);
+    } catch (e) {
+      currentProfile = null;
+    }
+    if (currentProfile) {
+      document.getElementById('user-name-display').textContent = currentProfile.full_name || 'Rep';
+      document.getElementById('more-name').textContent = currentProfile.full_name || '—';
+      document.getElementById('more-role').textContent = 'Role: ' + (currentProfile.role || 'rep');
+    }
+    document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
+
+    // Paint the PIN screen FIRST — before anything that could reach out.
     showLockScreen();
+
+    // Then wire the customer box and load its saved list. loadCustomerList
+    // shows the saved copy instantly and only tries the network in the
+    // background, so this is safe and never blocks the PIN screen.
+    initCustomerAutocomplete();
+    loadCustomerList();
+
+    // ONLY NOW, with the PIN screen already on screen, do we touch the
+    // network — in the background, where a failure is harmless. This warms
+    // the session and refreshes the profile for next time. It also handles
+    // the proactive session refresh (#4) so tokens don't quietly go stale.
+    warmSessionInBackground(cachedUserId);
   } else {
+    // Never signed in on this phone (or data was cleared) → must use email.
+    // This is the one honest limitation: with no saved identity, and no
+    // internet, there is nothing we can safely let them into.
     document.getElementById('screen-auth').classList.add('active');
   }
-});
+}
+
+// Background-only. Safe to fail. Never blocks a screen. Never called before
+// a screen is showing.
+async function warmSessionInBackground(expectedUserId) {
+  // If the database tool didn't load (offline first open of a new build),
+  // just stop quietly. The PIN screen is already up; sync will work after
+  // the next online reload.
+  if (typeof sb === 'undefined' || !sb || !navigator.onLine) return;
+
+  try {
+    const { data } = await withTimeout(sb.auth.getSession(), 6000);
+    const session = data && data.session;
+
+    if (session && session.user) {
+      // Proactively refresh the token while we're online and thinking about
+      // it, so a PIN-only rep doesn't hit an expired session days later (#4).
+      try { await withTimeout(sb.auth.refreshSession(), 8000); } catch (e) {}
+
+      // Refresh the saved profile for next time (never blocks anything).
+      try {
+        const { data: prof } = await withTimeout(
+          sb.from('profiles').select('*').eq('id', session.user.id).single(), 8000
+        );
+        if (prof) {
+          currentProfile = prof;
+          localStorage.setItem('cached_profile', JSON.stringify(prof));
+          localStorage.setItem('cached_user_id', session.user.id);
+        }
+      } catch (e) {}
+    }
+  } catch (e) {
+    // No session / slow network — nothing to do. PIN screen is already up.
+  }
+}
+
+// Kick off startup. This is the first app code that runs, and it is
+// deliberately synchronous localStorage work — no awaits, no network.
+startupFromCache();
 
 // Register service worker
 if ('serviceWorker' in navigator) {
