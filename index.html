@@ -563,7 +563,7 @@ let allSales = [];
 // Bump this on every release. It shows in the More tab, so when a rep
 // reports a problem you can ask what it says and know instantly whether
 // they are on the current build or a stale cached one.
-const APP_VERSION = 'v15 — 29 Jul 2026';
+const APP_VERSION = 'v16 — 29 Jul 2026';
 
 let curFuel = 'Diesel';
 let curTerm = 'COD';
@@ -677,8 +677,14 @@ function checkLockPin() {
     localStorage.removeItem('lock_until');
     localStorage.removeItem('lock_attempts');
     hideLockScreen();
+    // Show whatever we already have instantly...
     renderSales();
     renderDash();
+    // ...then actually fetch the latest sales from the database. This was
+    // the v15 bug: unlocking by PIN drew an empty list because it never
+    // called loadSales(). loadSales() shows cached data first and is
+    // offline-safe, so this is correct both online and offline.
+    loadSales();
   } else {
     lockAttempts++;
     localStorage.setItem('lock_attempts', lockAttempts);
