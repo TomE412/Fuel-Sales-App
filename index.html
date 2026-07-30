@@ -563,7 +563,7 @@ let allSales = [];
 // Bump this on every release. It shows in the More tab, so when a rep
 // reports a problem you can ask what it says and know instantly whether
 // they are on the current build or a stale cached one.
-const APP_VERSION = 'v16 — 29 Jul 2026';
+const APP_VERSION = 'v17 — 29 Jul 2026';
 
 let curFuel = 'Diesel';
 let curTerm = 'COD';
@@ -1143,8 +1143,12 @@ async function markPaidFromDash(id) {
 async function cancelSale(id) {
   const sale = allSales.find(s => s.id === id);
   if (!sale) return;
-  if (!confirm('Cancel this sale for ' + sale.customer + '?\n\nThis will remove it from all totals and graphs but keep it in the database for records.')) return;
-  const { error } = await sb.from('sales').update({ status: 'cancelled' }).eq('id', id);
+  // Permanent delete — removes the row entirely so litres/values stop
+  // counting everywhere (rep app AND ops dashboard). Cannot be undone.
+  if (!confirm('DELETE this sale for ' + sale.customer + '?\n\n' +
+    (sale.litres||0).toLocaleString() + ' L will be removed from all totals ' +
+    'and graphs permanently. This cannot be undone.')) return;
+  const { error } = await sb.from('sales').delete().eq('id', id);
   if (error) { alert('Error: ' + error.message); return; }
   await loadSales();
 }
@@ -1252,6 +1256,10 @@ async function recordSale() {
 
   // Build the sale payload once — used for both online insert and offline queue
   const salePayload = {
+    // Unique per sale, generated on the phone BEFORE sending. If a slow
+    // network makes us retry, the database's unique index rejects the second
+    // copy, so no duplicates. This is the real duplicate fix.
+    client_uid: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2,10),
     rep_id: currentUser.id, // rep_name is set automatically by database trigger
     sale_date: date,
     customer,
@@ -1285,8 +1293,15 @@ async function recordSale() {
     if (error) throw error;
     savedOnline = true;
   } catch (e) {
-    // Offline, slow, or network failure — queue it locally for later sync
-    queueSale(salePayload);
+    // A duplicate-key error means this exact sale already reached the
+    // database (a slow earlier attempt got through). It is NOT a failure —
+    // don't queue it again, or we'd recreate the duplicate we're preventing.
+    if (/duplicate|unique|23505/i.test((e && e.message) || '')) {
+      savedOnline = true;
+    } else {
+      // Offline, slow, or network failure — queue it locally for later sync
+      queueSale(salePayload);
+    }
   }
 
   // Reset form regardless of online/offline (the sale is captured either way)
@@ -1426,6 +1441,12 @@ async function syncQueue() {
       syncedCount++;
     } catch (e) {
       const msg = (e && e.message) || String(e);
+      if (/duplicate|unique|23505/i.test(msg)) {
+        // Already in the database from an earlier attempt — count it as done
+        // and drop it from the queue instead of retrying forever.
+        syncedCount++;
+        continue;
+      }
       if (/timeout/i.test(msg)) {
         // Network problem, not this sale. Keep everything and retry later.
         networkDown = true;
@@ -1530,7 +1551,7 @@ function renderSales() {
     const paidBtn = !s.paid && !isCancelled && s.payment_term !== 'COD' ?
       `<button class="del-btn" style="background:var(--amber);margin-top:6px;" onclick="markPaid(${s.id})">💰 Mark as paid</button>` : '';
     const cancelBtn = !isCancelled && !delivered ?
-      `<button class="del-btn" style="background:transparent;color:var(--red);border:1px solid var(--red);margin-top:6px;" onclick="cancelSale(${s.id})">✗ Cancel sale</button>` : '';
+      `<button class="del-btn" style="background:transparent;color:var(--red);border:1px solid var(--red);margin-top:6px;" onclick="cancelSale(${s.id})">🗑 Delete sale</button>` : '';
     return `<div class="sale-row" style="opacity:${(delivered||isCancelled)?'0.6':'1'}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div class="sale-customer" style="${(delivered||isCancelled)?'text-decoration:line-through;color:var(--text3);':''}">${s.customer}${fuelPill}${delPill}${paidPill}${cancelledPill}${tbaPill}</div>
