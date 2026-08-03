@@ -145,6 +145,44 @@ textarea:focus{border-color:var(--red);background:#fff;}
 .cust-new{display:none;align-items:center;gap:6px;margin-top:6px;padding:7px 10px;background:var(--blue-light);border-radius:6px;}
 .cust-new.show{display:flex;}
 .cust-new .txt{font-size:11px;color:var(--blue);font-weight:600;}
+
+/* PERFORMANCE REPORT */
+.perf-screen{position:fixed;inset:0;background:var(--bg);z-index:250;display:none;flex-direction:column;}
+.perf-screen.active{display:flex;}
+.perf-top{background:#fff;border-bottom:1px solid var(--border);padding:16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.perf-top-name{font-size:17px;font-weight:700;}
+.perf-top-period{font-size:12px;color:var(--text3);margin-top:2px;}
+.perf-close{width:34px;height:34px;border-radius:50%;background:var(--gray);border:none;font-size:16px;color:var(--text2);cursor:pointer;flex-shrink:0;}
+.perf-body{flex:1;overflow-y:auto;padding:16px;}
+.perf-hero{background:linear-gradient(135deg,var(--red) 0%,var(--red-dark) 100%);border-radius:var(--radius);padding:20px;color:#fff;margin-bottom:14px;text-align:center;}
+.perf-hero-value{font-size:34px;font-weight:800;font-family:var(--mono);letter-spacing:-0.01em;}
+.perf-hero-label{font-size:12px;opacity:0.85;margin-top:2px;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;}
+.perf-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.perf-stat{background:#fff;border-radius:var(--radius);border:1px solid var(--border);padding:13px;text-align:center;}
+.perf-stat-label{font-size:9.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;}
+.perf-stat-value{font-size:19px;font-weight:700;font-family:var(--mono);margin-top:4px;}
+.perf-card{background:#fff;border-radius:var(--radius);border:1px solid var(--border);padding:16px;margin-bottom:14px;}
+.perf-card-title{font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px;}
+.perf-card-sub{font-size:11.5px;color:var(--text3);margin-bottom:14px;}
+.perf-chart{display:flex;align-items:flex-end;gap:8px;height:130px;padding:0 2px;}
+.perf-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative;}
+.perf-bar-val{font-size:10px;font-weight:700;font-family:var(--mono);height:12px;}
+.perf-bar{width:100%;border-radius:5px 5px 2px 2px;min-height:3px;transition:opacity .15s;}
+.perf-bar-col:active .perf-bar{opacity:0.75;}
+.perf-bar-wk{font-size:10px;font-weight:600;color:var(--text3);}
+.perf-legend{display:flex;gap:14px;justify-content:center;margin-top:14px;font-size:10.5px;color:var(--text3);flex-wrap:wrap;}
+.perf-legend span{display:inline-flex;align-items:center;gap:5px;}
+.perf-legend i{width:9px;height:9px;border-radius:2px;display:inline-block;}
+.perf-empty{text-align:center;padding:30px 16px;color:var(--text3);font-size:13px;}
+.perf-tip{background:var(--blue-light);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text2);margin-bottom:14px;}
+.perf-cust-list{display:flex;flex-direction:column;gap:12px;}
+.perf-cust-row{display:flex;align-items:center;gap:10px;}
+.perf-cust-rank{flex-shrink:0;width:24px;height:24px;border-radius:50%;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+.perf-cust-info{flex:1;min-width:0;}
+.perf-cust-name{font-size:13px;font-weight:600;margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.perf-cust-bar-track{height:6px;background:var(--gray);border-radius:99px;overflow:hidden;}
+.perf-cust-bar-fill{height:100%;background:var(--red);border-radius:99px;}
+.perf-cust-vol{flex-shrink:0;font-size:12.5px;font-weight:700;font-family:var(--mono);color:var(--text2);}
 </style>
 </head>
 <body>
@@ -187,6 +225,18 @@ textarea:focus{border-color:var(--red);background:#fff;}
   <div class="lock-err" id="lock-err"></div>
   <div class="lock-timer" id="lock-timer"></div>
   <button class="lock-signout" onclick="signOutFromLock()">Sign in with email instead</button>
+</div>
+
+<!-- PERFORMANCE REPORT -->
+<div class="perf-screen" id="perf-screen">
+  <div class="perf-top">
+    <div>
+      <div class="perf-top-name" id="perf-name">—</div>
+      <div class="perf-top-period" id="perf-period">—</div>
+    </div>
+    <button class="perf-close" onclick="closePerfReport()">✕</button>
+  </div>
+  <div class="perf-body" id="perf-body"></div>
 </div>
 
 <!-- AUTH SCREEN -->
@@ -400,8 +450,15 @@ textarea:focus{border-color:var(--red);background:#fff;}
     </div>
 
     <div class="card" id="report-card" style="display:none;">
-      <div class="card-title">📄 Generate commission report</div>
-      <div class="field">
+      <div class="card-title">📊 Generate a report</div>
+      <div class="field" id="report-type-field">
+        <label>Report type</label>
+        <select id="report-type">
+          <option value="performance">📈 Performance</option>
+          <option value="commission">💰 Commission</option>
+        </select>
+      </div>
+      <div class="field" id="rep-select-field">
         <label>Sales rep</label>
         <select id="rep-select"></select>
       </div>
@@ -420,8 +477,8 @@ textarea:focus{border-color:var(--red);background:#fff;}
         <div class="field" style="margin-bottom:0;"><label>From</label><input type="date" id="tf-start"></div>
         <div class="field" style="margin-bottom:0;"><label>To</label><input type="date" id="tf-end"></div>
       </div>
-      <button class="btn-primary" id="report-btn" onclick="runCommissionReport()">Generate Excel for Niel</button>
-      <div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center;">Cost price is left blank for Niel to fill in.</div>
+      <button class="btn-primary" id="report-btn" onclick="runReport()">View Performance Report</button>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center;" id="report-hint">See sales volume by week and how fast deliveries go out.</div>
     </div>
 
     <div class="card">
@@ -1881,26 +1938,41 @@ function updateLastSyncedLine() {
   async function setupReportCard() {
     const card = document.getElementById("report-card");
     if (!card) return;
+    // Every signed-in user gets this card now — reps see only their own
+    // Performance report (no choices to make); admins get the report-type
+    // dropdown plus the rep picker and can also pull the Commission export.
+    card.style.display = "block";
     const admin = isReportAdmin();
-    card.style.display = admin ? "block" : "none";
-    if (!admin) return;
+    const typeField = document.getElementById("report-type-field");
+    const repField = document.getElementById("rep-select-field");
+    const typeSel = document.getElementById("report-type");
+    typeField.style.display = admin ? "block" : "none";
+    repField.style.display = admin ? "block" : "none";
+    if (!admin) typeSel.value = "performance";
+
     const rep = document.getElementById("rep-select");
     if (rep && !rep.dataset.filled) {
-      // Load rep names from profiles. Admins (Niel, Mack, Tom) sell fuel too,
-      // so they belong in this list alongside the dedicated reps.
-      try {
-        const { data: repProfiles, error } = await sb.from('profiles').select('full_name').in('role', ['rep','admin']).order('full_name');
-        if (!error && repProfiles && repProfiles.length) {
-          REPS = repProfiles.map(p => p.full_name);
-        } else {
-          // Fallback: derive from distinct rep_name values already in sales
-          const { data: salesReps } = await sb.from('sales').select('rep_name');
-          REPS = [...new Set((salesReps||[]).map(s => s.rep_name).filter(Boolean))].sort();
+      if (admin) {
+        // Load rep names from profiles. Admins (Niel, Mack, Tom) sell fuel too,
+        // so they belong in this list alongside the dedicated reps.
+        try {
+          const { data: repProfiles, error } = await sb.from('profiles').select('full_name').in('role', ['rep','admin']).order('full_name');
+          if (!error && repProfiles && repProfiles.length) {
+            REPS = repProfiles.map(p => p.full_name);
+          } else {
+            // Fallback: derive from distinct rep_name values already in sales
+            const { data: salesReps } = await sb.from('sales').select('rep_name');
+            REPS = [...new Set((salesReps||[]).map(s => s.rep_name).filter(Boolean))].sort();
+          }
+        } catch(e) {
+          console.log('Could not load reps for report:', e);
         }
-      } catch(e) {
-        console.log('Could not load reps for report:', e);
+        rep.innerHTML = REPS.map(n=>'<option>'+n+'</option>').join("");
+      } else {
+        // Reps aren't shown this field, but runPerformanceReport() still
+        // reads currentProfile.full_name directly — nothing to fill here.
+        rep.innerHTML = '<option>'+(currentProfile?.full_name||'')+'</option>';
       }
-      rep.innerHTML = REPS.map(n=>'<option>'+n+'</option>').join("");
       rep.dataset.filled = "1";
     }
     const now = new Date();
@@ -1917,10 +1989,260 @@ function updateLastSyncedLine() {
       });
       mode.dataset.wired = "1";
     }
+    if (typeSel && !typeSel.dataset.wired) {
+      typeSel.addEventListener("change", updateReportButtonLabel);
+      typeSel.dataset.wired = "1";
+    }
+    updateReportButtonLabel();
+  }
+
+  function updateReportButtonLabel() {
+    const typeSel = document.getElementById("report-type");
+    const btn = document.getElementById("report-btn");
+    const hint = document.getElementById("report-hint");
+    const isPerf = !isReportAdmin() || typeSel.value === "performance";
+    btn.textContent = isPerf ? "View Performance Report" : "Generate Excel for Niel";
+    hint.textContent = isPerf
+      ? "See sales volume by week and how fast deliveries go out."
+      : "Cost price is left blank for Niel to fill in.";
+  }
+
+  function runReport() {
+    const typeSel = document.getElementById("report-type");
+    const isPerf = !isReportAdmin() || typeSel.value === "performance";
+    if (isPerf) runPerformanceReport(); else runCommissionReport();
+  }
+
+  // ---- PERFORMANCE REPORT (every rep sees their own; admins can pick anyone) ----
+  async function runPerformanceReport() {
+    const admin = isReportAdmin();
+    const repName = admin ? document.getElementById("rep-select").value : (currentProfile?.full_name || "");
+    if (!repName) { alert("No rep selected."); return; }
+    const mode = document.getElementById("tf-mode").value;
+    let start, endEx, periodLabel;
+    if (mode === "range") {
+      start = document.getElementById("tf-start").value;
+      const endInput = document.getElementById("tf-end").value;
+      if (!start || !endInput) { alert("Pick both start and end dates."); return; }
+      const e = new Date(endInput+"T00:00:00"); e.setDate(e.getDate()+1);
+      endEx = e.toISOString().slice(0,10);
+      periodLabel = fmtDate(start) + ' – ' + fmtDate(endInput);
+    } else {
+      const m = parseInt(document.getElementById("tf-month").value,10);
+      const y = parseInt(document.getElementById("tf-year").value,10);
+      start = y+"-"+String(m+1).padStart(2,"0")+"-01";
+      const nm = m===11?0:m+1, ny = m===11?y+1:y;
+      endEx = ny+"-"+String(nm+1).padStart(2,"0")+"-01";
+      periodLabel = MONTHS[m] + ' ' + y;
+    }
+
+    const btn = document.getElementById("report-btn");
+    const orig = btn.textContent; btn.disabled = true; btn.textContent = "Loading…";
+    try {
+      const { data: sales, error } = await withTimeout(sb.from("sales")
+        .select("sale_date, created_at, customer, litres, price_per_litre, price_tba, delivered_at, status, fuel_type")
+        .eq("rep_name", repName)
+        .gte("sale_date", start)
+        .lt("sale_date", endEx)
+        .neq("status", "cancelled")
+        .order("sale_date", { ascending: true }));
+      if (error) throw error;
+      renderPerformanceReport(repName, periodLabel, start, endEx, sales || []);
+    } catch (e) {
+      alert("Could not load performance report: " + (e.message || e));
+    } finally {
+      btn.disabled = false; btn.textContent = orig;
+    }
+  }
+
+  function renderPerformanceReport(repName, periodLabel, startStr, endExStr, sales) {
+    const totalL = sales.reduce((a,s) => a + (s.litres||0), 0);
+    const totalV = sales.reduce((a,s) => a + (s.price_tba ? 0 : (s.litres||0)*(s.price_per_litre||0)), 0);
+    const count = sales.length;
+
+    // "Order to delivered" means button-press to button-press: created_at is
+    // the exact timestamp Supabase sets when Record Sale is tapped (the row is
+    // inserted); sale_date is just a rep-editable calendar date with no time
+    // component and can be back-dated, so it's wrong for measuring real
+    // elapsed time even though it's still what the weekly chart buckets by.
+    const delivered = sales.filter(s => s.delivered_at && s.created_at);
+    let avgDays = null;
+    if (delivered.length) {
+      const totalDays = delivered.reduce((a,s) => {
+        const sd = new Date(s.created_at);
+        const dd = new Date(s.delivered_at);
+        return a + Math.max(0,(dd - sd) / 86400000);
+      }, 0);
+      avgDays = totalDays / delivered.length;
+    }
+
+    // Weekly buckets across the selected period, so reps can see WHEN in the
+    // month their volume actually landed (not just the total).
+    const start = new Date(startStr+'T00:00:00');
+    const endEx = new Date(endExStr+'T00:00:00');
+    const today = new Date(); today.setHours(0,0,0,0);
+    const weeks = [];
+    let wkStart = new Date(start), wi = 1;
+    while (wkStart < endEx) {
+      let wkEnd = new Date(wkStart); wkEnd.setDate(wkEnd.getDate()+7);
+      if (wkEnd > endEx) wkEnd = new Date(endEx);
+      weeks.push({ label: 'Wk ' + wi, start: new Date(wkStart), end: new Date(wkEnd), litres: 0, value: 0 });
+      wkStart = wkEnd; wi++;
+    }
+    sales.forEach(s => {
+      const d = new Date(s.sale_date+'T00:00:00');
+      const wk = weeks.find(w => d >= w.start && d < w.end);
+      if (wk) { wk.litres += s.litres||0; wk.value += s.price_tba ? 0 : (s.litres||0)*(s.price_per_litre||0); }
+    });
+    const maxWk = Math.max(...weeks.map(w=>w.litres), 1);
+
+    // Top customers by litres — who this rep's volume actually comes from.
+    const byCustomer = {};
+    sales.forEach(s => {
+      const name = s.customer || '(no customer)';
+      if (!byCustomer[name]) byCustomer[name] = { name, litres: 0, value: 0 };
+      byCustomer[name].litres += s.litres||0;
+      byCustomer[name].value += s.price_tba ? 0 : (s.litres||0)*(s.price_per_litre||0);
+    });
+    const topCustomers = Object.values(byCustomer).sort((a,b)=>b.litres-a.litres).slice(0,5);
+    const maxCust = Math.max(...topCustomers.map(c=>c.litres), 1);
+    const RANK_COLS = ['#D4AF37','#A8A8A8','#B87333','#9a9a97','#9a9a97'];
+
+    // Busiest day of the week — a purchasing-rhythm pattern, distinct from
+    // "which week" above. Monday-first, matching a normal business week.
+    const DOW = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const dowLitres = Array(7).fill(0);
+    sales.forEach(s => {
+      const jsDay = new Date(s.sale_date+'T00:00:00').getDay(); // 0=Sun..6=Sat
+      const idx = jsDay === 0 ? 6 : jsDay - 1; // remap to Mon=0..Sun=6
+      dowLitres[idx] += s.litres||0;
+    });
+    const maxDow = Math.max(...dowLitres, 1);
+    const peakDowIdx = dowLitres.indexOf(Math.max(...dowLitres));
+
+    // Busiest single calendar day, for a concrete "your best day" highlight.
+    const byDate = {};
+    sales.forEach(s => {
+      if (!byDate[s.sale_date]) byDate[s.sale_date] = { date: s.sale_date, litres: 0, count: 0 };
+      byDate[s.sale_date].litres += s.litres||0;
+      byDate[s.sale_date].count += 1;
+    });
+    const bestDay = Object.values(byDate).sort((a,b)=>b.litres-a.litres)[0] || null;
+
+    // A few extra numbers reps tend to find interesting about their own patch.
+    const uniqueCustomers = Object.keys(byCustomer).length;
+    const avgSaleSize = count ? Math.round(totalL / count) : 0;
+    const byFuel = {};
+    sales.forEach(s => { const f = s.fuel_type || 'Diesel'; byFuel[f] = (byFuel[f]||0) + (s.litres||0); });
+    const topFuel = Object.entries(byFuel).sort((a,b)=>b[1]-a[1])[0];
+    const topFuelPct = topFuel && totalL ? Math.round(topFuel[1]/totalL*100) : null;
+
+    // Deliberately no red/amber/green judgment here — what counts as a "good"
+    // delivery time depends on route distance and truck scheduling, which
+    // this report has no visibility into. Just show the number plainly.
+    const deliveryText = avgDays === null ? '—' : avgDays.toFixed(1) + 'd';
+
+    // Same colour language as the Dash tab's year chart: red = happening now,
+    // blue = already complete, light grey = hasn't started yet.
+    const chartHtml = weeks.map(w => {
+      const h = Math.max(Math.round((w.litres/maxWk)*95), w.litres>0?4:2);
+      const isFuture = w.start > today;
+      const isCurrent = today >= w.start && today < w.end;
+      const barColor = isFuture ? '#D3D1C7' : isCurrent ? 'var(--red)' : 'var(--blue)';
+      const val = w.litres>=1000?(w.litres/1000).toFixed(1)+'k':(w.litres>0?w.litres:'');
+      return `<div class="perf-bar-col" title="${w.label}: ${w.litres.toLocaleString()} L · $${w.value.toLocaleString(undefined,{maximumFractionDigits:0})}">
+        <div class="perf-bar-val" style="color:${barColor}">${val}</div>
+        <div class="perf-bar" style="height:${h}px;background:${barColor};"></div>
+        <div class="perf-bar-wk" style="color:${isCurrent?'var(--red)':'var(--text3)'};font-weight:${isCurrent?'700':'600'};">${w.label}</div>
+      </div>`;
+    }).join('');
+
+    // Same "highlight what matters" language as the weekly chart: the peak
+    // weekday is red, every other day is blue — nothing to do with time here,
+    // just drawing the eye to the one bar worth noticing.
+    const dowChartHtml = DOW.map((d,i) => {
+      const v = dowLitres[i];
+      const h = Math.max(Math.round((v/maxDow)*95), v>0?4:2);
+      const isPeak = i === peakDowIdx && v > 0;
+      const barColor = isPeak ? 'var(--red)' : 'var(--blue)';
+      const val = v>=1000?(v/1000).toFixed(1)+'k':(v>0?v:'');
+      return `<div class="perf-bar-col" title="${d}: ${v.toLocaleString()} L">
+        <div class="perf-bar-val" style="color:${barColor}">${val}</div>
+        <div class="perf-bar" style="height:${h}px;background:${barColor};"></div>
+        <div class="perf-bar-wk" style="color:${isPeak?'var(--red)':'var(--text3)'};font-weight:${isPeak?'700':'600'};">${d}</div>
+      </div>`;
+    }).join('');
+
+    const custRowsHtml = topCustomers.map((c,i) => `
+      <div class="perf-cust-row">
+        <div class="perf-cust-rank" style="background:${RANK_COLS[i]};">${i+1}</div>
+        <div class="perf-cust-info">
+          <div class="perf-cust-name">${c.name}</div>
+          <div class="perf-cust-bar-track"><div class="perf-cust-bar-fill" style="width:${Math.round(c.litres/maxCust*100)}%;"></div></div>
+        </div>
+        <div class="perf-cust-vol">${c.litres.toLocaleString()} L</div>
+      </div>`).join('');
+
+    document.getElementById('perf-name').textContent = repName;
+    document.getElementById('perf-period').textContent = periodLabel;
+
+    document.getElementById('perf-body').innerHTML = `
+      <div class="perf-hero">
+        <div class="perf-hero-value">${totalL.toLocaleString()} L</div>
+        <div class="perf-hero-label">Total litres sold</div>
+      </div>
+      <div class="perf-stat-grid">
+        <div class="perf-stat"><div class="perf-stat-label">Value</div><div class="perf-stat-value">$${totalV.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
+        <div class="perf-stat"><div class="perf-stat-label">Sales</div><div class="perf-stat-value">${count}</div></div>
+        <div class="perf-stat"><div class="perf-stat-label">Avg delivery time</div><div class="perf-stat-value">${deliveryText}</div></div>
+        <div class="perf-stat"><div class="perf-stat-label">Delivered</div><div class="perf-stat-value">${delivered.length}/${count}</div></div>
+      </div>
+      <div class="perf-card">
+        <div class="perf-card-title">Sales volume by week</div>
+        <div class="perf-card-sub">${periodLabel}</div>
+        ${count ? `<div class="perf-chart">${chartHtml}</div>
+        <div class="perf-legend">
+          <span><i style="background:var(--red);"></i> This week</span>
+          <span><i style="background:var(--blue);"></i> Earlier this period</span>
+          <span><i style="background:#D3D1C7;"></i> Not yet</span>
+        </div>` : `<div class="perf-empty">No sales recorded in this period yet.</div>`}
+      </div>
+      ${avgDays !== null ? `<div class="perf-tip">🚛 On average, deliveries go out <b>${deliveryText}</b> after the order comes in.</div>` : ''}
+
+      ${count ? `
+      <div class="perf-card">
+        <div class="perf-card-title">🏆 Top customers</div>
+        <div class="perf-card-sub">By litres, ${periodLabel}</div>
+        <div class="perf-cust-list">${custRowsHtml}</div>
+      </div>
+
+      <div class="perf-card">
+        <div class="perf-card-title">📅 Busiest day of the week</div>
+        <div class="perf-card-sub">${DOW[peakDowIdx]} is when the most volume lands</div>
+        <div class="perf-chart">${dowChartHtml}</div>
+      </div>
+
+      ${bestDay ? `<div class="perf-tip">🔥 Your best single day was <b>${fmtDate(bestDay.date)}</b> — <b>${bestDay.litres.toLocaleString()} L</b> across ${bestDay.count} sale${bestDay.count===1?'':'s'}.</div>` : ''}
+
+      <div class="perf-stat-grid">
+        <div class="perf-stat"><div class="perf-stat-label">Customers served</div><div class="perf-stat-value">${uniqueCustomers}</div></div>
+        <div class="perf-stat"><div class="perf-stat-label">Avg sale size</div><div class="perf-stat-value">${avgSaleSize.toLocaleString()} L</div></div>
+        ${topFuelPct !== null ? `<div class="perf-stat" style="grid-column:span 2;"><div class="perf-stat-label">Most-sold fuel</div><div class="perf-stat-value">${topFuel[0]} · ${topFuelPct}%</div></div>` : ''}
+      </div>` : ''}
+    `;
+
+    document.getElementById('perf-screen').classList.add('active');
+  }
+
+  function closePerfReport() {
+    document.getElementById('perf-screen').classList.remove('active');
   }
 
   window.runCommissionReport = runCommissionReport;
   window.setupReportCard = setupReportCard;
+  window.runReport = runReport;
+  window.runPerformanceReport = runPerformanceReport;
+  window.closePerfReport = closePerfReport;
 })();
 
 // ---- INIT ----
