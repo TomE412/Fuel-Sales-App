@@ -346,20 +346,6 @@ textarea:focus{border-color:var(--red);background:#fff;}
         <input type="date" id="s-delivery">
       </div>
       <div class="field">
-        <label>Follow up <span style="font-weight:400;color:var(--text3);">(days after delivery)</span></label>
-        <div class="terms-grid" id="followup-grid">
-          <button class="term-btn" onclick="selFollowup('7',this)">7 days</button>
-          <button class="term-btn" onclick="selFollowup('14',this)">14 days</button>
-          <button class="term-btn" onclick="selFollowup('21',this)">21 days</button>
-          <button class="term-btn" onclick="selFollowup('30',this)">30 days</button>
-          <button class="term-btn" onclick="selFollowup('none',this)">None</button>
-          <button class="term-btn" onclick="selFollowup('other',this)">Other</button>
-        </div>
-        <div id="followup-other-wrap" style="display:none;margin-top:8px;">
-          <input type="number" id="followup-other-days" placeholder="Days after delivery" inputmode="numeric">
-        </div>
-      </div>
-      <div class="field">
         <label>Payment terms</label>
         <div class="terms-grid" id="terms-grid">
           <button class="term-btn selected" onclick="selTerm('COD',this)">COD</button>
@@ -400,17 +386,11 @@ textarea:focus{border-color:var(--red);background:#fff;}
     <div class="stat-grid">
       <div class="stat-box"><div class="stat-label">This month</div><div class="stat-value" id="d-month-l" style="color:var(--blue);">0</div><div style="font-size:11px;color:var(--text3);">litres</div></div>
       <div class="stat-box"><div class="stat-label">This month</div><div class="stat-value" id="d-month-v" style="color:var(--green-dark);">$0</div><div style="font-size:11px;color:var(--text3);">value</div></div>
-      <div class="stat-box"><div class="stat-label">Pending delivery</div><div class="stat-value" id="d-pending" style="color:var(--amber);">0</div><div style="font-size:11px;color:var(--text3);">orders</div></div>
-      <div class="stat-box"><div class="stat-label">Credit out</div><div class="stat-value" id="d-credit" style="color:var(--red);">$0</div><div style="font-size:11px;color:var(--text3);">unpaid</div></div>
+      <div class="stat-box" style="grid-column:span 2;"><div class="stat-label">Pending delivery</div><div class="stat-value" id="d-pending" style="color:var(--amber);">0</div><div style="font-size:11px;color:var(--text3);">orders</div></div>
     </div>
     <div class="card">
       <div class="card-title">Upcoming deliveries</div>
       <div id="d-deliveries"><div class="empty" style="padding:16px;"><p style="font-size:13px;">No upcoming deliveries</p></div></div>
-    </div>
-    <div class="card">
-      <div class="card-title">💰 Payments outstanding</div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Tap "Mark as paid" once payment is received</div>
-      <div id="d-payments"><div class="empty" style="padding:16px;"><p style="font-size:13px;">No outstanding payments</p></div></div>
     </div>
   </div>
 
@@ -433,7 +413,6 @@ textarea:focus{border-color:var(--red);background:#fff;}
     <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;"></div>
     <div style="display:flex;gap:12px;margin-top:12px;padding:10px;background:#fff;border-radius:8px;border:1px solid var(--border);">
       <span style="font-size:11px;font-weight:600;">🟢 Delivery</span>
-      <span style="font-size:11px;font-weight:600;">🟡 Follow up</span>
       <span style="font-size:11px;font-weight:600;">🔴 Payment due</span>
     </div>
     <div id="cal-detail" style="margin-top:10px;"></div>
@@ -624,7 +603,6 @@ const APP_VERSION = 'v17 — 29 Jul 2026';
 
 let curFuel = 'Diesel';
 let curTerm = 'COD';
-let curFollowup = 'none';
 let priceTBA = false;
 
 // ---- NETWORK TIMEOUT GUARD ----
@@ -907,7 +885,6 @@ function renderCal() {
       events[d].push(type);
     };
     addEvent(s.delivery_date, 'delivery');
-    addEvent(s.followup_date, 'followup');
     addEvent(s.payment_due, 'payment');
   });
 
@@ -917,7 +894,7 @@ function renderCal() {
     const dateStr = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
     const evs = events[dateStr] || [];
     const isToday = dateStr === today;
-    const dots = evs.map(e => `<div style="width:6px;height:6px;border-radius:50%;background:${e==='delivery'?'#1D9E75':e==='followup'?'#BA7517':'#D4180A'};margin:0 1px;"></div>`).join('');
+    const dots = evs.map(e => `<div style="width:6px;height:6px;border-radius:50%;background:${e==='delivery'?'#1D9E75':'#D4180A'};margin:0 1px;"></div>`).join('');
     html += `<div onclick="showCalDay('${dateStr}')" style="min-height:44px;background:${isToday?'var(--red-light)':'#fff'};border:1px solid ${isToday?'var(--red)':'var(--border)'};border-radius:6px;padding:4px;cursor:pointer;text-align:center;">
       <div style="font-size:12px;font-weight:${isToday?'700':'500'};color:${isToday?'var(--red)':'var(--text)'};">${d}</div>
       <div style="display:flex;justify-content:center;flex-wrap:wrap;margin-top:2px;">${dots}</div>
@@ -931,13 +908,12 @@ function showCalDay(dateStr) {
   const dayEvents = [];
   allSales.forEach(s => {
     if ((s.delivery_date||'').split('T')[0] === dateStr) dayEvents.push({type:'delivery', sale:s});
-    if ((s.followup_date||'').split('T')[0] === dateStr) dayEvents.push({type:'followup', sale:s});
     if ((s.payment_due||'').split('T')[0] === dateStr) dayEvents.push({type:'payment', sale:s});
   });
   const el = document.getElementById('cal-detail');
   if (!dayEvents.length) { el.innerHTML = ''; return; }
-  const icons = {delivery:'🟢',followup:'🟡',payment:'🔴'};
-  const labels = {delivery:'Delivery',followup:'Follow up',payment:'Payment due'};
+  const icons = {delivery:'🟢',payment:'🔴'};
+  const labels = {delivery:'Delivery',payment:'Payment due'};
   el.innerHTML = `<div class="card" style="margin-top:0;">
     <div class="card-title">${dateStr.split('-').reverse().join('/')}</div>
     ${dayEvents.map(e => `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
@@ -1182,20 +1158,6 @@ function initCustomerAutocomplete(){
 }
 
 // ---- SALES ----
-async function markPaid(id) {
-  if (!confirm('Mark this sale as paid?')) return;
-  const { error } = await sb.from('sales').update({ paid: true }).eq('id', id);
-  if (!error) await loadSales();
-}
-
-async function markPaidFromDash(id) {
-  const sale = allSales.find(s => s.id === id);
-  if (!sale) return;
-  if (!confirm('Mark ' + sale.customer + ' as paid?')) return;
-  const { error } = await sb.from('sales').update({ paid: true }).eq('id', id);
-  if (error) { alert('Error: ' + error.message); return; }
-  await loadSales();
-}
 
 async function cancelSale(id) {
   const sale = allSales.find(s => s.id === id);
@@ -1286,12 +1248,6 @@ async function recordSale() {
   const termLabel = curTerm === 'COD' ? 'COD' : curTerm === 'other' ?
     document.getElementById('term-other-days').value + ' days' : curTerm + ' days';
 
-  // Follow up from delivery date
-  let followupDays = curFollowup === 'none' ? null :
-    curFollowup === 'other' ? parseInt(document.getElementById('followup-other-days').value) :
-    parseInt(curFollowup);
-  const followupDate = followupDays && delivery ? addDays(delivery, followupDays) : null;
-
   // Client-side validation matching the database constraints
   // (so an offline sale can't queue something the server will later reject)
   if (litres <= 0 || litres > 40000) {
@@ -1328,8 +1284,6 @@ async function recordSale() {
     cost_price: costPrice,   // optional; null when the rep left it blank
     price_tba: priceTBA,
     delivery_date: delivery || null,
-    followup_date: followupDate,
-    followup_days: followupDays,
     payment_term: termLabel,
     payment_due: paymentDue,
     paid: curTerm === 'COD',
@@ -1378,9 +1332,6 @@ async function recordSale() {
   selectFuel('Diesel', document.getElementById('fuel-diesel'));
   curTerm = 'COD';
   document.querySelectorAll('#terms-grid .term-btn').forEach((b,i) => b.classList.toggle('selected', i===0));
-  curFollowup = 'none';
-  document.querySelectorAll('#followup-grid .term-btn').forEach(b => b.classList.remove('selected'));
-  document.getElementById('followup-other-wrap').style.display = 'none';
   document.getElementById('term-other-wrap').style.display = 'none';
 
   await loadSales();
@@ -1605,8 +1556,6 @@ function renderSales() {
     const priceHtml = salePriceHtml(s.litres, s.price_per_litre, s.price_tba);
     const delBtn = !delivered && !isCancelled && s.delivery_date ?
       `<button class="del-btn" onclick="markDelivered(${s.id})">🚛 Mark as delivered</button>` : '';
-    const paidBtn = !s.paid && !isCancelled && s.payment_term !== 'COD' ?
-      `<button class="del-btn" style="background:var(--amber);margin-top:6px;" onclick="markPaid(${s.id})">💰 Mark as paid</button>` : '';
     const cancelBtn = !isCancelled && !delivered ?
       `<button class="del-btn" style="background:transparent;color:var(--red);border:1px solid var(--red);margin-top:6px;" onclick="cancelSale(${s.id})">🗑 Delete sale</button>` : '';
     return `<div class="sale-row" style="opacity:${(delivered||isCancelled)?'0.6':'1'}">
@@ -1619,7 +1568,7 @@ function renderSales() {
       </div>
       <div class="sale-meta">${s.location||'—'} · ${fmtDate(s.sale_date)} · ${s.payment_term}</div>
       <div class="sale-meta">Del: ${fmtDate(s.delivery_date)} · Pay due: ${fmtDate(s.payment_due)}</div>
-      ${delBtn}${paidBtn}${cancelBtn}
+      ${delBtn}${cancelBtn}
     </div>`;
   }).join('');
 }
@@ -1639,46 +1588,10 @@ function renderDash() {
   const monthL = monthSales.reduce((a,s) => a + (s.litres||0), 0);
   const monthV = monthSales.reduce((a,s) => a + (s.litres||0)*(s.price_per_litre||0), 0);
   const pending = activeSales.filter(s => s.status==='pending' && s.delivery_date).length;
-  const credit = activeSales.filter(s => !s.paid && s.payment_term!=='COD')
-    .reduce((a,s) => a + (s.litres||0)*(s.price_per_litre||0), 0);
 
   document.getElementById('d-month-l').textContent = monthL.toLocaleString();
   document.getElementById('d-month-v').textContent = '$' + monthV.toLocaleString(undefined,{maximumFractionDigits:0});
   document.getElementById('d-pending').textContent = pending;
-  document.getElementById('d-credit').textContent = '$' + credit.toLocaleString(undefined,{maximumFractionDigits:0});
-
-  // PAYMENTS OUTSTANDING
-  const outstanding = allSales.filter(s => 
-    !s.paid && s.payment_term !== 'COD' && s.status !== 'cancelled'
-  ).sort((a,b) => {
-    const da = a.payment_due || '9999-99-99';
-    const db = b.payment_due || '9999-99-99';
-    return da.localeCompare(db);
-  });
-
-  const payEl = document.getElementById('d-payments');
-  if (outstanding.length) {
-    payEl.innerHTML = outstanding.map(s => {
-      const pd = (s.payment_due||'').split('T')[0];
-      const d = pd ? new Date(pd+'T00:00:00') : null;
-      const daysUntil = d ? Math.round((d - now)/86400000) : null;
-      const overdue = daysUntil !== null && daysUntil < 0;
-      const dueLabel = daysUntil === null ? 'No due date' :
-        overdue ? Math.abs(daysUntil) + 'd overdue' :
-        daysUntil === 0 ? 'Due today' :
-        'Due in ' + daysUntil + 'd';
-      return `<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);">
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:14px;font-weight:700;">${s.customer}</div>
-          <div style="font-size:11px;color:var(--text3);">${s.payment_term} · ${(s.litres||0).toLocaleString()} L · $${((s.litres||0)*(s.price_per_litre||0)).toFixed(2)}</div>
-          <div style="font-size:11px;font-weight:600;color:${overdue?'var(--red)':daysUntil<=3?'var(--amber)':'var(--text3)'};margin-top:2px;">${dueLabel}</div>
-        </div>
-        <button onclick="markPaidFromDash(${s.id})" style="padding:8px 12px;background:var(--amber);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">💰 Mark paid</button>
-      </div>`;
-    }).join('');
-  } else {
-    payEl.innerHTML = '<div class="empty" style="padding:16px;"><p style="font-size:13px;">✓ All payments up to date</p></div>';
-  }
 
   // Year chart
   const chartYear = now.getFullYear();
@@ -1747,13 +1660,6 @@ function selTerm(val, btn) {
   document.querySelectorAll('#terms-grid .term-btn').forEach(b => b.classList.remove('selected'));
   btn.classList.add('selected');
   document.getElementById('term-other-wrap').style.display = val==='other' ? 'block' : 'none';
-}
-
-function selFollowup(val, btn) {
-  curFollowup = val;
-  document.querySelectorAll('#followup-grid .term-btn').forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
-  document.getElementById('followup-other-wrap').style.display = val==='other' ? 'block' : 'none';
 }
 
 function addDays(dateStr, days) {
