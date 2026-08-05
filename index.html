@@ -323,6 +323,10 @@ textarea:focus{border-color:var(--red);background:#fff;}
           <span class="txt" id="loc-matched-txt">Recognized Ops location</span>
           <span class="clear" onclick="clearLocationMatch()">×</span>
         </div>
+        <div class="cust-new" id="loc-new">
+          <span style="color:var(--blue);font-weight:700;">+</span>
+          <span class="txt">New location — ops can add map coordinates later</span>
+        </div>
       </div>
       <div class="field-row">
         <div class="field">
@@ -1213,13 +1217,21 @@ function locAcRender(q){
   locAcCurrent = locAcSearch(q);
   const list = document.getElementById('loc-ac-list');
   const nq = acNorm(q);
-  if(nq.length<2 || !locAcCurrent.length){ list.classList.remove('show'); return; }
-  list.innerHTML = locAcCurrent.map((p,i)=>
+  if(nq.length<2){ list.classList.remove('show'); return; }
+  let html = locAcCurrent.map((p,i)=>
     '<div class="ac-item'+(i===locAcIdx?' sel':'')+'" onclick="locAcPick(\''+p.place.replace(/'/g,"\\'")+'\')">'+
       '<div class="ac-name">'+acHighlight(p.place,q)+'</div>'+
       (p.parent?'<div class="ac-meta">'+p.parent+'</div>':'')+
     '</div>'
   ).join('');
+  const exact = locAcCurrent.some(p=>acNorm(p.place)===nq);
+  if(!exact){
+    const safe = q.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    html += '<div class="ac-new" onclick="locAcPickNew()">'+
+      '<div class="ac-name">+ Add "'+safe+'" as a new location</div>'+
+      '<div class="ac-meta">not mapped yet</div></div>';
+  }
+  list.innerHTML = html;
   list.classList.add('show');
 }
 
@@ -1229,16 +1241,31 @@ function locAcPick(placeName){
   document.getElementById('s-location').value = p.place;
   selectedPlace = p;
   document.getElementById('loc-ac-list').classList.remove('show');
+  document.getElementById('loc-new').classList.remove('show');
   document.getElementById('loc-matched').classList.add('show');
   document.getElementById('loc-matched-txt').textContent = selectedCustomerId
     ? 'Will update this customer\u2019s pin on the Ops map'
     : 'Recognized Ops location';
 }
 
+// A location with no match — the sale still records with this free text
+// exactly as before. No coordinates exist for it, so it's never used to plot
+// or move a map pin (see the guard in syncCustomerSiteFromSale below); ops
+// staff can add it to place_coords with real coordinates once they know
+// where it is, the same way they always have via the map's "Add customer".
+function locAcPickNew(){
+  const typed = document.getElementById('s-location').value.trim();
+  selectedPlace = { place: typed };
+  document.getElementById('loc-ac-list').classList.remove('show');
+  document.getElementById('loc-matched').classList.remove('show');
+  document.getElementById('loc-new').classList.add('show');
+}
+
 function clearLocationMatch(){
   selectedPlace = null;
   document.getElementById('s-location').value='';
   document.getElementById('loc-matched').classList.remove('show');
+  document.getElementById('loc-new').classList.remove('show');
   document.getElementById('s-location').focus();
 }
 
@@ -1249,6 +1276,7 @@ function initLocationAutocomplete(){
     selectedPlace = null;
     locAcIdx = -1;
     document.getElementById('loc-matched').classList.remove('show');
+    document.getElementById('loc-new').classList.remove('show');
     locAcRender(e.target.value);
   });
   input.addEventListener('keydown', e=>{
@@ -1274,7 +1302,10 @@ function initLocationAutocomplete(){
 // blocks or fails the sale itself: if this errors, the sale already
 // succeeded and is unaffected — we just log it.
 async function syncCustomerSiteFromSale(customerId, place){
-  if(!customerId || !place) return;
+  // Guard against writing a site with no real coordinates — a "new location"
+  // pick (see locAcPickNew) has a place name but no lat/lng, and plotting
+  // that as (0,0) or null would corrupt the Ops map's nearest-place math.
+  if(!customerId || !place || place.latitude == null || place.longitude == null) return;
   try{
     await sb.from('customer_sites').upsert({
       customer_id: customerId,
@@ -1284,6 +1315,34 @@ async function syncCustomerSiteFromSale(customerId, place){
     }, { onConflict: 'customer_id,place' });
   }catch(e){
     console.log('Could not sync Ops map pin (non-blocking):', e.message);
+  }
+}
+
+// New customer, recorded from the field: canonicalize them into
+// customer_locations the same way Ops's own "Add customer" pin-drop does
+// (exact-name match first, insert only if genuinely new), so they show up
+// for Accounts/Ops immediately instead of waiting for someone to notice a
+// null customer_id sale and fix it up by hand. Only creates a mapped site
+// if the location was also a recognized place — see the guard above.
+async function ensureCanonicalCustomerAndSite(name, place){
+  if(!name) return;
+  try{
+    let cid = null;
+    const exact = CUSTOMER_LIST.find(c => (c.invoice_name||'').toLowerCase() === name.toLowerCase());
+    if(exact){
+      cid = exact.id;
+    } else {
+      const { data, error } = await sb.from('customer_locations')
+        .insert({ invoice_name: name, delivery_type: 'delivery' })
+        .select('id,invoice_name').single();
+      if(error) throw error;
+      cid = data.id;
+      CUSTOMER_LIST.push({ id: data.id, invoice_name: data.invoice_name, total_litres: 0, order_count: 0 });
+      try{ localStorage.setItem('customer_list', JSON.stringify(CUSTOMER_LIST)); }catch(e){}
+    }
+    if(cid && place) await syncCustomerSiteFromSale(cid, place);
+  }catch(e){
+    console.log('Could not canonicalize new customer (non-blocking):', e.message);
   }
 }
 
@@ -1449,8 +1508,14 @@ async function recordSale() {
   // actually reached the database (an offline-queued sale gets synced later
   // by a different code path that doesn't have this context, so the pin
   // update simply catches up next time this customer is recorded online).
-  if (savedOnline && selectedCustomerId && selectedPlace) {
-    syncCustomerSiteFromSale(selectedCustomerId, selectedPlace);
+  if (savedOnline) {
+    if (selectedCustomerId) {
+      if (selectedPlace) syncCustomerSiteFromSale(selectedCustomerId, selectedPlace);
+    } else if (customer) {
+      // Brand-new customer — add them to the canonical list (and map, if the
+      // location matched too), same as an existing customer would get synced.
+      ensureCanonicalCustomerAndSite(customer, selectedPlace);
+    }
   }
 
   // Reset form regardless of online/offline (the sale is captured either way)
@@ -1462,6 +1527,7 @@ async function recordSale() {
   document.getElementById('s-location').value = '';
   selectedPlace = null;
   document.getElementById('loc-matched').classList.remove('show');
+  document.getElementById('loc-new').classList.remove('show');
   document.getElementById('loc-ac-list').classList.remove('show');
   document.getElementById('s-litres').value = '';
   document.getElementById('s-price').value = '';
