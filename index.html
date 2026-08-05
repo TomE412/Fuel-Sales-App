@@ -314,7 +314,15 @@ textarea:focus{border-color:var(--red);background:#fff;}
       </div>
       <div class="field">
         <label>Location</label>
-        <input type="text" id="s-location" placeholder="e.g. Ruwa">
+        <div class="ac-wrap">
+          <input type="text" id="s-location" placeholder="e.g. Ruwa" autocomplete="off">
+          <div class="ac-list" id="loc-ac-list"></div>
+        </div>
+        <div class="cust-matched" id="loc-matched">
+          <span style="color:var(--green-dark);font-weight:700;">✓</span>
+          <span class="txt" id="loc-matched-txt">Recognized Ops location</span>
+          <span class="clear" onclick="clearLocationMatch()">×</span>
+        </div>
       </div>
       <div class="field-row">
         <div class="field">
@@ -846,6 +854,8 @@ async function loadUser(user, showLock = false) {
 
   initCustomerAutocomplete();
   loadCustomerList();
+  initLocationAutocomplete();
+  loadPlaceList();
 
   if (showLock) {
     showLockScreen();
@@ -1157,6 +1167,126 @@ function initCustomerAutocomplete(){
   input.dataset.acWired = '1';
 }
 
+// ---- LOCATION AUTOCOMPLETE ----
+// Same pattern as the customer autocomplete above, matched against the
+// place list Ops Planner already uses (place_coords). Picking a match means
+// recordSale() can upsert a customer_sites row, so the Ops map pin for that
+// customer stays current automatically — no more waiting on ops staff to
+// manually drop/move a pin every time a delivery location is confirmed here.
+let PLACE_LIST = [];
+let selectedPlace = null; // {place, latitude, longitude} once matched, else null
+let locAcIdx = -1;
+let locAcCurrent = [];
+
+async function loadPlaceList(){
+  try{
+    const cached = localStorage.getItem('place_list');
+    if(cached) PLACE_LIST = JSON.parse(cached);
+  }catch(e){}
+  try{
+    const { data, error } = await withTimeout(
+      sb.from('place_coords').select('place,latitude,longitude,parent').order('place'),
+      8000
+    );
+    if(error) throw error;
+    PLACE_LIST = data||[];
+    try{ localStorage.setItem('place_list', JSON.stringify(PLACE_LIST)); }catch(e){}
+  }catch(e){
+    console.log('Place list: using cached (offline):', e.message);
+  }
+}
+
+function locAcSearch(q){
+  const nq = acNorm(q);
+  if(nq.length < 2) return [];
+  const starts=[], wordStart=[], contains=[];
+  PLACE_LIST.forEach(p=>{
+    const np = acNorm(p.place);
+    if(np.startsWith(nq)) starts.push(p);
+    else if(np.split(' ').some(w=>w.startsWith(nq))) wordStart.push(p);
+    else if(np.includes(nq)) contains.push(p);
+  });
+  return [...starts, ...wordStart, ...contains].slice(0,6);
+}
+
+function locAcRender(q){
+  locAcCurrent = locAcSearch(q);
+  const list = document.getElementById('loc-ac-list');
+  const nq = acNorm(q);
+  if(nq.length<2 || !locAcCurrent.length){ list.classList.remove('show'); return; }
+  list.innerHTML = locAcCurrent.map((p,i)=>
+    '<div class="ac-item'+(i===locAcIdx?' sel':'')+'" onclick="locAcPick(\''+p.place.replace(/'/g,"\\'")+'\')">'+
+      '<div class="ac-name">'+acHighlight(p.place,q)+'</div>'+
+      (p.parent?'<div class="ac-meta">'+p.parent+'</div>':'')+
+    '</div>'
+  ).join('');
+  list.classList.add('show');
+}
+
+function locAcPick(placeName){
+  const p = PLACE_LIST.find(x=>x.place===placeName);
+  if(!p) return;
+  document.getElementById('s-location').value = p.place;
+  selectedPlace = p;
+  document.getElementById('loc-ac-list').classList.remove('show');
+  document.getElementById('loc-matched').classList.add('show');
+  document.getElementById('loc-matched-txt').textContent = selectedCustomerId
+    ? 'Will update this customer\u2019s pin on the Ops map'
+    : 'Recognized Ops location';
+}
+
+function clearLocationMatch(){
+  selectedPlace = null;
+  document.getElementById('s-location').value='';
+  document.getElementById('loc-matched').classList.remove('show');
+  document.getElementById('s-location').focus();
+}
+
+function initLocationAutocomplete(){
+  const input = document.getElementById('s-location');
+  if(!input || input.dataset.acWired) return;
+  input.addEventListener('input', e=>{
+    selectedPlace = null;
+    locAcIdx = -1;
+    document.getElementById('loc-matched').classList.remove('show');
+    locAcRender(e.target.value);
+  });
+  input.addEventListener('keydown', e=>{
+    const list = document.getElementById('loc-ac-list');
+    if(!list.classList.contains('show')) return;
+    if(e.key==='ArrowDown'){ e.preventDefault(); locAcIdx=Math.min(locAcIdx+1,locAcCurrent.length-1); locAcRender(input.value); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); locAcIdx=Math.max(locAcIdx-1,-1); locAcRender(input.value); }
+    else if(e.key==='Enter'){ if(locAcIdx>=0&&locAcCurrent[locAcIdx]){ e.preventDefault(); locAcPick(locAcCurrent[locAcIdx].place); } }
+    else if(e.key==='Escape'){ list.classList.remove('show'); }
+  });
+  document.addEventListener('click', e=>{
+    if(!e.target.closest('#s-location') && !e.target.closest('#loc-ac-list')) document.getElementById('loc-ac-list').classList.remove('show');
+  });
+  input.dataset.acWired = '1';
+}
+
+// Best-effort: keep this customer's Ops map pin in sync with where their
+// sales are actually happening. Only runs when BOTH the customer was picked
+// from the existing-customer list (a confirmed canonical customer_id, not a
+// brand-new one) AND the location matched a known Ops place — mirrors the
+// same customer_id+place upsert Ops's own "Add customer" pin-drop uses, so
+// this never creates a second, conflicting way sites get written. Never
+// blocks or fails the sale itself: if this errors, the sale already
+// succeeded and is unaffected — we just log it.
+async function syncCustomerSiteFromSale(customerId, place){
+  if(!customerId || !place) return;
+  try{
+    await sb.from('customer_sites').upsert({
+      customer_id: customerId,
+      place: place.place,
+      latitude: place.latitude,
+      longitude: place.longitude
+    }, { onConflict: 'customer_id,place' });
+  }catch(e){
+    console.log('Could not sync Ops map pin (non-blocking):', e.message);
+  }
+}
+
 // ---- SALES ----
 
 async function cancelSale(id) {
@@ -1315,6 +1445,14 @@ async function recordSale() {
     }
   }
 
+  // Keep the Ops map pin current for this customer — only possible when we
+  // actually reached the database (an offline-queued sale gets synced later
+  // by a different code path that doesn't have this context, so the pin
+  // update simply catches up next time this customer is recorded online).
+  if (savedOnline && selectedCustomerId && selectedPlace) {
+    syncCustomerSiteFromSale(selectedCustomerId, selectedPlace);
+  }
+
   // Reset form regardless of online/offline (the sale is captured either way)
   document.getElementById('s-customer').value = '';
   selectedCustomerId = null;
@@ -1322,6 +1460,9 @@ async function recordSale() {
   document.getElementById('cust-new').classList.remove('show');
   document.getElementById('ac-list').classList.remove('show');
   document.getElementById('s-location').value = '';
+  selectedPlace = null;
+  document.getElementById('loc-matched').classList.remove('show');
+  document.getElementById('loc-ac-list').classList.remove('show');
   document.getElementById('s-litres').value = '';
   document.getElementById('s-price').value = '';
   document.getElementById('s-cost').value = '';
@@ -2210,6 +2351,8 @@ function startupFromCache() {
     // background, so this is safe and never blocks the PIN screen.
     initCustomerAutocomplete();
     loadCustomerList();
+    initLocationAutocomplete();
+    loadPlaceList();
 
     // ONLY NOW, with the PIN screen already on screen, do we touch the
     // network — in the background, where a failure is harmless. This warms
