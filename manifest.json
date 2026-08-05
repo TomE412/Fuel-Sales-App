@@ -2,6 +2,7 @@
   "name": "Skelsee Fuel Sales",
   "short_name": "Fuel Sales",
   "description": "Sales tracking app for fuel reps",
+  "id": "/Fuel-Sales-App/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
