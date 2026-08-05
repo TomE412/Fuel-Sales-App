@@ -404,6 +404,11 @@ textarea:focus{border-color:var(--red);background:#fff;}
       <div class="card-title">Upcoming deliveries</div>
       <div id="d-deliveries"><div class="empty" style="padding:16px;"><p style="font-size:13px;">No upcoming deliveries</p></div></div>
     </div>
+    <div class="card">
+      <div class="card-title">🌱 My customers — ripeness</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Your customers only, most due first</div>
+      <div id="d-ripeness"><div class="empty" style="padding:16px;"><p style="font-size:13px;">Loading…</p></div></div>
+    </div>
   </div>
 
   <!-- CALENDAR TAB -->
@@ -1841,6 +1846,99 @@ function renderDash() {
   }
 }
 
+// ---- MY CUSTOMERS — RIPENESS ----
+// app_rep_gaps already computes, per customer, an effective "rep" (a manual
+// assignment on customer_locations if one was made, else whoever the sales
+// history points to) plus reorder ripeness — the same view Accounts' "By
+// rep" tab and Ops use. This just filters that view to the signed-in rep's
+// own name and sorts most-overdue first, so nothing new is computed here.
+const RIPE_STATUS_COL = {
+  gone_quiet: 'var(--red)',
+  overdue: 'var(--amber)',
+  due_now: 'var(--green-dark)',
+  due_soon: 'var(--blue)',
+  not_yet: 'var(--text3)',
+  insufficient_history: 'var(--text3)',
+  no_pattern: 'var(--text3)'
+};
+const RIPE_STATUS_LBL = {
+  gone_quiet: 'Gone quiet',
+  overdue: 'Overdue',
+  due_now: 'Due now',
+  due_soon: 'Due soon',
+  not_yet: 'Not due yet',
+  insufficient_history: 'New / not enough history',
+  no_pattern: 'No clear pattern yet'
+};
+
+async function loadMyRipeness(){
+  const el = document.getElementById('d-ripeness');
+  if (!el || !currentProfile) return;
+  try {
+    // nullsFirst:false matters — Postgres defaults to NULLS FIRST on a
+    // descending sort, which would otherwise push every customer with no
+    // established buying pattern (ripeness_pct is null, not low) above the
+    // genuinely most-overdue real customers.
+    const { data, error } = await withTimeout(
+      sb.from('app_rep_gaps').select('*').eq('rep', currentProfile.full_name).order('ripeness_pct', { ascending: false, nullsFirst: false }),
+      8000
+    );
+    if (error) throw error;
+    renderMyRipeness(data || []);
+  } catch(e) {
+    el.innerHTML = '<div class="empty" style="padding:16px;"><p style="font-size:13px;">Could not load — check your connection</p></div>';
+  }
+}
+
+function renderMyRipeness(rows){
+  const el = document.getElementById('d-ripeness');
+  if (!rows.length) {
+    el.innerHTML = '<div class="empty" style="padding:16px;"><p style="font-size:13px;">No customers assigned to you yet</p></div>';
+    return;
+  }
+  el.innerHTML = rows.map(r => {
+    const col = RIPE_STATUS_COL[r.gap_status] || 'var(--text3)';
+    const lbl = RIPE_STATUS_LBL[r.gap_status] || r.gap_status;
+    const removeBtn = r.gap_status === 'gone_quiet'
+      ? `<button onclick="removeGoneQuietCustomer('${r.customer.replace(/'/g,"\\'")}')" style="padding:7px 10px;background:transparent;border:1px solid var(--red);color:var(--red);border-radius:8px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">Remove</button>`
+      : '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.customer}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;">${r.days_since_last!=null?r.days_since_last+'d since last order':'No orders yet'}${r.avg_cycle_days?' · every '+r.avg_cycle_days+'d':''}</div>
+        <div style="font-size:11px;font-weight:600;color:${col};margin-top:2px;">${lbl}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:16px;font-weight:700;font-family:var(--mono);color:${col};">${r.ripeness_pct!=null?r.ripeness_pct+'%':'—'}</div>
+      </div>
+      ${removeBtn}
+    </div>`;
+  }).join('');
+}
+
+// "Remove" only ever shows for gone_quiet customers. This does NOT just
+// clear the assignment — clearing assigned_rep_id alone falls back to
+// app_rep_gaps' own sales-history calculation, which would still point back
+// at this rep (confirmed by testing against the live view before building
+// this). Writing the literal "Unassigned" as a real manual assignment is
+// the same convention Accounts already uses for a customer nobody owns, so
+// it's genuinely released — any rep can be assigned to them from here on.
+async function removeGoneQuietCustomer(customerName){
+  if (!confirm(customerName + ' has gone quiet. Remove them from your list?\n\nThey’ll show as unassigned — any rep can pick them up from here.')) return;
+  try {
+    const { error } = await sb.from('customer_locations').update({
+      assigned_rep: 'Unassigned',
+      assigned_rep_id: null,
+      assigned_at: new Date().toISOString(),
+      assigned_by: currentProfile?.full_name || null
+    }).eq('invoice_name', customerName);
+    if (error) throw error;
+    await loadMyRipeness();
+  } catch(e) {
+    alert('Could not remove: ' + (e.message || e));
+  }
+}
+
 // ---- HELPERS ----
 function showTab(id, btn) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -1848,6 +1946,7 @@ function showTab(id, btn) {
   document.getElementById('tab-'+id).classList.add('active');
   if (btn) btn.classList.add('active');
   if (id === 'cal') renderCal();
+  if (id === 'dash') loadMyRipeness();
   if (id === 'more') {
     // Restore saved cost per km
     const saved = localStorage.getItem('calc_cpkm');
