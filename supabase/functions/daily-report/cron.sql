@@ -16,7 +16,7 @@ select cron.schedule(
   '30 4 * * *',
   $$
   select net.http_post(
-    url := 'https://lkaotuavapyvqfuuyzft.supabase.co/functions/v1/daily-report',
+    url := 'https://lkaotuavapyvqfuuyzft.supabase.co/functions/v1/Daily-reports',
     headers := jsonb_build_object(
       'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYW90dWF2YXB5dnFmdXV5emZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MzU4NzcsImV4cCI6MjA5NzQxMTg3N30.he7Ah-TVyzZZAMiCHglIzP-UbdnxDw-CW4V9mYYJBDU',
       'Content-Type', 'application/json'

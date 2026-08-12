@@ -20,16 +20,16 @@ I don't have logins for either. Steps below.
 ```
 supabase login
 supabase link --project-ref lkaotuavapyvqfuuyzft
-supabase functions deploy daily-report
+supabase functions deploy Daily-reports
 ```
 
 **Option B — Dashboard, no CLI needed:**
 Supabase Dashboard → Edge Functions → Create a new function named
-`daily-report` → paste the contents of `index.ts` → Deploy.
+`Daily-reports` → paste the contents of `index.ts` → Deploy.
 
 ## 3. Set secrets
 
-Dashboard → Edge Functions → `daily-report` → Secrets:
+Dashboard → Edge Functions → `Daily-reports` → Secrets:
 
 | Key | Value |
 |---|---|
@@ -42,7 +42,7 @@ Dashboard → Edge Functions → `daily-report` → Secrets:
 
 ## 4. Schedule it
 
-Dashboard → Integrations → **Cron** → New job → pick the `daily-report`
+Dashboard → Integrations → **Cron** → New job → pick the `Daily-reports`
 function → schedule `30 4 * * *` (04:30 UTC = 06:30 Harare).
 
 If your plan doesn't show that Cron UI, run `cron.sql` (in this folder)
@@ -52,7 +52,7 @@ once in the SQL Editor instead — same result via `pg_cron` directly.
 
 Trigger it manually and check the response:
 ```
-curl -X POST https://lkaotuavapyvqfuuyzft.supabase.co/functions/v1/daily-report \
+curl -X POST https://lkaotuavapyvqfuuyzft.supabase.co/functions/v1/Daily-reports \
   -H "Authorization: Bearer <anon key>"
 ```
 A `{"ok":true,...}` response with an email landing in your inbox a few
