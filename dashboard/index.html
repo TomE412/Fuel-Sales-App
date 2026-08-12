@@ -194,7 +194,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
   <div class="main">
     <div class="col-left">
-      <div class="panel">
+      <div class="panel scroll">
         <div class="ph">
           <div class="ph-title" style="color:var(--red);">🚛 Deliveries going out today</div>
           <span class="ph-count" id="today-count" style="background:var(--red-light);color:var(--red-dark);">0</span>
@@ -508,24 +508,23 @@ function renderAll() {
   const curM = now.getMonth();
 
   // TODAY DELIVERIES
-  const todayDels = activeSales.filter(s => (s.deliveryDate||'').split('T')[0] === today);
-  const pending = todayDels.filter(s => !s.delivered).length;
+  const todayDeliveries = activeSales.filter(s => (s.deliveryDate||'').split('T')[0] === today && !s.delivered);
+  const pending = todayDeliveries.length;
   document.getElementById('today-count').textContent = pending;
   const toEl = document.getElementById('today-list');
-  if (todayDels.length) {
-    toEl.innerHTML = todayDels.map(s => {
+  if (todayDeliveries.length) {
+    toEl.innerHTML = todayDeliveries.map(s => {
       const fp = s.fuelType ? `<span class="pill ${s.fuelType==='Petrol'?'p-petrol':'p-diesel'}">${s.fuelType}</span>` : '';
-      const dp = s.delivered ? `<span class="pill p-del">✓ Delivered</span>` : '';
       return `<div class="today-row">
-        <div class="today-icon">${s.delivered?'✓':'🚛'}</div>
+        <div class="today-icon">🚛</div>
         <div style="flex:1;min-width:0;">
-          <div class="order-name ${s.delivered?'delivered':''}">${s.customer}${fp}${dp}</div>
+          <div class="order-name">${s.customer}${fp}</div>
           <div class="order-meta">${s.location||'—'} · ${s.rep}</div>
           ${s.notes?`<div style="font-size:11px;color:var(--text2);margin-top:3px;background:var(--gray-light);padding:4px 6px;border-radius:4px;border-left:2px solid var(--amber);">📝 ${s.notes}</div>`:''}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
-          <div class="order-litres" style="color:${s.delivered?'var(--gray-text)':'var(--green-dark)'}">${(s.litres||0).toLocaleString()} L</div>
-          ${s.delivered?'':`<button class="deliver-btn" onclick="markDelivered('${s.id}')">✓ Mark delivered</button>`}
+          <div class="order-litres" style="color:var(--green-dark)">${(s.litres||0).toLocaleString()} L</div>
+          <button class="deliver-btn" onclick="markDelivered('${s.id}')">✓ Mark delivered</button>
         </div>
       </div>`;
     }).join('');
