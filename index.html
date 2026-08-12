@@ -1304,6 +1304,28 @@ function initLocationAutocomplete(){
   input.dataset.acWired = '1';
 }
 
+// Best-effort lookup for a brand-new location typed in the field (no known
+// coordinates yet) using OpenStreetMap's free Nominatim geocoder. Never
+// blocks the sale: a failed/slow/empty lookup just means the pin waits for
+// ops staff to place it by hand, exactly as it does today.
+async function geocodePlace(name){
+  if(!name) return null;
+  try{
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=zw&q=' +
+      encodeURIComponent(name + ', Zimbabwe');
+    const res = await withTimeout(fetch(url, { headers: { 'Accept': 'application/json' } }), 6000);
+    if(!res.ok) return null;
+    const rows = await res.json();
+    if(!rows || !rows.length) return null;
+    const lat = parseFloat(rows[0].lat), lon = parseFloat(rows[0].lon);
+    if(isNaN(lat) || isNaN(lon)) return null;
+    return { latitude: lat, longitude: lon };
+  }catch(e){
+    console.log('Geocode lookup failed (non-blocking):', e.message);
+    return null;
+  }
+}
+
 // Best-effort: keep this customer's Ops map pin in sync with where their
 // sales are actually happening. Only runs when BOTH the customer was picked
 // from the existing-customer list (a confirmed canonical customer_id, not a
@@ -1692,14 +1714,48 @@ async function recordSale() {
   // actually reached the database (an offline-queued sale gets synced later
   // by a different code path that doesn't have this context, so the pin
   // update simply catches up next time this customer is recorded online).
+  // Fire-and-forget (not awaited) so the form resets immediately — same
+  // pattern as syncCustomerSiteFromSale/ensureCanonicalCustomerAndSite below.
   if (savedOnline) {
-    if (selectedCustomerId) {
-      if (selectedPlace) syncCustomerSiteFromSale(selectedCustomerId, selectedPlace);
-    } else if (customer) {
-      // Brand-new customer — add them to the canonical list (and map, if the
-      // location matched too), same as an existing customer would get synced.
-      ensureCanonicalCustomerAndSite(customer, selectedPlace);
-    }
+    // Snapshot everything this needs BEFORE the form reset below clears the
+    // module-level selectedPlace/selectedCustomerId — this IIFE keeps running
+    // after that reset (it awaits a network geocode call), so it must not
+    // read those live variables again once execution resumes past an await.
+    const placeSnapshot = selectedPlace ? { ...selectedPlace } : null;
+    const custIdSnapshot = selectedCustomerId;
+    const custNameSnapshot = customer;
+    (async () => {
+      // A brand-new location (from locAcPickNew) has a place name but no
+      // coordinates. Try a one-time free geocode lookup before syncing — if
+      // it succeeds, save the coordinates to place_coords too, so every rep
+      // after this one gets it as a normal autocomplete match instead of
+      // "not mapped yet". If it fails, behavior is unchanged from before.
+      if (placeSnapshot && placeSnapshot.place && placeSnapshot.latitude == null) {
+        const coords = await geocodePlace(placeSnapshot.place);
+        if (coords) {
+          placeSnapshot.latitude = coords.latitude;
+          placeSnapshot.longitude = coords.longitude;
+          try {
+            await sb.from('place_coords').insert({
+              place: placeSnapshot.place,
+              latitude: coords.latitude,
+              longitude: coords.longitude
+            });
+            PLACE_LIST.push({ place: placeSnapshot.place, latitude: coords.latitude, longitude: coords.longitude, parent: null });
+            try { localStorage.setItem('place_list', JSON.stringify(PLACE_LIST)); } catch (e) {}
+          } catch (e) {
+            console.log('Could not save geocoded place (non-blocking):', e.message);
+          }
+        }
+      }
+      if (custIdSnapshot) {
+        if (placeSnapshot) syncCustomerSiteFromSale(custIdSnapshot, placeSnapshot);
+      } else if (custNameSnapshot) {
+        // Brand-new customer — add them to the canonical list (and map, if the
+        // location matched too), same as an existing customer would get synced.
+        ensureCanonicalCustomerAndSite(custNameSnapshot, placeSnapshot);
+      }
+    })();
   }
 
   // Reset form regardless of online/offline (the sale is captured either way)

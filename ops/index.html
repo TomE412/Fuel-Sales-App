@@ -142,8 +142,12 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
 .sbtn.danger{background:#fff;border-color:var(--red);color:var(--red);}
 .sbtn:disabled{opacity:0.4;cursor:default;}
 .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--muted);margin-left:auto;align-items:center;}
-.lg{display:flex;align-items:center;gap:4px;}
+.lg{display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;}
+.lg input{margin:0;width:11px;height:11px;flex-shrink:0;}
+.lg .n{color:var(--line);font-family:var(--mono);}
 .dot{width:9px;height:9px;border-radius:50%;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,0.15);flex-shrink:0;}
+.dot.sq{border-radius:2px;}
+.dot.dm{border-radius:2px;transform:rotate(45deg);}
 
 /* MAP SEARCH */
 .msearch{position:relative;}
@@ -352,13 +356,7 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
       </div>
       <label class="tgl" id="drag-tgl"><input type="checkbox" id="drag-on" onchange="toggleDrag()"> ✋ Move pins</label>
       <button class="sbtn" onclick="startAdd()" id="add-btn">➕ Add customer</button>
-      <div class="legend">
-        <span class="lg"><span class="dot" style="background:#D4180A;"></span>Gone quiet</span>
-        <span class="lg"><span class="dot" style="background:#BA7517;"></span>Overdue</span>
-        <span class="lg"><span class="dot" style="background:#3B6D11;"></span>Due now</span>
-        <span class="lg"><span class="dot" style="background:#185FA5;"></span>Due soon</span>
-        <span class="lg"><span class="dot" style="background:#c9c9c6;"></span>Not yet</span>
-      </div>
+      <div class="legend" id="legend"></div>
     </div>
     <div class="mapwrap">
       <div id="map"></div>
@@ -548,9 +546,10 @@ function DEPOT(){
 
 let SALES=[], CHASE={due_now:[],overdue:[]}, RIPE=[], BOOK=[];
 let BOARD=[], ROUTES=[], PLACES=[], TRUCKS=[], SETTINGS={road_factor:1.3,ors_key:null}, CUSTNAMES=[];
+let PROSPECTS=[];
 let tab='due_now', pat='all', bkSort={k:'ripeness_pct',d:-1};
 let curRoute=null, page='today';
-let map=null, pinLayer=null, dragLayer=null, markers={}, mapReady=false;
+let map=null, pinLayer=null, dragLayer=null, prospectLayer=null, markers={}, mapReady=false;
 let RUN=[], truckKey=null, dragMode=false, addMode=false, pendingLatLng=null, runLine=null;
 
 // routing state: km + minutes from the last successful call, and how we got them
@@ -558,6 +557,33 @@ let ROUTE={km:0, mins:null, mode:'line', busy:false, seq:0};
 
 const STATUS_COL={gone_quiet:'#D4180A',overdue:'#BA7517',due_now:'#3B6D11',due_soon:'#185FA5',not_yet:'#c9c9c6',never_ordered:'#c9c9c6',unknown:'#c9c9c6'};
 const STATUS_LBL={gone_quiet:'Gone quiet',overdue:'Overdue',due_now:'Due now',due_soon:'Due soon',not_yet:'Not yet due',never_ordered:'Never ordered',unknown:'No history'};
+
+/* ---- map layer toggles ---- */
+// Statuses that render as the same grey dot share one "not_yet" toggle —
+// they're visually identical today, so a separate checkbox per status would
+// just be three checkboxes that always move together.
+const STATUS_LAYER={gone_quiet:'gone_quiet',overdue:'overdue',due_now:'due_now',due_soon:'due_soon',not_yet:'not_yet',never_ordered:'not_yet',unknown:'not_yet'};
+const LAYER_DEFS=[
+  {key:'gone_quiet',label:'Gone quiet',col:'#D4180A'},
+  {key:'overdue',label:'Overdue',col:'#BA7517'},
+  {key:'due_now',label:'Due now',col:'#3B6D11'},
+  {key:'due_soon',label:'Due soon',col:'#185FA5'},
+  {key:'not_yet',label:'Not yet',col:'#c9c9c6'},
+  {key:'farmer',label:'Farmer prospects',col:'#0E8C7F',icon:'square'},
+  {key:'mine',label:'Mine prospects',col:'#A3348C',icon:'diamond'}
+];
+let LAYERS={};
+(function initLayers(){
+  let saved={};
+  try{ saved=JSON.parse(localStorage.getItem('map_layers')||'{}'); }catch(e){}
+  LAYER_DEFS.forEach(d=>{ LAYERS[d.key]= d.key in saved ? !!saved[d.key] : true; });
+})();
+function saveLayers(){ try{ localStorage.setItem('map_layers', JSON.stringify(LAYERS)); }catch(e){} }
+function toggleLayer(key){
+  LAYERS[key]=!LAYERS[key];
+  saveLayers();
+  drawPins();
+}
 
 /* ============ AUTH ============ */
 async function signIn(){
@@ -607,20 +633,22 @@ async function loadAll(){
 
 async function loadRefs(){
   try{
-    const [r,p,t,s,c,d]=await Promise.all([
+    const [r,p,t,s,c,d,pr]=await Promise.all([
       sb.from('routes').select('*').order('sort_order'),
       sb.from('place_coords').select('*').order('place'),
       sb.from('trucks').select('*').eq('active',true).order('sort_order'),
       sb.from('app_settings').select('*').eq('id',1).maybeSingle(),
       sb.from('customer_locations').select('id,invoice_name').order('invoice_name'),
-      sb.from('depots').select('*').eq('active',true).order('sort_order')
+      sb.from('depots').select('*').eq('active',true).order('sort_order'),
+      sb.from('map_prospect_feed').select('*')
     ]);
     ROUTES=r.data||[]; PLACES=p.data||[]; TRUCKS=t.data||[]; DEPOTS=d.data||[];
     if(s.data) SETTINGS=s.data;
     CUSTNAMES=c.data||[];
+    PROSPECTS=pr.data||[];
     if(!truckKey && TRUCKS.length) truckKey=TRUCKS[TRUCKS.length-1].truck_key;
     if(!depotKey && DEPOTS.length) depotKey=DEPOTS[0].depot_key;
-    renderRoutePicker(); renderDepots(); renderTrucks(); renderSettings(); fillMapRoutes(); fillPlaceSelect();
+    renderRoutePicker(); renderDepots(); renderTrucks(); renderSettings(); fillMapRoutes(); fillPlaceSelect(); renderLayerToggles();
     if(mapReady) drawDepot();
   }catch(e){ console.warn('refs',e); }
 }
@@ -1041,6 +1069,7 @@ function initMap(){
   map=L.map('map',{zoomControl:true}).setView([-18.3,30.5],7);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
   pinLayer=L.layerGroup().addTo(map);
+  prospectLayer=L.layerGroup().addTo(map);
   map.on('click',e=>{ if(addMode) dropPin(e.latlng); });
   mapReady=true;
   drawDepot();
@@ -1061,7 +1090,7 @@ function fillPlaceSelect(){
   s.innerHTML=PLACES.map(p=>'<option value="'+esc(p.place)+'">'+esc(p.place)+(p.parent?' ('+esc(p.parent)+')':'')+'</option>').join('');
 }
 
-function sitesForMap(){
+function routeFilteredSites(){
   const rk=document.getElementById('map-route')?.value||'all';
   const seen={};
   BOARD.forEach(b=>{
@@ -1072,10 +1101,50 @@ function sitesForMap(){
   return Object.values(seen);
 }
 
+function sitesForMap(){
+  return routeFilteredSites().filter(b=>LAYERS[STATUS_LAYER[b.board_status]||'not_yet']);
+}
+
+function renderLayerToggles(){
+  const el=document.getElementById('legend');
+  if(!el) return;
+  const statusCounts={};
+  routeFilteredSites().forEach(b=>{
+    const k=STATUS_LAYER[b.board_status]||'not_yet';
+    statusCounts[k]=(statusCounts[k]||0)+1;
+  });
+  const prospectCounts={farmer:0,mine:0};
+  PROSPECTS.forEach(p=>{ if(prospectCounts[p.entity_type]!=null) prospectCounts[p.entity_type]++; });
+  el.innerHTML=LAYER_DEFS.map(d=>{
+    const n = d.key==='farmer'||d.key==='mine' ? (prospectCounts[d.key]||0) : (statusCounts[d.key]||0);
+    const dotClass = d.icon==='square'?'dot sq':d.icon==='diamond'?'dot dm':'dot';
+    return '<label class="lg">'+
+      '<input type="checkbox" '+(LAYERS[d.key]?'checked':'')+' onchange="toggleLayer(\''+d.key+'\')">'+
+      '<span class="'+dotClass+'" style="background:'+d.col+';"></span>'+
+      esc(d.label)+' <span class="n">'+n+'</span></label>';
+  }).join('');
+}
+
 function drawPins(){
   if(!mapReady) return;
+  renderLayerToggles();
   pinLayer.clearLayers(); markers={};
+  prospectLayer.clearLayers();
   if(dragLayer){ map.removeLayer(dragLayer); dragLayer=null; }
+
+  if(LAYERS.farmer || LAYERS.mine){
+    PROSPECTS.forEach(p=>{
+      if(!LAYERS[p.entity_type]) return;
+      if(p.lat==null||p.lng==null) return;
+      const col = p.entity_type==='mine' ? '#A3348C' : '#0E8C7F';
+      const shapeCSS = p.entity_type==='mine'
+        ? 'width:11px;height:11px;background:'+col+';border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15);transform:rotate(45deg);'
+        : 'width:11px;height:11px;background:'+col+';border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15);border-radius:2px;';
+      const icon=L.divIcon({className:'',html:'<div style="'+shapeCSS+'"></div>',iconSize:[11,11],iconAnchor:[5.5,5.5]});
+      const m=L.marker([p.lat,p.lng],{icon}).addTo(prospectLayer);
+      m.bindPopup(prospectPopupHTML(p));
+    });
+  }
 
   sitesForMap().forEach(b=>{
     const col=STATUS_COL[b.board_status]||'#c9c9c6';
@@ -1101,6 +1170,22 @@ function drawPins(){
     }
   });
   if(RUN.length && ROUTE.mode==='line') drawLineRoute();
+}
+
+function prospectPopupHTML(p){
+  const kind = p.entity_type==='mine' ? '⛏️ Mine prospect' : '🌾 Farmer prospect';
+  const col = p.entity_type==='mine' ? '#A3348C' : '#0E8C7F';
+  return '<b>'+esc(p.name||'—')+'</b><br>'+
+    '<span style="color:'+col+';font-size:11px;font-weight:700;">'+kind+'</span>'+
+    (p.area?'<br><span style="color:#9a9a97;font-size:11px;">📍 '+esc(p.area)+'</span>':'')+
+    '<div style="margin:7px 0;padding:6px 0;border-top:1px solid #eee;font-size:11px;line-height:1.6;">'+
+      (p.crops&&p.crops.length?'Crops: <b>'+esc(p.crops.join(', '))+'</b><br>':'')+
+      (p.mineral?'Mineral: <b>'+esc(p.mineral)+'</b><br>':'')+
+      (p.season_signal?'Season: '+esc(p.season_signal)+'<br>':'')+
+      (p.capacity?'Capacity: '+esc(p.capacity)+'<br>':'')+
+      (p.supplier?'Current supplier: '+esc(p.supplier)+'<br>':'')+
+      (p.contact?'Contact: '+esc(p.contact):'')+
+    '</div>';
 }
 
 function popupHTML(b){
