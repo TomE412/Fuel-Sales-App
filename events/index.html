@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="color-scheme" content="light only">
+<title>Skelsee Event Planner</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Event Planner">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --red:#D4180A;--red-dark:#A32D2D;--red-light:#FCEBEB;
+  --green:#1D9E75;--green-light:#EAF3DE;--green-dark:#3B6D11;
+  --amber:#BA7517;--amber-light:#FAEEDA;
+  --blue:#185FA5;--blue-light:#E6F1FB;
+  --purple:#6B3FA0;--purple-light:#EFE7F7;
+  --gray:#F4F4F2;--border:#E0E0DE;--text3:#9a9a97;--text2:#5a5a57;--text:#1a1a18;
+  --surface:#fff;--bg:#F7F7F5;
+  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+  --radius:12px;--radius-sm:8px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;}
+.screen{display:none;flex-direction:column;height:100vh;overflow:hidden;}
+.screen.active{display:flex;}
+
+/* PIN LOCK */
+.lock-screen{position:fixed;inset:0;background:var(--bg);z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center;padding:32px;}
+.lock-screen.active{display:flex;}
+.lock-logo{font-size:44px;margin-bottom:18px;}
+.lock-title{font-size:20px;font-weight:700;margin-bottom:4px;text-align:center;}
+.lock-sub{font-size:13px;color:var(--text3);margin-bottom:28px;text-align:center;}
+.lock-dots{display:flex;justify-content:center;gap:14px;margin-bottom:28px;}
+.lock-dot{width:16px;height:16px;border-radius:50%;background:var(--border);transition:background 0.15s;}
+.lock-dot.filled{background:var(--blue);}
+.lock-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:280px;}
+.lock-key{padding:18px;border:1px solid var(--border);border-radius:12px;font-size:22px;font-weight:600;background:#fff;cursor:pointer;font-family:var(--mono);text-align:center;transition:background 0.1s;}
+.lock-key:active{background:var(--border);}
+.lock-err{color:var(--red);font-size:13px;text-align:center;margin-top:12px;min-height:20px;font-weight:500;}
+.lock-timer{color:var(--amber);font-size:13px;text-align:center;margin-top:8px;font-weight:600;}
+
+/* MAIN APP */
+.topbar{background:#fff;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.topbar-title{font-size:16px;font-weight:700;}
+.sync-badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;background:var(--green-light);color:var(--green-dark);cursor:pointer;}
+.sync-badge.pending{background:var(--amber-light);color:var(--amber);}
+.sync-badge.error{background:var(--red-light);color:var(--red-dark);}
+
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);background:#fff;border-bottom:1px solid var(--border);flex-shrink:0;}
+.tab{padding:10px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;text-transform:uppercase;letter-spacing:0.04em;}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+
+.tab-content{display:none;flex:1;overflow-y:auto;padding:16px;}
+.tab-content.active{display:block;}
+
+/* CARDS / FIELDS */
+.card{background:#fff;border-radius:var(--radius);border:1px solid var(--border);padding:16px;margin-bottom:12px;}
+.card-title{font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px;}
+.field{margin-bottom:14px;}
+.field label{font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em;}
+.field input,.field select{width:100%;padding:13px 14px;background:var(--gray);border:1.5px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);font-size:15px;outline:none;transition:border-color 0.15s;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--blue);background:#fff;}
+.field textarea{width:100%;padding:10px 12px;background:var(--gray);border:1.5px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);font-size:14px;outline:none;resize:none;min-height:70px;}
+.submit-btn{width:100%;padding:15px;background:var(--blue);color:#fff;border:none;border-radius:var(--radius-sm);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;margin-top:8px;}
+.submit-btn:active{opacity:0.85;}
+.secondary-btn{width:100%;padding:12px;background:var(--gray);color:var(--text2);border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;margin-top:8px;}
+.logout-btn{width:100%;padding:13px;background:var(--gray);color:var(--text2);border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;margin-top:12px;}
+
+/* EMPTY STATE */
+.empty{text-align:center;padding:40px 20px;color:var(--text3);}
+.empty-icon{font-size:36px;margin-bottom:10px;opacity:0.4;}
+
+/* EVENTS */
+.config-banner{display:none;background:var(--amber-light);color:var(--amber);border-radius:8px;padding:10px 12px;font-size:12px;font-weight:600;margin-bottom:12px;}
+.event-card{background:#fff;border-radius:var(--radius);border:1px solid var(--border);padding:14px;margin-bottom:10px;cursor:pointer;position:relative;}
+.event-card-name{font-size:15px;font-weight:700;padding-right:70px;}
+.event-card-meta{font-size:12px;color:var(--text3);margin-top:3px;}
+.pill{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;}
+.p-status{position:absolute;top:14px;right:14px;background:var(--blue-light);color:var(--blue);}
+.back-link{display:inline-block;margin-bottom:10px;font-size:13px;font-weight:700;color:var(--blue);cursor:pointer;}
+
+/* ACCORDIONS */
+.accordion{background:#fff;border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:8px;overflow:hidden;}
+.accordion-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer;font-weight:700;font-size:13px;}
+.accordion-actions{display:flex;align-items:center;gap:10px;}
+.mini-btn{font-size:11px;font-weight:700;padding:4px 8px;border-radius:6px;background:var(--blue-light);color:var(--blue);border:none;cursor:pointer;}
+.accordion-body{display:none;padding:0 14px 12px;border-top:1px solid var(--border);}
+.accordion-body.show{display:block;padding-top:10px;}
+.entry-row{padding:8px 0;border-bottom:1px solid #f2f2f0;}
+.entry-row:last-child{border-bottom:none;}
+.entry-row-title{font-size:13px;font-weight:600;}
+.entry-row-sub{font-size:11px;color:var(--text3);margin-top:2px;}
+.offline-note{font-size:11px;color:var(--amber);margin-bottom:6px;font-weight:600;}
+
+/* CALENDAR */
+.cal-legend{display:flex;gap:10px;margin-top:12px;padding:10px;background:#fff;border-radius:8px;border:1px solid var(--border);flex-wrap:wrap;}
+.cal-legend span{font-size:10.5px;font-weight:600;display:flex;align-items:center;gap:4px;}
+.cal-legend i{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.cal-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;}
+.cal-item:last-child{border-bottom:none;}
+.cal-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.cal-item-title{font-size:13px;font-weight:600;}
+.cal-item-sub{font-size:11px;color:var(--text3);}
+</style>
+</head>
+<body>
+
+<!-- PIN LOCK SCREEN -->
+<div class="lock-screen active" id="lock-screen">
+  <div class="lock-logo">🎉</div>
+  <div class="lock-title">Event Planner</div>
+  <div class="lock-sub">Enter your PIN to continue</div>
+  <div class="lock-dots">
+    <div class="lock-dot" id="ld0"></div>
+    <div class="lock-dot" id="ld1"></div>
+    <div class="lock-dot" id="ld2"></div>
+    <div class="lock-dot" id="ld3"></div>
+    <div class="lock-dot" id="ld4"></div>
+    <div class="lock-dot" id="ld5"></div>
+  </div>
+  <div class="lock-grid">
+    <button class="lock-key" onclick="lockKey('1')">1</button>
+    <button class="lock-key" onclick="lockKey('2')">2</button>
+    <button class="lock-key" onclick="lockKey('3')">3</button>
+    <button class="lock-key" onclick="lockKey('4')">4</button>
+    <button class="lock-key" onclick="lockKey('5')">5</button>
+    <button class="lock-key" onclick="lockKey('6')">6</button>
+    <button class="lock-key" onclick="lockKey('7')">7</button>
+    <button class="lock-key" onclick="lockKey('8')">8</button>
+    <button class="lock-key" onclick="lockKey('9')">9</button>
+    <button class="lock-key" onclick="lockKey('clr')" style="font-size:13px;color:var(--text2);">CLR</button>
+    <button class="lock-key" onclick="lockKey('0')">0</button>
+    <button class="lock-key" onclick="lockKey('del')">⌫</button>
+  </div>
+  <div class="lock-err" id="lock-err"></div>
+  <div class="lock-timer" id="lock-timer"></div>
+</div>
+
+<!-- MAIN APP -->
+<div class="screen" id="screen-app">
+  <div class="topbar">
+    <div class="topbar-title">🎉 Event Planner</div>
+    <div id="sync-badge" class="sync-badge" onclick="retrySync()" title="Tap to try uploading now">Ready</div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" data-tab="events" onclick="showTab('events',this)">🎉 Events</div>
+    <div class="tab" data-tab="add" onclick="showTab('add',this)">➕ Add Entry</div>
+    <div class="tab" data-tab="cal" onclick="showTab('cal',this)">📅 Calendar</div>
+    <div class="tab" data-tab="more" onclick="showTab('more',this)">⚙️ More</div>
+  </div>
+
+  <!-- EVENTS TAB -->
+  <div class="tab-content active" id="tab-events">
+    <div class="config-banner" id="config-banner">⚠️ Not connected to Google Sheets yet — paste your Apps Script URL &amp; token into index.html. See SETUP.md.</div>
+
+    <div id="events-list-view">
+      <button class="submit-btn" onclick="openEventForm()">+ New Event</button>
+      <div class="card" id="event-form-card" style="display:none;margin-top:12px;">
+        <div class="card-title">New event</div>
+        <div id="event-form-fields"></div>
+        <button class="submit-btn" onclick="saveNewEvent()">Save Event</button>
+        <button class="secondary-btn" onclick="cancelEventForm()">Cancel</button>
+      </div>
+      <div id="events-list" style="margin-top:12px;"></div>
+    </div>
+
+    <div id="event-detail-view" style="display:none;">
+      <div class="back-link" onclick="closeEventDetail()">‹ All events</div>
+      <div class="card" id="event-detail-header"></div>
+      <div id="event-accordions"></div>
+    </div>
+  </div>
+
+  <!-- ADD ENTRY TAB -->
+  <div class="tab-content" id="tab-add">
+    <div class="card">
+      <div class="card-title">New entry</div>
+      <div class="field">
+        <label>Event</label>
+        <select id="entry-event"></select>
+      </div>
+      <div class="field">
+        <label>Category</label>
+        <select id="entry-category" onchange="renderCategoryFields()"></select>
+      </div>
+      <div id="entry-fields"></div>
+      <button class="submit-btn" onclick="saveEntry()">Save Entry</button>
+    </div>
+  </div>
+
+  <!-- CALENDAR TAB -->
+  <div class="tab-content" id="tab-cal">
+    <div id="cal-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <button onclick="calNav(-1)" style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;">‹</button>
+      <div id="cal-title" style="font-size:16px;font-weight:700;"></div>
+      <button onclick="calNav(1)" style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;">›</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px;">
+      <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:4px;">Su</div>
+      <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:4px;">Mo</div>
+      <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:4px;">Tu</div>
+      <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:4px;">We</div>
+      <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:4px;">Th</div>
+      <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:4px;">Fr</div>
+      <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:4px;">Sa</div>
+    </div>
+    <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;"></div>
+    <div class="cal-legend">
+      <span><i style="background:#6B3FA0;"></i>Event day</span>
+      <span><i style="background:#185FA5;"></i>Run sheet</span>
+      <span><i style="background:#D4180A;"></i>Budget due</span>
+      <span><i style="background:#BA7517;"></i>Vendor due</span>
+      <span><i style="background:#3B6D11;"></i>Note reminder</span>
+    </div>
+    <div id="cal-detail" style="margin-top:10px;"></div>
+  </div>
+
+  <!-- MORE TAB -->
+  <div class="tab-content" id="tab-more">
+    <div class="card">
+      <div class="card-title">Sync</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:10px;" id="more-sync-status">—</div>
+      <button class="secondary-btn" onclick="retrySync()">Retry upload now</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Connection</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:10px;" id="conn-test-result">Not tested yet.</div>
+      <button class="secondary-btn" onclick="testConnection()">Test connection</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Change PIN</div>
+      <div class="field"><label>Current PIN</label><input type="password" id="cp-current" inputmode="numeric" maxlength="6"></div>
+      <div class="field"><label>New PIN (6 digits)</label><input type="password" id="cp-new1" inputmode="numeric" maxlength="6"></div>
+      <div class="field"><label>Confirm new PIN</label><input type="password" id="cp-new2" inputmode="numeric" maxlength="6"></div>
+      <button class="submit-btn" onclick="changePin()">Update PIN</button>
+      <div style="font-size:12px;margin-top:8px;" id="cp-msg"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">About</div>
+      <div style="font-size:12px;color:var(--text3);line-height:1.6;">
+        Everything you add here is written straight into the Google Sheet behind this app — open it any time to filter, sort, or build your own pivot tables. This app only ever adds or updates single rows; it never rewrites a whole tab, so anything you add in the Sheet yourself stays put.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIG — paste your deployed Apps Script Web App URL + token here.
+// See SETUP.md for how to generate them.
+// ============================================================
+const APPS_SCRIPT_URL = 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
+const API_TOKEN = 'PASTE_YOUR_API_TOKEN_HERE';
+
+// ---- Category + event form definitions ----
+const CATEGORY_ORDER = ['FloorPlan','SeatingPlan','Budget','GuestList','Vendors','RunSheet','Notes'];
+
+const CATEGORY_META = {
+  FloorPlan: { label:'Floor Plan', emoji:'📐', fields:[
+    {key:'ItemName', label:'Item name', type:'text', required:true, placeholder:'e.g. Head table'},
+    {key:'ItemType', label:'Type', type:'select', options:['Table','Stage','Bar','Dance Floor','Entrance','Walkway','Other']},
+    {key:'LocationNote', label:'Location', type:'text', placeholder:'e.g. Northeast corner, near marquee entrance'},
+    {key:'Dimensions', label:'Dimensions', type:'text', placeholder:'e.g. 3m x 2m'},
+    {key:'Notes', label:'Notes', type:'textarea'}
+  ]},
+  SeatingPlan: { label:'Seating Plan', emoji:'🪑', fields:[
+    {key:'TableNumber', label:'Table number / name', type:'text', required:true, placeholder:'e.g. Table 5'},
+    {key:'TableCapacity', label:'Seats at table', type:'number'},
+    {key:'GuestName', label:'Guest name', type:'text', placeholder:'Leave blank for an unassigned table'},
+    {key:'SeatNumber', label:'Seat number', type:'text'},
+    {key:'Notes', label:'Notes', type:'textarea'}
+  ]},
+  Budget: { label:'Budgeting', emoji:'💰', fields:[
+    {key:'ItemDescription', label:'Item', type:'text', required:true, placeholder:'e.g. Catering deposit'},
+    {key:'Category', label:'Category', type:'select', options:['Venue','Catering','Décor','Photography','Attire','Entertainment','Other']},
+    {key:'EstimatedCost', label:'Estimated cost', type:'number', step:'0.01'},
+    {key:'ActualCost', label:'Actual cost', type:'number', step:'0.01'},
+    {key:'AmountPaid', label:'Amount paid', type:'number', step:'0.01'},
+    {key:'DueDate', label:'Due date', type:'date'},
+    {key:'PaidStatus', label:'Status', type:'select', options:['Unpaid','Partially paid','Paid']},
+    {key:'VendorName', label:'Vendor', type:'text'},
+    {key:'Notes', label:'Notes', type:'textarea'}
+  ]},
+  GuestList: { label:'Guest List', emoji:'👥', fields:[
+    {key:'GuestName', label:'Guest name', type:'text', required:true},
+    {key:'SideGroup', label:'Side / group', type:'text', placeholder:"e.g. Bride's side"},
+    {key:'PartySize', label:'Party size', type:'number'},
+    {key:'RSVPStatus', label:'RSVP', type:'select', options:['Pending','Yes','No','Maybe']},
+    {key:'MealChoice', label:'Meal choice', type:'text'},
+    {key:'DietaryNotes', label:'Dietary notes', type:'text'},
+    {key:'TableNumber', label:'Table number', type:'text'},
+    {key:'ContactPhone', label:'Contact phone', type:'text'},
+    {key:'ContactEmail', label:'Contact email', type:'text'},
+    {key:'Notes', label:'Notes', type:'textarea'}
+  ]},
+  Vendors: { label:'Vendors / Suppliers', emoji:'🤝', fields:[
+    {key:'VendorName', label:'Vendor name', type:'text', required:true},
+    {key:'ServiceType', label:'Service', type:'text', placeholder:'e.g. Catering, Photography, DJ'},
+    {key:'ContactPerson', label:'Contact person', type:'text'},
+    {key:'Phone', label:'Phone', type:'text'},
+    {key:'Email', label:'Email', type:'text'},
+    {key:'ContractStatus', label:'Status', type:'select', options:['Enquired','Booked','Deposit paid','Paid in full']},
+    {key:'DepositDueDate', label:'Deposit due', type:'date'},
+    {key:'DepositAmount', label:'Deposit amount', type:'number', step:'0.01'},
+    {key:'BalanceDueDate', label:'Balance due', type:'date'},
+    {key:'BalanceAmount', label:'Balance amount', type:'number', step:'0.01'},
+    {key:'Notes', label:'Notes', type:'textarea'}
+  ]},
+  RunSheet: { label:'Timeline / Run Sheet', emoji:'🕒', fields:[
+    {key:'Date', label:'Date', type:'date', required:true},
+    {key:'Time', label:'Time', type:'time'},
+    {key:'ActivityDescription', label:'Activity', type:'text', required:true, placeholder:'e.g. Guests seated'},
+    {key:'ResponsiblePerson', label:'Responsible person', type:'text'},
+    {key:'DurationMinutes', label:'Duration (minutes)', type:'number'},
+    {key:'Notes', label:'Notes', type:'textarea'}
+  ]},
+  Notes: { label:'General Notes', emoji:'📝', fields:[
+    {key:'NoteText', label:'Note', type:'textarea', required:true},
+    {key:'ReminderDate', label:'Reminder date (optional)', type:'date'},
+    {key:'Author', label:'Author', type:'text'}
+  ]}
+};
+
+const EVENT_FIELDS = [
+  {key:'EventName', label:'Event name', type:'text', required:true, placeholder:"e.g. Sarah & Tom's Wedding"},
+  {key:'EventType', label:'Type', type:'select', options:['Wedding','Birthday','Corporate','Public Function','Other']},
+  {key:'EventDate', label:'Event date', type:'date', required:true},
+  {key:'VenueName', label:'Venue', type:'text'},
+  {key:'VenueAddress', label:'Venue address', type:'text'},
+  {key:'ClientName', label:'Client name', type:'text'},
+  {key:'ClientPhone', label:'Client phone', type:'text'},
+  {key:'ClientEmail', label:'Client email', type:'text'},
+  {key:'GuestCountEstimate', label:'Estimated guest count', type:'number'},
+  {key:'Status', label:'Status', type:'select', options:['Planning','Confirmed','Completed','Cancelled']},
+  {key:'Notes', label:'Notes', type:'textarea'}
+];
+
+const CATEGORY_COLORS = { Event:'#6B3FA0', RunSheet:'#185FA5', Budget:'#D4180A', Vendors:'#BA7517', Notes:'#3B6D11' };
+
+let allEvents = [];
+let currentEventId = null;
+let calItemsCache = {};
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+
+// ---- Utils ----
+function escapeHtml(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function withTimeout(promise, ms){
+  return Promise.race([promise, new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')), ms))]);
+}
+function createLocalId(prefix){
+  return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8);
+}
+function formatDateDisplay(v){
+  const s = String(v||'').split('T')[0];
+  const parts = s.split('-');
+  return parts.length===3 ? parts.reverse().join('/') : s;
+}
+function pad2(n){ return String(n).padStart(2,'0'); }
+function monthKey(y,m){ return y+'-'+pad2(m+1); }
+
+// ---- Generic field rendering (shared by New Event + Add Entry forms) ----
+function renderFields(containerEl, fields, idPrefix){
+  containerEl.innerHTML = fields.map(f=>{
+    const id = idPrefix + f.key;
+    let input;
+    if(f.type==='select'){
+      input = `<select id="${id}"><option value="">—</option>${f.options.map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}</select>`;
+    } else if(f.type==='textarea'){
+      input = `<textarea id="${id}" placeholder="${escapeHtml(f.placeholder||'')}"></textarea>`;
+    } else {
+      input = `<input type="${f.type}" id="${id}" placeholder="${escapeHtml(f.placeholder||'')}" ${f.step?`step="${f.step}"`:''}>`;
+    }
+    return `<div class="field"><label>${escapeHtml(f.label)}${f.required?' *':''}</label>${input}</div>`;
+  }).join('');
+}
+function collectFields(fields, idPrefix){
+  const obj = {};
+  fields.forEach(f=>{ const el = document.getElementById(idPrefix+f.key); obj[f.key] = el ? String(el.value).trim() : ''; });
+  return obj;
+}
+function validateFields(fields, obj){
+  for(const f of fields){ if(f.required && !obj[f.key]) return f.label + ' is required'; }
+  return null;
+}
+
+// ---- Network ----
+async function apiGet(action, params){
+  params = params || {};
+  const url = new URL(APPS_SCRIPT_URL);
+  url.searchParams.set('action', action);
+  url.searchParams.set('token', API_TOKEN);
+  Object.keys(params).forEach(k=>{ if(params[k]!==undefined && params[k]!==null && params[k]!=='') url.searchParams.set(k, params[k]); });
+  const res = await withTimeout(fetch(url.toString()), 12000);
+  const data = await res.json();
+  if(!data.ok) throw new Error(data.error || 'request failed');
+  return data;
+}
+async function apiPost(body){
+  body = Object.assign({}, body, { token: API_TOKEN });
+  const res = await withTimeout(fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body)
+  }), 12000);
+  return res.json();
+}
+async function sendOrQueue(payload){
+  if(!navigator.onLine){ queueWrite(payload); return; }
+  try{
+    const data = await apiPost(payload);
+    if(data.ok) setSyncBadge(getQueue().length ? 'queued' : 'synced');
+    else queueWrite(payload);
+  } catch(e){
+    queueWrite(payload);
+  }
+}
+
+// ---- Offline write queue ----
+function queueKey(){ return 'events_write_queue'; }
+function getQueue(){ try{ return JSON.parse(localStorage.getItem(queueKey())||'[]'); } catch(e){ return []; } }
+function saveQueue(q){ try{ localStorage.setItem(queueKey(), JSON.stringify(q)); } catch(e){} }
+function queueWrite(payload){
+  const q = getQueue();
+  q.push({ _localId: createLocalId('local'), _queuedAt: new Date().toISOString(), payload });
+  saveQueue(q);
+  setSyncBadge('queued');
+}
+async function syncQueue(){
+  const q = getQueue();
+  if(!q.length) return;
+  const remaining = [];
+  let syncedCount = 0;
+  let networkDown = false;
+  for(const item of q){
+    if(networkDown){ remaining.push(item); continue; }
+    try{
+      const data = await apiPost(item.payload);
+      if(data.ok){ syncedCount++; }
+      else { item._error = data.error || 'rejected'; item._attempts = (item._attempts||0)+1; remaining.push(item); }
+    } catch(e){
+      networkDown = true;
+      remaining.push(item);
+    }
+  }
+  saveQueue(remaining);
+  setSyncBadge(remaining.length===0 ? 'synced' : 'queued');
+  if(syncedCount>0) loadEvents();
+}
+async function retrySync(){
+  const n = getQueue().length;
+  if(!n){ alert('Nothing waiting to upload — everything is saved to the sheet.'); return; }
+  setSyncBadge('loading');
+  await syncQueue();
+  const left = getQueue().length;
+  if(left===0) alert('Uploaded. ' + n + (n===1?' entry is':' entries are') + ' now in the sheet.');
+  else if(left<n) alert('Uploaded ' + (n-left) + ' of ' + n + '. ' + left + ' still waiting.');
+}
+function setSyncBadge(state){
+  const el = document.getElementById('sync-badge');
+  const statusEl = document.getElementById('more-sync-status');
+  const q = getQueue().length;
+  el.classList.remove('pending','error');
+  if(state==='loading'){ el.textContent='Syncing…'; el.classList.add('pending'); }
+  else if(state==='queued'){ el.textContent = q + (q===1?' waiting':' waiting'); el.classList.add('pending'); }
+  else { el.textContent='Ready'; }
+  if(statusEl) statusEl.textContent = q===0 ? 'Everything is saved to the sheet.' : (q + (q===1?' entry is':' entries are') + ' waiting to upload — will sync automatically when back online.');
+}
+
+// ---- Tabs ----
+function showTab(id, el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  (el || document.querySelector(`.tab[data-tab="${id}"]`)).classList.add('active');
+  document.getElementById('tab-'+id).classList.add('active');
+  if(id==='cal') renderCal();
+  if(id==='add'){ populateEventSelect(); renderCategoryFields(); }
+}
+
+// ---- Events ----
+async function loadEvents(){
+  try{
+    const data = await apiGet('listEvents');
+    allEvents = data.events;
+    localStorage.setItem('events_cache_events', JSON.stringify(allEvents));
+  } catch(e){
+    try{ allEvents = JSON.parse(localStorage.getItem('events_cache_events')||'[]'); } catch(e2){ allEvents = []; }
+  }
+  renderEventsList();
+  populateEventSelect();
+}
+
+function renderEventsList(){
+  const el = document.getElementById('events-list');
+  if(!allEvents.length){
+    el.innerHTML = '<div class="empty"><div class="empty-icon">🎉</div><p>No events yet — tap + New Event to add one.</p></div>';
+    return;
+  }
+  el.innerHTML = allEvents.slice().sort((a,b)=>String(a.EventDate||'').localeCompare(String(b.EventDate||''))).map(ev=>`
+    <div class="event-card" onclick="openEventDetail('${ev.EventID}')">
+      <div class="event-card-name">${escapeHtml(ev.EventName||'Untitled event')}</div>
+      <div class="event-card-meta">${ev.EventDate?formatDateDisplay(ev.EventDate):'No date set'}${ev.VenueName?' · '+escapeHtml(ev.VenueName):''}</div>
+      <div class="event-card-meta">${ev.ClientName?'👤 '+escapeHtml(ev.ClientName):''}${ev.GuestCountEstimate?' · 👥 '+escapeHtml(String(ev.GuestCountEstimate)):''}</div>
+      <span class="pill p-status">${escapeHtml(ev.Status||'Planning')}</span>
+    </div>
+  `).join('');
+}
+
+function openEventForm(){
+  renderFields(document.getElementById('event-form-fields'), EVENT_FIELDS, 'evf_');
+  document.getElementById('event-form-card').style.display = 'block';
+}
+function cancelEventForm(){
+  document.getElementById('event-form-card').style.display = 'none';
+}
+function saveNewEvent(){
+  const fields = collectFields(EVENT_FIELDS, 'evf_');
+  const err = validateFields(EVENT_FIELDS, fields);
+  if(err){ alert(err); return; }
+  const ev = Object.assign({ EventID: createLocalId('evt') }, fields);
+  allEvents.unshift(ev);
+  localStorage.setItem('events_cache_events', JSON.stringify(allEvents));
+  renderEventsList();
+  populateEventSelect();
+  sendOrQueue({ action:'createEvent', event: ev });
+  cancelEventForm();
+  alert('Event created.');
+}
+
+function populateEventSelect(){
+  const sel = document.getElementById('entry-event');
+  const prev = sel.value;
+  if(!allEvents.length){
+    sel.innerHTML = '<option value="">No events yet — create one first</option>';
+    return;
+  }
+  sel.innerHTML = allEvents.map(ev=>`<option value="${ev.EventID}">${escapeHtml(ev.EventName||'Untitled')} — ${ev.EventDate?formatDateDisplay(ev.EventDate):'no date'}</option>`).join('');
+  if(prev && allEvents.some(e=>e.EventID===prev)) sel.value = prev;
+  else if(currentEventId && allEvents.some(e=>e.EventID===currentEventId)) sel.value = currentEventId;
+}
+
+function openEventDetail(eventId){
+  currentEventId = eventId;
+  document.getElementById('events-list-view').style.display = 'none';
+  document.getElementById('event-detail-view').style.display = 'block';
+  const ev = allEvents.find(e=>e.EventID===eventId) || {};
+  document.getElementById('event-detail-header').innerHTML = `
+    <div class="card-title">${escapeHtml(ev.EventType||'Event')}</div>
+    <div style="font-size:18px;font-weight:700;">${escapeHtml(ev.EventName||'Untitled event')}</div>
+    <div style="font-size:13px;color:var(--text3);margin-top:4px;">${ev.EventDate?formatDateDisplay(ev.EventDate):'No date set'}${ev.VenueName?' · '+escapeHtml(ev.VenueName):''}</div>
+    ${ev.ClientName?`<div style="font-size:13px;color:var(--text3);margin-top:2px;">👤 ${escapeHtml(ev.ClientName)}${ev.ClientPhone?' · '+escapeHtml(ev.ClientPhone):''}</div>`:''}
+  `;
+  document.getElementById('event-accordions').innerHTML = CATEGORY_ORDER.map(cat=>{
+    const meta = CATEGORY_META[cat];
+    return `<div class="accordion">
+      <div class="accordion-header" onclick="toggleAccordion('${cat}')">
+        <span>${meta.emoji} ${meta.label}</span>
+        <span class="accordion-actions">
+          <button class="mini-btn" onclick="event.stopPropagation();addEntryForCurrentEvent('${cat}')">+ Add</button>
+          <span id="acc-arrow-${cat}">▾</span>
+        </span>
+      </div>
+      <div class="accordion-body" id="acc-body-${cat}"></div>
+    </div>`;
+  }).join('');
+}
+
+function closeEventDetail(){
+  document.getElementById('event-detail-view').style.display = 'none';
+  document.getElementById('events-list-view').style.display = 'block';
+  currentEventId = null;
+}
+
+function addEntryForCurrentEvent(cat){
+  showTab('add', document.querySelector('.tab[data-tab="add"]'));
+  document.getElementById('entry-event').value = currentEventId;
+  document.getElementById('entry-category').value = cat;
+  renderCategoryFields();
+}
+
+let loadedAccordions = {};
+function toggleAccordion(cat){
+  const body = document.getElementById('acc-body-'+cat);
+  const arrow = document.getElementById('acc-arrow-'+cat);
+  const show = !body.classList.contains('show');
+  body.classList.toggle('show', show);
+  arrow.textContent = show ? '▴' : '▾';
+  if(show && !loadedAccordions[currentEventId+'_'+cat]){
+    loadedAccordions[currentEventId+'_'+cat] = true;
+    loadEntriesForAccordion(currentEventId, cat);
+  }
+}
+
+async function loadEntriesForAccordion(eventId, cat){
+  const body = document.getElementById('acc-body-'+cat);
+  body.innerHTML = '<div class="empty" style="padding:12px;"><p style="font-size:12px;">Loading…</p></div>';
+  try{
+    const data = await apiGet('listEntries', { event: eventId, category: cat });
+    localStorage.setItem('events_cache_entries_'+eventId+'_'+cat, JSON.stringify(data.entries));
+    renderEntryRows(body, cat, data.entries, false);
+  } catch(e){
+    let cached = [];
+    try{ cached = JSON.parse(localStorage.getItem('events_cache_entries_'+eventId+'_'+cat)||'[]'); } catch(e2){}
+    renderEntryRows(body, cat, cached, true);
+  }
+}
+
+function renderEntryRows(body, cat, entries, offline){
+  if(!entries || !entries.length){
+    body.innerHTML = (offline?'<div class="offline-note">Showing saved copy — offline</div>':'') + '<div class="empty" style="padding:12px;"><p style="font-size:12px;">Nothing here yet.</p></div>';
+    return;
+  }
+  const meta = CATEGORY_META[cat];
+  const titleField = meta.fields[0];
+  const subFields = meta.fields.slice(1,4);
+  body.innerHTML = (offline?'<div class="offline-note">Showing saved copy — offline</div>':'') + entries.map(en=>{
+    const title = escapeHtml(en[titleField.key] || '(untitled)');
+    const sub = subFields.filter(f=>en[f.key]).map(f=>escapeHtml(String(en[f.key]))).join(' · ');
+    return `<div class="entry-row"><div class="entry-row-title">${title}</div>${sub?`<div class="entry-row-sub">${sub}</div>`:''}</div>`;
+  }).join('');
+}
+
+function addEntryLocalCache(eventId, cat, entry){
+  const cacheKey = 'events_cache_entries_'+eventId+'_'+cat;
+  let arr = [];
+  try{ arr = JSON.parse(localStorage.getItem(cacheKey)||'[]'); } catch(e){}
+  arr.unshift(entry);
+  localStorage.setItem(cacheKey, JSON.stringify(arr));
+  if(currentEventId===eventId){
+    const body = document.getElementById('acc-body-'+cat);
+    if(body && body.classList.contains('show')) renderEntryRows(body, cat, arr, false);
+  }
+}
+
+// ---- Add Entry tab ----
+function buildCategorySelect(){
+  const sel = document.getElementById('entry-category');
+  sel.innerHTML = CATEGORY_ORDER.map(c=>`<option value="${c}">${CATEGORY_META[c].emoji} ${CATEGORY_META[c].label}</option>`).join('');
+}
+function renderCategoryFields(){
+  const cat = document.getElementById('entry-category').value || CATEGORY_ORDER[0];
+  renderFields(document.getElementById('entry-fields'), CATEGORY_META[cat].fields, 'ef_');
+}
+function saveEntry(){
+  const eventId = document.getElementById('entry-event').value;
+  if(!eventId){ alert("Choose an event first — create one in the Events tab if you haven't yet."); return; }
+  const cat = document.getElementById('entry-category').value;
+  const meta = CATEGORY_META[cat];
+  const fields = collectFields(meta.fields, 'ef_');
+  const err = validateFields(meta.fields, fields);
+  if(err){ alert(err); return; }
+  const entry = Object.assign({ EntryID: createLocalId('ent'), EventID: eventId }, fields);
+  addEntryLocalCache(eventId, cat, entry);
+  sendOrQueue({ action:'createEntry', category: cat, entry: entry });
+  renderCategoryFields();
+  alert('Saved to ' + meta.label + '.');
+}
+
+// ---- Calendar ----
+function calNav(dir){
+  calMonth += dir;
+  if(calMonth>11){ calMonth=0; calYear++; }
+  if(calMonth<0){ calMonth=11; calYear--; }
+  renderCal();
+}
+async function renderCal(){
+  const MN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('cal-title').textContent = MN[calMonth] + ' ' + calYear;
+  const key = monthKey(calYear, calMonth);
+  let items;
+  try{
+    const data = await apiGet('calendar', { month: key });
+    items = data.items;
+    localStorage.setItem('events_cache_cal_'+key, JSON.stringify(items));
+  } catch(e){
+    try{ items = JSON.parse(localStorage.getItem('events_cache_cal_'+key)||'[]'); } catch(e2){ items = []; }
+  }
+  calItemsCache[key] = items;
+
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const today = new Date().toISOString().split('T')[0];
+  const byDate = {};
+  items.forEach(it=>{ (byDate[it.date] = byDate[it.date]||[]).push(it); });
+
+  let html = '';
+  for(let i=0;i<firstDay;i++) html += '<div></div>';
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = calYear + '-' + pad2(calMonth+1) + '-' + pad2(d);
+    const evs = byDate[dateStr] || [];
+    const isToday = dateStr === today;
+    const dots = evs.slice(0,4).map(it=>`<div style="width:6px;height:6px;border-radius:50%;background:${CATEGORY_COLORS[it.category]||'#888'};margin:0 1px;"></div>`).join('');
+    html += `<div onclick="showCalDay('${dateStr}')" style="min-height:44px;background:${isToday?'var(--blue-light)':'#fff'};border:1px solid ${isToday?'var(--blue)':'var(--border)'};border-radius:6px;padding:4px;cursor:pointer;text-align:center;">
+      <div style="font-size:12px;font-weight:${isToday?'700':'500'};color:${isToday?'var(--blue)':'var(--text)'};">${d}</div>
+      <div style="display:flex;justify-content:center;flex-wrap:wrap;margin-top:2px;">${dots}</div>
+    </div>`;
+  }
+  document.getElementById('cal-grid').innerHTML = html;
+  document.getElementById('cal-detail').innerHTML = '';
+}
+function showCalDay(dateStr){
+  const key = monthKey(calYear, calMonth);
+  const items = (calItemsCache[key]||[]).filter(it=>it.date===dateStr);
+  const el = document.getElementById('cal-detail');
+  if(!items.length){ el.innerHTML=''; return; }
+  el.innerHTML = `<div class="card" style="margin-top:0;">
+    <div class="card-title">${dateStr.split('-').reverse().join('/')}</div>
+    ${items.map(it=>`<div class="cal-item" onclick="${it.eventId?`openFromCalendar('${it.eventId}')`:''}">
+      <span class="cal-dot" style="background:${CATEGORY_COLORS[it.category]||'#888'};"></span>
+      <div>
+        <div class="cal-item-title">${escapeHtml(it.title||it.category)}${it.time?' · '+escapeHtml(it.time):''}</div>
+        <div class="cal-item-sub">${escapeHtml(it.eventName||'')}</div>
+      </div>
+    </div>`).join('')}
+  </div>`;
+}
+function openFromCalendar(eventId){
+  showTab('events', document.querySelector('.tab[data-tab="events"]'));
+  openEventDetail(eventId);
+}
+
+// ---- More tab ----
+async function testConnection(){
+  const el = document.getElementById('conn-test-result');
+  el.textContent = 'Testing…';
+  el.style.color = '';
+  try{
+    const data = await apiGet('ping');
+    el.textContent = '✅ Connected — ' + data.time;
+    el.style.color = 'var(--green-dark)';
+  } catch(e){
+    el.textContent = '❌ ' + (e.message || 'Could not reach the Apps Script URL. Check SETUP.md.');
+    el.style.color = 'var(--red)';
+  }
+}
+function checkConfigBanner(){
+  const banner = document.getElementById('config-banner');
+  const notConfigured = !APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('PASTE_YOUR') !== -1;
+  banner.style.display = notConfigured ? 'block' : 'none';
+}
+
+// ---- PIN lock ----
+let lockBuf = '';
+let lockAttempts = 0;
+let lockTimerInterval = null;
+const DEFAULT_PIN = '123456';
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_SECS = 30;
+
+function getStoredPin(){ return localStorage.getItem('events_pin') || DEFAULT_PIN; }
+function setStoredPin(p){ localStorage.setItem('events_pin', p); }
+
+function showLockScreen(){
+  document.getElementById('lock-screen').classList.add('active');
+  document.getElementById('screen-app').classList.remove('active');
+  lockBuf = '';
+  updateLockDots();
+  document.getElementById('lock-err').textContent = '';
+  document.getElementById('lock-timer').textContent = '';
+  checkLockout();
+}
+function hideLockScreen(){
+  document.getElementById('lock-screen').classList.remove('active');
+  document.getElementById('screen-app').classList.add('active');
+}
+function updateLockDots(){
+  for(let i=0;i<6;i++) document.getElementById('ld'+i).classList.toggle('filled', i<lockBuf.length);
+}
+function lockKey(k){
+  const lockedUntil = parseInt(localStorage.getItem('events_lock_until')||'0');
+  if(Date.now() < lockedUntil) return;
+  if(k==='clr'){ lockBuf=''; updateLockDots(); document.getElementById('lock-err').textContent=''; return; }
+  if(k==='del'){ lockBuf = lockBuf.slice(0,-1); updateLockDots(); return; }
+  if(lockBuf.length >= 6) return;
+  lockBuf += k;
+  updateLockDots();
+  if(lockBuf.length === 6) setTimeout(checkLockPin, 100);
+}
+function checkLockPin(){
+  if(lockBuf === getStoredPin()){
+    lockAttempts = 0;
+    localStorage.removeItem('events_lock_until');
+    localStorage.removeItem('events_lock_attempts');
+    hideLockScreen();
+    startApp();
+  } else {
+    lockAttempts++;
+    localStorage.setItem('events_lock_attempts', lockAttempts);
+    lockBuf = '';
+    updateLockDots();
+    if(lockAttempts >= MAX_ATTEMPTS){
+      const until = Date.now() + LOCKOUT_SECS*1000;
+      localStorage.setItem('events_lock_until', until);
+      localStorage.setItem('events_lock_attempts', '0');
+      lockAttempts = 0;
+      startLockTimer(until);
+      document.getElementById('lock-err').textContent = '';
+    } else {
+      const remaining = MAX_ATTEMPTS - lockAttempts;
+      document.getElementById('lock-err').textContent = 'Incorrect PIN — ' + remaining + ' attempt' + (remaining!==1?'s':'') + ' remaining';
+    }
+  }
+}
+function startLockTimer(until){
+  if(lockTimerInterval) clearInterval(lockTimerInterval);
+  const timerEl = document.getElementById('lock-timer');
+  document.querySelectorAll('.lock-key').forEach(b=>b.style.opacity='0.4');
+  lockTimerInterval = setInterval(()=>{
+    const remaining = Math.ceil((until - Date.now())/1000);
+    if(remaining <= 0){
+      clearInterval(lockTimerInterval);
+      timerEl.textContent = '';
+      document.getElementById('lock-err').textContent = '';
+      document.querySelectorAll('.lock-key').forEach(b=>b.style.opacity='1');
+    } else {
+      timerEl.textContent = 'Too many attempts — try again in ' + remaining + 's';
+    }
+  }, 500);
+}
+function checkLockout(){
+  const lockedUntil = parseInt(localStorage.getItem('events_lock_until')||'0');
+  if(Date.now() < lockedUntil) startLockTimer(lockedUntil);
+  lockAttempts = parseInt(localStorage.getItem('events_lock_attempts')||'0');
+}
+function changePin(){
+  const cur = document.getElementById('cp-current').value;
+  const n1 = document.getElementById('cp-new1').value;
+  const n2 = document.getElementById('cp-new2').value;
+  const msgEl = document.getElementById('cp-msg');
+  if(cur !== getStoredPin()){ msgEl.textContent='Current PIN is incorrect.'; msgEl.style.color='var(--red)'; return; }
+  if(!/^\d{6}$/.test(n1)){ msgEl.textContent='New PIN must be exactly 6 digits.'; msgEl.style.color='var(--red)'; return; }
+  if(n1 !== n2){ msgEl.textContent='New PINs do not match.'; msgEl.style.color='var(--red)'; return; }
+  setStoredPin(n1);
+  msgEl.textContent = 'PIN updated.';
+  msgEl.style.color = 'var(--green-dark)';
+  document.getElementById('cp-current').value = '';
+  document.getElementById('cp-new1').value = '';
+  document.getElementById('cp-new2').value = '';
+}
+
+// ---- Startup ----
+function startApp(){
+  showTab('events', document.querySelector('.tab[data-tab="events"]'));
+  checkConfigBanner();
+  loadEvents();
+  setSyncBadge(getQueue().length ? 'queued' : 'synced');
+  if(navigator.onLine) syncQueue();
+  window.addEventListener('online', syncQueue);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  buildCategorySelect();
+  renderCategoryFields();
+  if('serviceWorker' in navigator){ navigator.serviceWorker.register('./sw.js').catch(()=>{}); }
+  showLockScreen();
+});
+</script>
+</body>
+</html>
