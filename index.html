@@ -83,6 +83,8 @@ textarea:focus{border-color:var(--red);background:#fff;}
 .submit-btn{width:100%;padding:15px;background:var(--red);color:#fff;border:none;border-radius:var(--radius-sm);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;margin-top:8px;}
 .submit-btn:disabled{opacity:0.6;cursor:not-allowed;}
 
+.edit-status{margin-top:10px;font-size:13px;color:var(--text2);line-height:1.4;}
+
 /* SALES LOG */
 .sale-row{background:#fff;border-radius:var(--radius);border:1px solid var(--border);padding:14px;margin-bottom:10px;}
 .sale-customer{font-size:15px;font-weight:700;}
@@ -376,6 +378,8 @@ textarea:focus{border-color:var(--red);background:#fff;}
         <textarea id="s-notes" placeholder="Delivery or customer notes..."></textarea>
       </div>
       <button class="submit-btn" id="submit-btn" onclick="recordSale()">Record Sale</button>
+      <div class="edit-status" id="edit-status" style="display:none;"></div>
+      <button class="submit-btn" id="cancel-edit-btn" onclick="cancelEdit()" style="display:none;background:#fff;color:var(--text2);border:1px solid var(--border);margin-top:8px;">Cancel edit</button>
     </div>
   </div>
 
@@ -621,6 +625,8 @@ const APP_VERSION = 'v17 — 29 Jul 2026';
 let curFuel = 'Diesel';
 let curTerm = 'COD';
 let priceTBA = false;
+let editingSaleId = null;
+let editingQueueId = null;
 
 // ---- NETWORK TIMEOUT GUARD ----
 // Supabase calls do not time out on their own. On a weak cellular signal a
@@ -1366,6 +1372,121 @@ async function cancelSale(id) {
   await loadSales();
 }
 
+function setEditMode(saleLabel) {
+  const status = document.getElementById('edit-status');
+  const cancelBtn = document.getElementById('cancel-edit-btn');
+  const submitBtn = document.getElementById('submit-btn');
+  if (saleLabel) {
+    status.style.display = 'block';
+    status.textContent = 'Editing sale: ' + saleLabel + '. Update the litres, price or delivery date as needed.';
+    cancelBtn.style.display = 'block';
+    submitBtn.textContent = 'Update Sale';
+  } else {
+    status.style.display = 'none';
+    status.textContent = '';
+    cancelBtn.style.display = 'none';
+    submitBtn.textContent = 'Record Sale';
+  }
+}
+
+function clearForm() {
+  document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('s-customer').value = '';
+  selectedCustomerId = null;
+  document.getElementById('cust-matched').classList.remove('show');
+  document.getElementById('cust-new').classList.remove('show');
+  document.getElementById('ac-list').classList.remove('show');
+  document.getElementById('s-location').value = '';
+  selectedPlace = null;
+  document.getElementById('loc-matched').classList.remove('show');
+  document.getElementById('loc-new').classList.remove('show');
+  document.getElementById('loc-ac-list').classList.remove('show');
+  document.getElementById('s-litres').value = '';
+  document.getElementById('s-price').value = '';
+  document.getElementById('s-cost').value = '';
+  if (priceTBA) toggleTBA();
+  document.getElementById('s-delivery').value = '';
+  document.getElementById('s-notes').value = '';
+  selectFuel('Diesel', document.getElementById('fuel-diesel'));
+  setPaymentTerm('COD');
+}
+
+function setPaymentTerm(termLabel) {
+  const buttons = Array.from(document.querySelectorAll('#terms-grid .term-btn'));
+  const exact = buttons.find(b => b.textContent.trim() === termLabel);
+  if (exact) {
+    selTerm(termLabel, exact);
+    return;
+  }
+  const daysMatch = termLabel.match(/^(\d+)\s*days$/);
+  if (daysMatch) {
+    const days = daysMatch[1];
+    const match = buttons.find(b => b.textContent.trim() === days + ' days');
+    if (match) { selTerm(days, match); return; }
+    const other = buttons.find(b => b.textContent.trim() === 'Other');
+    if (other) {
+      selTerm('other', other);
+      document.getElementById('term-other-days').value = days;
+      return;
+    }
+  }
+  const defaultBtn = buttons.find(b => b.textContent.trim() === 'COD');
+  if (defaultBtn) selTerm('COD', defaultBtn);
+}
+
+function cancelEdit() {
+  editingSaleId = null;
+  editingQueueId = null;
+  clearForm();
+  setEditMode(null);
+}
+
+function fillSaleForm(sale) {
+  document.getElementById('s-date').value = sale.sale_date || '';
+  document.getElementById('s-customer').value = sale.customer || '';
+  selectedCustomerId = sale.customer_id || null;
+  if (selectedCustomerId) {
+    document.getElementById('cust-matched').classList.add('show');
+    document.getElementById('cust-new').classList.remove('show');
+    document.getElementById('cust-matched-txt').textContent = 'Linked to accounts record';
+  }
+  document.getElementById('s-location').value = sale.location || '';
+  selectFuel(sale.fuel_type || 'Diesel', sale.fuel_type === 'Petrol' ? document.getElementById('fuel-petrol') : document.getElementById('fuel-diesel'));
+  document.getElementById('s-litres').value = sale.litres || '';
+  const priceField = document.getElementById('s-price');
+  if (sale.price_tba) {
+    if (!priceTBA) toggleTBA();
+    priceField.value = '';
+  } else {
+    if (priceTBA) toggleTBA();
+    priceField.value = sale.price_per_litre || '';
+  }
+  document.getElementById('s-cost').value = sale.cost_price != null ? sale.cost_price : '';
+  document.getElementById('s-delivery').value = sale.delivery_date || '';
+  setPaymentTerm(sale.payment_term || 'COD');
+  document.getElementById('s-notes').value = sale.notes || '';
+}
+
+function openSaleForEdit(idOrLocalId) {
+  const queued = getQueue();
+  const queuedItem = queued.find(item => item._localId === idOrLocalId);
+  if (queuedItem) {
+    editingSaleId = null;
+    editingQueueId = idOrLocalId;
+    fillSaleForm(queuedItem.payload);
+    setEditMode(queuedItem.payload.customer + ' · ' + (queuedItem.payload.litres||0).toLocaleString() + ' L');
+    showTab('record', document.querySelectorAll('.tab')[0]);
+    return;
+  }
+  const sale = allSales.find(s => String(s.id) === String(idOrLocalId));
+  if (!sale) return;
+  editingSaleId = sale.id;
+  editingQueueId = null;
+  fillSaleForm(sale);
+  setEditMode(sale.customer + ' · ' + (sale.litres||0).toLocaleString() + ' L');
+  showTab('record', document.querySelectorAll('.tab')[0]);
+}
+
 async function loadSales() {
   setSyncBadge('loading');
 
@@ -1486,28 +1607,86 @@ async function recordSale() {
   };
 
   let savedOnline = false;
-  try {
-    // IMPORTANT: on cellular, a request often doesn't fail — it just hangs.
-    // Without a timeout the await sits forever, the catch never runs, and the
-    // sale never reaches the offline queue. Racing against a timer means a
-    // bad connection fails FAST and the sale gets queued instead of lost.
-    const { error } = await withTimeout(
-      sb.from('sales').insert(salePayload),
-      8000
-    );
-    if (error) throw error;
-    savedOnline = true;
-  } catch (e) {
-    // A duplicate-key error means this exact sale already reached the
-    // database (a slow earlier attempt got through). It is NOT a failure —
-    // don't queue it again, or we'd recreate the duplicate we're preventing.
-    if (/duplicate|unique|23505/i.test((e && e.message) || '')) {
+  let updateFailed = false;
+
+  if (editingSaleId) {
+    try {
+      const { error } = await withTimeout(
+        sb.from('sales').update({
+          sale_date: date,
+          location,
+          fuel_type: curFuel,
+          litres,
+          price_per_litre: priceTBA ? 0 : price,
+          cost_price: costPrice,
+          price_tba: priceTBA,
+          delivery_date: delivery || null,
+          payment_term: termLabel,
+          payment_due: paymentDue,
+          paid: curTerm === 'COD',
+          notes
+        }).eq('id', editingSaleId),
+        8000
+      );
+      if (error) throw error;
       savedOnline = true;
+    } catch (e) {
+      updateFailed = true;
+      alert('Could not update sale: ' + ((e && e.message) || e));
+    }
+  } else if (editingQueueId) {
+    const q = getQueue();
+    const item = q.find(item => item._localId === editingQueueId);
+    if (item) {
+      item.payload = {
+        ...item.payload,
+        sale_date: date,
+        customer,
+        customer_id: selectedCustomerId,
+        location,
+        fuel_type: curFuel,
+        litres,
+        price_per_litre: priceTBA ? 0 : price,
+        cost_price: costPrice,
+        price_tba: priceTBA,
+        delivery_date: delivery || null,
+        payment_term: termLabel,
+        payment_due: paymentDue,
+        paid: curTerm === 'COD',
+        notes
+      };
+      saveQueue(q);
+      savedOnline = false;
     } else {
-      // Offline, slow, or network failure — queue it locally for later sync
-      queueSale(salePayload);
+      alert('Could not find queued sale to update.');
+      updateFailed = true;
+    }
+  } else {
+    try {
+      const { error } = await withTimeout(
+        sb.from('sales').insert(salePayload),
+        8000
+      );
+      if (error) throw error;
+      savedOnline = true;
+    } catch (e) {
+      if (/duplicate|unique|23505/i.test((e && e.message) || '')) {
+        savedOnline = true;
+      } else {
+        queueSale(salePayload);
+      }
     }
   }
+
+  if (updateFailed) {
+    btn.disabled = false;
+    btn.textContent = editingSaleId ? 'Update Sale' : 'Record Sale';
+    return;
+  }
+
+  editingSaleId = null;
+  editingQueueId = null;
+  setEditMode(null);
 
   // Keep the Ops map pin current for this customer — only possible when we
   // actually reached the database (an offline-queued sale gets synced later
@@ -1739,7 +1918,8 @@ function renderSales() {
     const p = item.payload;
     const fuelPill = p.fuel_type ? `<span class="pill ${p.fuel_type==='Petrol'?'p-petrol':'p-diesel'}">${p.fuel_type}</span>` : '';
     const pendingPill = `<span class="pill" style="background:var(--amber-light);color:var(--amber);">⏳ Not synced yet</span>`;
-    return `<div class="sale-row" style="border-left:3px solid var(--amber);">
+    const editBtn = `<button class="del-btn" style="background:#fff;color:var(--text2);border:1px solid var(--border);margin-top:6px;" onclick="openSaleForEdit('${item._localId}');event.stopPropagation()">✎ Edit sale</button>`;
+    return `<div class="sale-row" style="border-left:3px solid var(--amber);" onclick="openSaleForEdit('${item._localId}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div class="sale-customer">${p.customer}${fuelPill}${pendingPill}</div>
         <div style="text-align:right;flex-shrink:0;">
@@ -1750,6 +1930,7 @@ function renderSales() {
       <div class="sale-meta">${p.location||'—'} · ${fmtDate(p.sale_date)} · ${p.payment_term}</div>
       <div class="sale-meta">Del: ${fmtDate(p.delivery_date)} · Pay due: ${fmtDate(p.payment_due)}</div>
       <div class="sale-meta" style="color:var(--amber);font-weight:600;">Saved on this phone — will upload when back online</div>
+      ${editBtn}
     </div>`;
   }).join('');
 
@@ -1768,9 +1949,11 @@ function renderSales() {
     const priceHtml = salePriceHtml(s.litres, s.price_per_litre, s.price_tba);
     const delBtn = !delivered && !isCancelled && s.delivery_date ?
       `<button class="del-btn" onclick="markDelivered(${s.id})">🚛 Mark as delivered</button>` : '';
+    const editBtn = !delivered && !isCancelled ?
+      `<button class="del-btn" style="background:#fff;color:var(--text2);border:1px solid var(--border);margin-top:6px;" onclick="openSaleForEdit(${s.id});event.stopPropagation()">✎ Edit sale</button>` : '';
     const cancelBtn = !isCancelled && !delivered ?
-      `<button class="del-btn" style="background:transparent;color:var(--red);border:1px solid var(--red);margin-top:6px;" onclick="cancelSale(${s.id})">🗑 Delete sale</button>` : '';
-    return `<div class="sale-row" style="opacity:${(delivered||isCancelled)?'0.6':'1'}">
+      `<button class="del-btn" style="background:transparent;color:var(--red);border:1px solid var(--red);margin-top:6px;" onclick="cancelSale(${s.id});event.stopPropagation()">🗑 Delete sale</button>` : '';
+    return `<div class="sale-row" style="opacity:${(delivered||isCancelled)?'0.6':'1'}" onclick="openSaleForEdit(${s.id})">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div class="sale-customer" style="${(delivered||isCancelled)?'text-decoration:line-through;color:var(--text3);':''}">${s.customer}${fuelPill}${delPill}${paidPill}${cancelledPill}${tbaPill}</div>
         <div style="text-align:right;flex-shrink:0;">
@@ -1780,7 +1963,7 @@ function renderSales() {
       </div>
       <div class="sale-meta">${s.location||'—'} · ${fmtDate(s.sale_date)} · ${s.payment_term}</div>
       <div class="sale-meta">Del: ${fmtDate(s.delivery_date)} · Pay due: ${fmtDate(s.payment_due)}</div>
-      ${delBtn}${cancelBtn}
+      ${delBtn}${editBtn}${cancelBtn}
     </div>`;
   }).join('');
 }
