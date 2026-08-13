@@ -470,6 +470,157 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 #sec-logistics .pop-btn{width:100%;margin-top:8px;padding:6px;background:var(--green);color:#fff;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;}
 #sec-logistics .pop-btn:hover{background:var(--green-dark);}
 #sec-logistics .pop-btn.rm{background:var(--red);}
+
+/* ================= SHARED PIN-LOCK + PERFORMANCE-REPORT OVERLAYS ================= */
+/* Shell-level, not scoped to #sec-sales — #lock-screen has to be able to
+   cover the whole page before the shell even knows which section to show
+   (see startupFromCache() in the shared script). Ported byte-for-byte from
+   index.html; class names here don't exist anywhere else in this file. */
+.lock-screen{position:fixed;inset:0;background:var(--bg2,#F7F7F5);z-index:9500;display:none;flex-direction:column;align-items:center;justify-content:center;padding:32px;}
+.lock-screen.active{display:flex;}
+.lock-logo{margin-bottom:24px;}
+.lock-title{font-size:20px;font-weight:700;margin-bottom:4px;text-align:center;}
+.lock-sub{font-size:13px;color:var(--gray-text);margin-bottom:28px;text-align:center;}
+.lock-dots{display:flex;justify-content:center;gap:14px;margin-bottom:28px;}
+.lock-dot{width:16px;height:16px;border-radius:50%;background:var(--gray-border);transition:background 0.15s;}
+.lock-dot.filled{background:var(--red);}
+.lock-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:280px;}
+.lock-key{padding:18px;border:1px solid var(--gray-border);border-radius:12px;font-size:22px;font-weight:600;background:#fff;cursor:pointer;font-family:var(--mono);text-align:center;transition:background 0.1s;}
+.lock-key:active{background:var(--gray-border);}
+.lock-err{color:var(--red);font-size:13px;text-align:center;margin-top:12px;min-height:20px;font-weight:500;}
+.lock-timer{color:var(--amber);font-size:13px;text-align:center;margin-top:8px;font-weight:600;}
+.lock-signout{margin-top:20px;padding:8px 16px;background:transparent;border:none;color:var(--gray-text);font-size:12px;cursor:pointer;text-decoration:underline;}
+
+.perf-screen{position:fixed;inset:0;background:var(--bg2,#F7F7F5);z-index:9400;display:none;flex-direction:column;}
+.perf-screen.active{display:flex;}
+.perf-top{background:#fff;border-bottom:1px solid var(--gray-border);padding:16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.perf-top-name{font-size:17px;font-weight:700;}
+.perf-top-period{font-size:12px;color:var(--gray-text);margin-top:2px;}
+.perf-close{width:34px;height:34px;border-radius:50%;background:var(--gray-light);border:none;font-size:16px;color:#5a5a57;cursor:pointer;flex-shrink:0;}
+.perf-body{flex:1;overflow-y:auto;padding:16px;}
+.perf-hero{background:linear-gradient(135deg,var(--red) 0%,var(--red-dark) 100%);border-radius:12px;padding:20px;color:#fff;margin-bottom:14px;text-align:center;}
+.perf-hero-value{font-size:34px;font-weight:800;font-family:var(--mono);letter-spacing:-0.01em;}
+.perf-hero-label{font-size:12px;opacity:0.85;margin-top:2px;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;}
+.perf-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.perf-stat{background:#fff;border-radius:12px;border:1px solid var(--gray-border);padding:13px;text-align:center;}
+.perf-stat-label{font-size:9.5px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.05em;}
+.perf-stat-value{font-size:19px;font-weight:700;font-family:var(--mono);margin-top:4px;}
+.perf-card{background:#fff;border-radius:12px;border:1px solid var(--gray-border);padding:16px;margin-bottom:14px;}
+.perf-card-title{font-size:12px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px;}
+.perf-card-sub{font-size:11.5px;color:var(--gray-text);margin-bottom:14px;}
+.perf-chart{display:flex;align-items:flex-end;gap:8px;height:130px;padding:0 2px;}
+.perf-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative;}
+.perf-bar-val{font-size:10px;font-weight:700;font-family:var(--mono);height:12px;}
+.perf-bar{width:100%;border-radius:5px 5px 2px 2px;min-height:3px;transition:opacity .15s;}
+.perf-bar-col:active .perf-bar{opacity:0.75;}
+.perf-bar-wk{font-size:10px;font-weight:600;color:var(--gray-text);}
+.perf-legend{display:flex;gap:14px;justify-content:center;margin-top:14px;font-size:10.5px;color:var(--gray-text);flex-wrap:wrap;}
+.perf-legend span{display:inline-flex;align-items:center;gap:5px;}
+.perf-legend i{width:9px;height:9px;border-radius:2px;display:inline-block;}
+.perf-empty{text-align:center;padding:30px 16px;color:var(--gray-text);font-size:13px;}
+.perf-tip{background:var(--blue-light);border-radius:8px;padding:10px 12px;font-size:12px;color:#5a5a57;margin-bottom:14px;}
+.perf-cust-list{display:flex;flex-direction:column;gap:12px;}
+.perf-cust-row{display:flex;align-items:center;gap:10px;}
+.perf-cust-rank{flex-shrink:0;width:24px;height:24px;border-radius:50%;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+.perf-cust-info{flex:1;min-width:0;}
+.perf-cust-name{font-size:13px;font-weight:600;margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.perf-cust-bar-track{height:6px;background:var(--gray-light);border-radius:99px;overflow:hidden;}
+.perf-cust-bar-fill{height:100%;background:var(--red);border-radius:99px;}
+.perf-cust-vol{flex-shrink:0;font-size:12.5px;font-weight:700;font-family:var(--mono);color:#5a5a57;}
+
+/* ================= SALES SECTION (ported from index.html — the rep app) ================= */
+/* index.html's own auth screen is dropped — reps use the shared #auth-wrap
+   login form (see collision check: auth-email/auth-password/auth-err would
+   have collided outright, confirming they're meant to be the same fields).
+   .screen/.screen.active is kept exactly as-is, nested inside #sec-sales,
+   so the PIN-lock/hide-show state machine (showLockScreen/hideLockScreen/
+   checkLockPin) needs zero behavioral changes from what's proven today. */
+#sec-sales .screen{display:none;flex-direction:column;height:100%;overflow:hidden;}
+#sec-sales .screen.active{display:flex;}
+
+#sec-sales .field{margin-bottom:14px;}
+#sec-sales .field label{font-size:12px;font-weight:600;color:#5a5a57;display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em;}
+#sec-sales .field input{width:100%;padding:13px 14px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:15px;outline:none;transition:border-color 0.15s;}
+#sec-sales .tba-row{display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;}
+#sec-sales .tba-box{width:20px;height:20px;border:2px solid var(--gray-border);border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all 0.15s;background:#fff;}
+#sec-sales .tba-box.on{background:var(--amber);border-color:var(--amber);}
+#sec-sales .tba-box.on::after{content:'✓';color:#fff;font-size:13px;font-weight:800;}
+#sec-sales .tba-txt{font-size:12px;color:#5a5a57;font-weight:600;}
+#sec-sales #s-price.tba-off{opacity:0.45;pointer-events:none;background:var(--gray-light);}
+#sec-sales .field input:focus{border-color:var(--red);background:#fff;}
+#sec-sales .field select{width:100%;padding:13px 14px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:15px;outline:none;}
+#sec-sales .field select:focus{border-color:var(--red);background:#fff;}
+
+#sec-sales .topbar{background:#fff;border-bottom:1px solid var(--gray-border);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+#sec-sales .topbar-title{font-size:16px;font-weight:700;}
+#sec-sales .topbar-user{font-size:12px;color:var(--gray-text);}
+#sec-sales .sync-badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;background:var(--green-light);color:var(--green-dark);}
+#sec-sales .sync-badge.pending{background:var(--amber-light);color:var(--amber);}
+#sec-sales .sync-badge.error{background:var(--red-light);color:var(--red-dark);}
+
+#sec-sales .tabs{display:grid;background:#fff;border-bottom:1px solid var(--gray-border);flex-shrink:0;}
+#sec-sales .tab{padding:10px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--gray-text);cursor:pointer;border-bottom:2px solid transparent;text-transform:uppercase;letter-spacing:0.04em;}
+#sec-sales .tab.active{color:var(--red);border-bottom-color:var(--red);}
+
+#sec-sales .tab-content{display:none;flex:1;overflow-y:auto;padding:16px;}
+#sec-sales .tab-content.active{display:block;}
+
+#sec-sales .card{background:#fff;border-radius:12px;border:1px solid var(--gray-border);padding:16px;margin-bottom:12px;}
+#sec-sales .card-title{font-size:12px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px;}
+
+#sec-sales .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+#sec-sales .terms-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+#sec-sales .term-btn{padding:9px 6px;border:1.5px solid var(--gray-border);border-radius:8px;background:#fff;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;text-align:center;color:#5a5a57;transition:all 0.15s;}
+#sec-sales .term-btn.selected{border-color:var(--red);background:var(--red-light);color:var(--red-dark);}
+#sec-sales .fuel-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+#sec-sales textarea{width:100%;padding:10px 12px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:14px;outline:none;resize:none;min-height:70px;}
+#sec-sales textarea:focus{border-color:var(--red);background:#fff;}
+
+#sec-sales .submit-btn{width:100%;padding:15px;background:var(--red);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;margin-top:8px;}
+#sec-sales .submit-btn:disabled{opacity:0.6;cursor:not-allowed;}
+#sec-sales .edit-status{margin-top:10px;font-size:13px;color:#5a5a57;line-height:1.4;}
+
+#sec-sales .sale-row{background:#fff;border-radius:12px;border:1px solid var(--gray-border);padding:14px;margin-bottom:10px;}
+#sec-sales .sale-customer{font-size:15px;font-weight:700;}
+#sec-sales .sale-meta{font-size:12px;color:var(--gray-text);margin-top:3px;}
+#sec-sales .sale-litres{font-size:16px;font-weight:700;font-family:var(--mono);color:var(--green-dark);}
+#sec-sales .sale-price{font-size:13px;font-weight:700;font-family:var(--mono);color:var(--text);margin-top:1px;}
+#sec-sales .sale-unit{font-size:10px;font-weight:600;font-family:var(--mono);color:var(--gray-text);margin-top:1px;}
+#sec-sales .pill{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:5px;vertical-align:middle;}
+#sec-sales .p-diesel{background:var(--blue-light);color:var(--blue-dark);}
+#sec-sales .p-petrol{background:var(--red-light);color:var(--red-dark);}
+#sec-sales .p-del{background:var(--green-light);color:var(--green-dark);}
+#sec-sales .del-btn{width:100%;margin-top:10px;padding:9px;background:var(--green);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;}
+#sec-sales .del-btn:disabled{background:var(--green-light);color:var(--green-dark);cursor:default;}
+
+#sec-sales .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+#sec-sales .stat-box{background:#fff;border-radius:12px;border:1px solid var(--gray-border);padding:14px;text-align:center;}
+#sec-sales .stat-label{font-size:10px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.06em;}
+#sec-sales .stat-value{font-size:22px;font-weight:700;font-family:var(--mono);margin-top:4px;}
+
+#sec-sales .empty{text-align:center;padding:40px 20px;color:var(--gray-text);}
+#sec-sales .empty-icon{font-size:36px;margin-bottom:10px;opacity:0.4;}
+
+#sec-sales .logout-btn{width:100%;padding:13px;background:var(--gray-light);color:#5a5a57;border:1px solid var(--gray-border);border-radius:8px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;margin-top:12px;}
+
+#sec-sales .ac-wrap{position:relative;}
+#sec-sales .ac-list{position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--red);border-top:none;border-radius:0 0 8px 8px;max-height:230px;overflow-y:auto;z-index:50;box-shadow:0 6px 18px rgba(0,0,0,0.10);display:none;}
+#sec-sales .ac-list.show{display:block;}
+#sec-sales .ac-item{padding:11px 14px;cursor:pointer;border-bottom:1px solid #f2f2f0;}
+#sec-sales .ac-item:last-child{border-bottom:none;}
+#sec-sales .ac-item:hover,#sec-sales .ac-item.sel{background:var(--red-light);}
+#sec-sales .ac-name{font-size:14px;font-weight:600;line-height:1.3;}
+#sec-sales .ac-name b{color:var(--red);font-weight:700;}
+#sec-sales .ac-meta{font-size:10px;color:var(--gray-text);font-family:var(--mono);margin-top:2px;}
+#sec-sales .ac-new{padding:11px 14px;background:var(--blue-light);cursor:pointer;}
+#sec-sales .ac-new .ac-name{color:var(--blue);}
+#sec-sales .cust-matched{display:none;align-items:center;gap:6px;margin-top:6px;padding:7px 10px;background:var(--green-light);border-radius:6px;}
+#sec-sales .cust-matched.show{display:flex;}
+#sec-sales .cust-matched .txt{font-size:11px;color:var(--green-dark);font-weight:600;line-height:1.3;}
+#sec-sales .cust-matched .clear{margin-left:auto;color:var(--gray-text);cursor:pointer;font-weight:700;padding:0 4px;}
+#sec-sales .cust-new{display:none;align-items:center;gap:6px;margin-top:6px;padding:7px 10px;background:var(--blue-light);border-radius:6px;}
+#sec-sales .cust-new.show{display:flex;}
+#sec-sales .cust-new .txt{font-size:11px;color:var(--blue);font-weight:600;}
 </style>
 </head>
 <body>
@@ -1210,7 +1361,394 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
       </div>
     </div>
 
+    <!-- SALES (ported from index.html — the rep app). Note: index.html's own
+         auth screen is NOT ported — reps use the shared #auth-wrap login
+         form above (see plan: their ids would have collided outright,
+         confirming they're the same fields). Everything else — the PIN
+         lock, offline queue, and inner .screen/.screen.active toggle — is
+         ported unchanged; see the shell-level #lock-screen/#perf-screen
+         below and the SalesApp script further down. -->
+    <div class="admin-section" id="sec-sales">
+      <div class="screen active" id="screen-app">
+        <div class="topbar">
+          <div>
+            <div class="topbar-title">⛽ Fuel Sales</div>
+            <div class="topbar-user" id="user-name-display">—</div>
+          </div>
+          <div style="text-align:right;">
+            <div id="sync-badge" class="sync-badge" onclick="SalesApp.retrySync()" style="cursor:pointer;" title="Tap to try uploading now">Ready</div>
+            <div id="last-synced" style="font-size:10px;color:var(--gray-text);margin-top:3px;">&nbsp;</div>
+          </div>
+        </div>
+        <div class="tabs" style="grid-template-columns:repeat(5,1fr);">
+          <div class="tab active" onclick="SalesApp.showTab('record',this)">📝 Record</div>
+          <div class="tab" onclick="SalesApp.showTab('sales',this)">📋 Sales</div>
+          <div class="tab" onclick="SalesApp.showTab('dash',this)">📊 Dash</div>
+          <div class="tab" onclick="SalesApp.showTab('cal',this)">📅 Cal</div>
+          <div class="tab" onclick="SalesApp.showTab('more',this)">⚙️ More</div>
+        </div>
+
+        <!-- RECORD TAB -->
+        <div class="tab-content active" id="tab-record">
+          <div class="card">
+            <div class="card-title">New sale</div>
+            <div class="field">
+              <label>Sale date</label>
+              <input type="date" id="s-date">
+            </div>
+            <div class="field">
+              <label>Customer name</label>
+              <div class="ac-wrap">
+                <input type="text" id="s-customer" placeholder="Start typing..." autocomplete="off">
+                <div class="ac-list" id="ac-list"></div>
+              </div>
+              <div class="cust-matched" id="cust-matched">
+                <span style="color:var(--green-dark);font-weight:700;">✓</span>
+                <span class="txt" id="cust-matched-txt"></span>
+                <span class="clear" onclick="SalesApp.clearCustomerMatch()">×</span>
+              </div>
+              <div class="cust-new" id="cust-new">
+                <span style="color:var(--blue);font-weight:700;">+</span>
+                <span class="txt">New customer — will be added to the list</span>
+              </div>
+            </div>
+            <div class="field">
+              <label>Location</label>
+              <div class="ac-wrap">
+                <input type="text" id="s-location" placeholder="e.g. Ruwa" autocomplete="off">
+                <div class="ac-list" id="loc-ac-list"></div>
+              </div>
+              <div class="cust-matched" id="loc-matched">
+                <span style="color:var(--green-dark);font-weight:700;">✓</span>
+                <span class="txt" id="loc-matched-txt">Recognized Ops location</span>
+                <span class="clear" onclick="SalesApp.clearLocationMatch()">×</span>
+              </div>
+              <div class="cust-new" id="loc-new">
+                <span style="color:var(--blue);font-weight:700;">+</span>
+                <span class="txt">New location — ops can add map coordinates later</span>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label>Litres</label>
+                <input type="number" id="s-litres" placeholder="e.g. 5000" inputmode="decimal">
+              </div>
+              <div class="field">
+                <label>Price / litre ($)</label>
+                <input type="number" id="s-price" placeholder="e.g. 1.94" inputmode="decimal" step="0.001">
+                <label class="tba-row" onclick="SalesApp.toggleTBA(event)">
+                  <span class="tba-box" id="tba-box"></span>
+                  <span class="tba-txt">Price TBA — send now, agree price later</span>
+                </label>
+              </div>
+            </div>
+            <div class="field">
+              <label>Cost price / litre ($) <span style="font-weight:400;color:var(--gray-text);">— optional, office use</span></label>
+              <input type="number" id="s-cost" placeholder="Leave blank if not known" inputmode="decimal" step="0.001">
+            </div>
+            <div class="field">
+              <label>Fuel type</label>
+              <div class="fuel-grid">
+                <button class="term-btn selected" id="fuel-diesel" onclick="SalesApp.selectFuel('Diesel',this)">⛽ Diesel</button>
+                <button class="term-btn" id="fuel-petrol" onclick="SalesApp.selectFuel('Petrol',this)">🔴 Petrol</button>
+              </div>
+            </div>
+            <div class="field">
+              <label>Delivery date</label>
+              <input type="date" id="s-delivery">
+            </div>
+            <div class="field">
+              <label>Payment terms</label>
+              <div class="terms-grid" id="terms-grid">
+                <button class="term-btn selected" onclick="SalesApp.selTerm('COD',this)">COD</button>
+                <button class="term-btn" onclick="SalesApp.selTerm('7',this)">7 days</button>
+                <button class="term-btn" onclick="SalesApp.selTerm('14',this)">14 days</button>
+                <button class="term-btn" onclick="SalesApp.selTerm('21',this)">21 days</button>
+                <button class="term-btn" onclick="SalesApp.selTerm('30',this)">30 days</button>
+                <button class="term-btn" onclick="SalesApp.selTerm('other',this)">Other</button>
+              </div>
+              <div id="term-other-wrap" style="display:none;margin-top:8px;">
+                <input type="number" id="term-other-days" placeholder="Days" inputmode="numeric">
+              </div>
+            </div>
+            <div class="field">
+              <label>Notes</label>
+              <textarea id="s-notes" placeholder="Delivery or customer notes..."></textarea>
+            </div>
+            <button class="submit-btn" id="submit-btn" onclick="SalesApp.recordSale()">Record Sale</button>
+            <div class="edit-status" id="edit-status" style="display:none;"></div>
+            <button class="submit-btn" id="cancel-edit-btn" onclick="SalesApp.cancelEdit()" style="display:none;background:#fff;color:var(--gray-text);border:1px solid var(--gray-border);margin-top:8px;">Cancel edit</button>
+          </div>
+        </div>
+
+        <!-- SALES TAB -->
+        <div class="tab-content" id="tab-sales">
+          <div id="sales-list"><div class="empty"><div class="empty-icon">📋</div><p>No sales yet</p></div></div>
+        </div>
+
+        <!-- DASH TAB -->
+        <div class="tab-content" id="tab-dash">
+          <div id="year-chart-wrap" style="background:#fff;border-radius:12px;border:1px solid var(--gray-border);padding:14px;margin-bottom:12px;">
+            <div style="font-size:12px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">📈 My litres — <span id="chart-year"></span></div>
+            <div style="display:flex;align-items:flex-end;gap:3px;height:80px;" id="rep-year-chart"></div>
+            <div style="display:flex;gap:8px;margin-top:6px;font-size:9px;font-weight:600;">
+              <span style="color:var(--red);">■ This month</span>
+              <span style="color:var(--blue);">■ Past</span>
+              <span style="color:#D3D1C7;">■ Future</span>
+            </div>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-box"><div class="stat-label">This month</div><div class="stat-value" id="d-month-l" style="color:var(--blue);">0</div><div style="font-size:11px;color:var(--gray-text);">litres</div></div>
+            <div class="stat-box"><div class="stat-label">This month</div><div class="stat-value" id="d-month-v" style="color:var(--green-dark);">$0</div><div style="font-size:11px;color:var(--gray-text);">value</div></div>
+            <div class="stat-box" style="grid-column:span 2;"><div class="stat-label">Pending delivery</div><div class="stat-value" id="d-pending" style="color:var(--amber);">0</div><div style="font-size:11px;color:var(--gray-text);">orders</div></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Upcoming deliveries</div>
+            <div id="d-deliveries"><div class="empty" style="padding:16px;"><p style="font-size:13px;">No upcoming deliveries</p></div></div>
+          </div>
+          <div class="card">
+            <div class="card-title">🌱 My customers — ripeness</div>
+            <div style="font-size:11px;color:var(--gray-text);margin-bottom:8px;">Your customers only, most due first</div>
+            <div id="d-ripeness"><div class="empty" style="padding:16px;"><p style="font-size:13px;">Loading…</p></div></div>
+          </div>
+        </div>
+
+        <!-- CALENDAR TAB -->
+        <div class="tab-content" id="tab-cal">
+          <div id="cal-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <button onclick="SalesApp.calNav(-1)" style="background:#fff;border:1px solid var(--gray-border);border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;">‹</button>
+            <div id="cal-title" style="font-size:16px;font-weight:700;"></div>
+            <button onclick="SalesApp.calNav(1)" style="background:#fff;border:1px solid var(--gray-border);border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;">›</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px;">
+            <div style="text-align:center;font-size:10px;font-weight:700;color:var(--gray-text);padding:4px;">Su</div>
+            <div style="text-align:center;font-size:10px;font-weight:700;color:var(--gray-text);padding:4px;">Mo</div>
+            <div style="text-align:center;font-size:10px;font-weight:700;color:var(--gray-text);padding:4px;">Tu</div>
+            <div style="text-align:center;font-size:10px;font-weight:700;color:var(--gray-text);padding:4px;">We</div>
+            <div style="text-align:center;font-size:10px;font-weight:700;color:var(--gray-text);padding:4px;">Th</div>
+            <div style="text-align:center;font-size:10px;font-weight:700;color:var(--gray-text);padding:4px;">Fr</div>
+            <div style="text-align:center;font-size:10px;font-weight:700;color:var(--gray-text);padding:4px;">Sa</div>
+          </div>
+          <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;"></div>
+          <div style="display:flex;gap:12px;margin-top:12px;padding:10px;background:#fff;border-radius:8px;border:1px solid var(--gray-border);">
+            <span style="font-size:11px;font-weight:600;">🟢 Delivery</span>
+            <span style="font-size:11px;font-weight:600;">🔴 Payment due</span>
+          </div>
+          <div id="cal-detail" style="margin-top:10px;"></div>
+        </div>
+
+        <!-- MORE TAB -->
+        <div class="tab-content" id="tab-more">
+          <div class="card">
+            <div class="card-title">Account</div>
+            <div style="font-size:14px;color:#5a5a57;margin-bottom:4px;" id="more-name">—</div>
+            <div style="font-size:12px;color:var(--gray-text);" id="more-email">—</div>
+            <div style="font-size:12px;color:var(--gray-text);margin-top:2px;" id="more-role">—</div>
+            <div style="font-size:11px;color:var(--gray-text);margin-top:8px;font-family:var(--mono);" id="more-version">—</div>
+          </div>
+
+          <div class="card" id="report-card" style="display:none;">
+            <div class="card-title">📊 Generate a report</div>
+            <div class="field" id="report-type-field">
+              <label>Report type</label>
+              <select id="report-type">
+                <option value="performance">📈 Performance</option>
+                <option value="commission">💰 Commission</option>
+              </select>
+            </div>
+            <div class="field" id="rep-select-field">
+              <label>Sales rep</label>
+              <select id="perf-rep-select"></select>
+            </div>
+            <div class="field">
+              <label>Timeframe</label>
+              <select id="tf-mode">
+                <option value="month">Whole month</option>
+                <option value="range">Custom date range</option>
+              </select>
+            </div>
+            <div class="field-row" id="tf-month-row">
+              <select id="tf-month"></select>
+              <select id="tf-year"></select>
+            </div>
+            <div class="field-row" id="tf-range-row" style="display:none;">
+              <div class="field" style="margin-bottom:0;"><label>From</label><input type="date" id="tf-start"></div>
+              <div class="field" style="margin-bottom:0;"><label>To</label><input type="date" id="tf-end"></div>
+            </div>
+            <button class="submit-btn" id="report-btn" onclick="SalesApp.runReport()">View Performance Report</button>
+            <div style="font-size:11px;color:var(--gray-text);margin-top:8px;text-align:center;" id="report-hint">See sales volume by week and how fast deliveries go out.</div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">⛽ Delivery cost calculator</div>
+            <div class="field">
+              <label>Distance to client (km)</label>
+              <input type="number" id="calc-dist" placeholder="e.g. 120" inputmode="decimal">
+            </div>
+            <div class="field">
+              <label>Litres to deliver</label>
+              <input type="number" id="calc-litres" placeholder="e.g. 5000" inputmode="decimal">
+            </div>
+            <div class="field">
+              <label>Depot price per litre ($)</label>
+              <input type="number" id="calc-depot" placeholder="e.g. 1.94" inputmode="decimal" step="0.001">
+            </div>
+            <div class="field">
+              <label>Markup per litre ($)</label>
+              <input type="number" id="calc-markup" placeholder="e.g. 0.05" inputmode="decimal" step="0.001">
+            </div>
+            <div class="field">
+              <label>Cost per km ($) <span style="font-weight:400;color:var(--gray-text);">— adjustable</span></label>
+              <input type="number" id="calc-cpkm" placeholder="e.g. 2.20" inputmode="decimal" step="0.01" value="2.20">
+            </div>
+            <button class="submit-btn" onclick="SalesApp.calcDelivery()" style="margin-top:8px;">Calculate</button>
+            <div id="calc-result" style="margin-top:12px;display:none;">
+              <div style="background:var(--green-light);border-radius:8px;padding:14px;">
+                <div style="font-size:12px;font-weight:700;color:var(--green-dark);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Result</div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                  <span style="font-size:13px;color:#5a5a57;">Transport cost/L</span>
+                  <span style="font-size:13px;font-weight:700;font-family:var(--mono);" id="r-transport">—</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                  <span style="font-size:13px;color:#5a5a57;">Depot price/L</span>
+                  <span style="font-size:13px;font-weight:700;font-family:var(--mono);" id="r-depot">—</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                  <span style="font-size:13px;color:#5a5a57;">Markup/L</span>
+                  <span style="font-size:13px;font-weight:700;font-family:var(--mono);" id="r-markup">—</span>
+                </div>
+                <div style="border-top:1px solid var(--green);margin:8px 0;"></div>
+                <div style="display:flex;justify-content:space-between;">
+                  <span style="font-size:15px;font-weight:700;color:var(--green-dark);">Delivered price/L</span>
+                  <span style="font-size:15px;font-weight:700;font-family:var(--mono);color:var(--green-dark);" id="r-total">—</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-top:6px;">
+                  <span style="font-size:13px;color:#5a5a57;">Total order value</span>
+                  <span style="font-size:13px;font-weight:700;font-family:var(--mono);" id="r-value">—</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">📍 Distance reference</div>
+            <div style="font-size:11px;color:var(--gray-text);margin-bottom:8px;">Standard road distances — use as reference when client doesn't provide one</div>
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:0;font-size:11px;">
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:700;color:var(--gray-text);font-size:10px;text-transform:uppercase;">Town</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:700;color:var(--red);font-size:10px;text-align:center;">HRE</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:700;color:var(--blue);font-size:10px;text-align:center;">MUT</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Bulawayo</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">440</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">620</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Gweru</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">275</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">455</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Masvingo</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">292</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">330</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Chinhoyi</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">116</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">381</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Bindura</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">88</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">353</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Marondera</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">72</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">193</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Kadoma</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">141</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">406</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Chegutu</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">107</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">372</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Kwekwe</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">195</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">460</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Zvishavane</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">340</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">400</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Nyanga</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">268</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">105</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Kariba</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">365</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">630</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Victoria Falls</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">880</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">1145</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Ruwa</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">25</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">290</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Norton</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">40</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">305</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Chitungwiza</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">25</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">290</div>
+              <div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);">Hwange</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">790</div><div style="padding:5px 4px;border-bottom:1px solid var(--gray-border);font-weight:600;font-family:var(--mono);text-align:center;">1055</div>
+              <div style="padding:5px 4px;">Mutare/Harare</div><div style="padding:5px 4px;font-weight:600;font-family:var(--mono);text-align:center;">265</div><div style="padding:5px 4px;font-weight:600;font-family:var(--mono);text-align:center;">—</div>
+            </div>
+            <div style="font-size:10px;color:var(--gray-text);margin-top:8px;">HRE = from Harare · MUT = from Mutare · all distances in km</div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">🔒 Change PIN</div>
+            <div style="font-size:12px;color:var(--gray-text);margin-bottom:10px;">6 digit PIN used to unlock the app offline</div>
+            <div class="field">
+              <label>New PIN (6 digits)</label>
+              <input type="password" id="new-pin" placeholder="••••••" inputmode="numeric" maxlength="6" pattern="[0-9]{6}">
+            </div>
+            <div class="field">
+              <label>Confirm new PIN</label>
+              <input type="password" id="confirm-pin" placeholder="••••••" inputmode="numeric" maxlength="6" pattern="[0-9]{6}">
+            </div>
+            <button class="submit-btn" onclick="SalesApp.changePin()" style="font-size:14px;padding:12px;">Update PIN</button>
+            <div id="pin-msg" style="font-size:13px;text-align:center;margin-top:8px;min-height:18px;"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">🔑 Change password</div>
+            <div class="field">
+              <label>New password</label>
+              <input type="password" id="new-pw" placeholder="Enter new password" autocomplete="new-password">
+            </div>
+            <div class="field">
+              <label>Confirm new password</label>
+              <input type="password" id="confirm-pw" placeholder="Confirm new password" autocomplete="new-password">
+            </div>
+            <button class="submit-btn" onclick="SalesApp.changePassword()" style="font-size:14px;padding:12px;">Update password</button>
+            <div id="pw-msg" style="font-size:13px;text-align:center;margin-top:8px;min-height:18px;"></div>
+          </div>
+
+          <button class="logout-btn" onclick="adminSignOut()">Sign out</button>
+        </div>
+      </div>
+    </div>
+
   </div>
+</div>
+
+<!-- SHELL-LEVEL: PIN LOCK SCREEN (rep offline unlock) + PERFORMANCE REPORT
+     OVERLAY. Siblings of .admin-shell, not scoped to any section — the PIN
+     screen specifically must be able to cover the page before the shell
+     even knows what to render (see startupFromCache() in the shared
+     script). Ported from index.html unchanged. -->
+<div class="lock-screen" id="lock-screen">
+  <div class="lock-logo">
+    <svg width="120" height="46" viewBox="0 0 240 92" xmlns="http://www.w3.org/2000/svg">
+      <text x="2" y="52" font-family="Arial Black,Arial" font-weight="900" font-size="54" fill="#1a1a18">SKELSEE</text>
+      <rect x="2" y="58" width="236" height="30" rx="3" fill="#D4180A"/>
+      <text x="46" y="80" font-family="Arial Black,Arial" font-weight="900" font-size="22" fill="#fff" letter-spacing="3">TRADING</text>
+      <ellipse cx="22" cy="73" rx="9" ry="11" fill="#F5C400"/>
+      <polygon points="22,56 17,64 27,64" fill="#F5C400"/>
+    </svg>
+  </div>
+  <div class="lock-title">Fuel Sales</div>
+  <div class="lock-sub" id="lock-user">Enter your PIN to continue</div>
+  <div class="lock-dots">
+    <div class="lock-dot" id="ld0"></div>
+    <div class="lock-dot" id="ld1"></div>
+    <div class="lock-dot" id="ld2"></div>
+    <div class="lock-dot" id="ld3"></div>
+    <div class="lock-dot" id="ld4"></div>
+    <div class="lock-dot" id="ld5"></div>
+  </div>
+  <div class="lock-grid">
+    <button class="lock-key" onclick="lockKey('1')">1</button>
+    <button class="lock-key" onclick="lockKey('2')">2</button>
+    <button class="lock-key" onclick="lockKey('3')">3</button>
+    <button class="lock-key" onclick="lockKey('4')">4</button>
+    <button class="lock-key" onclick="lockKey('5')">5</button>
+    <button class="lock-key" onclick="lockKey('6')">6</button>
+    <button class="lock-key" onclick="lockKey('7')">7</button>
+    <button class="lock-key" onclick="lockKey('8')">8</button>
+    <button class="lock-key" onclick="lockKey('9')">9</button>
+    <button class="lock-key" onclick="lockKey('clr')" style="font-size:13px;color:var(--gray-text);">CLR</button>
+    <button class="lock-key" onclick="lockKey('0')">0</button>
+    <button class="lock-key" onclick="lockKey('del')">⌫</button>
+  </div>
+  <div class="lock-err" id="lock-err"></div>
+  <div class="lock-timer" id="lock-timer"></div>
+  <button class="lock-signout" onclick="signOutFromLock()">Sign in with email instead</button>
+</div>
+
+<div class="perf-screen" id="perf-screen">
+  <div class="perf-top">
+    <div>
+      <div class="perf-top-name" id="perf-name">—</div>
+      <div class="perf-top-period" id="perf-period">—</div>
+    </div>
+    <button class="perf-close" onclick="SalesApp.closePerfReport()">✕</button>
+  </div>
+  <div class="perf-body" id="perf-body"></div>
 </div>
 
 <!-- SHARED LOST-SALE MODAL — reachable from any section (Accounts now,
@@ -1265,10 +1803,24 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const SECTIONS = [
   { key:'overview',   label:'📊 Overview',   roles:['admin','ops','accounts'] },
   { key:'accounts',   label:'💰 Accounts',   roles:['admin','accounts'] },
-  { key:'logistics',  label:'🚛 Logistics',  roles:['admin','ops'] }
+  { key:'logistics',  label:'🚛 Logistics',  roles:['admin','ops'] },
+  { key:'sales',      label:'⛽ Sales',       roles:['admin','rep'] }
 ];
 let myRole = null;
 let activeSection = 'overview';
+
+// Supabase calls do not time out on their own. On a weak cellular signal a
+// request can hang indefinitely: the promise never settles, so any catch
+// block never runs and offline handling never kicks in. Racing the call
+// against a timer makes it fail fast. Shared here (rather than living
+// inside SalesApp, the section that needs it most) since it's a pure
+// utility with no state.
+function withTimeout(promise, ms = 8000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Network timeout')), ms))
+  ]);
+}
 
 /* ---- shared auth ---- */
 async function adminSignIn(){
@@ -1283,9 +1835,9 @@ async function adminSignIn(){
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if(error){ errEl.textContent = error.message; btn.disabled = false; btn.textContent = 'Sign in'; return; }
 
-  const ok = await enterWithProfile(data.user.id);
+  const ok = await enterWithProfile(data.user);
   if(!ok){
-    errEl.textContent = 'Access denied. Your account has no admin/ops/accounts role.';
+    errEl.textContent = 'Access denied. Your account has no admin/ops/accounts/rep role.';
     await sb.auth.signOut();
   }
   btn.disabled = false; btn.textContent = 'Sign in';
@@ -1299,23 +1851,45 @@ async function adminSignOut(){
   document.getElementById('auth-password').value = '';
 }
 
+// Shared identity used by SalesApp regardless of which path signed them in
+// (normal shell login below, or the rep PIN-unlock path in startupFromCache()
+// further down) — SalesApp's ported code reads currentUser.id /
+// currentProfile.full_name / .role directly, exactly as index.html did.
+let currentUser = null;
+let currentProfile = null;
+
 // Shared by both a fresh sign-in and an existing-session restore on reload.
 let myName = null;
-async function enterWithProfile(userId){
+async function enterWithProfile(user){
+  const userId = user.id;
   const { data: profile } = await sb.from('profiles').select('full_name,role').eq('id', userId).single();
-  if(!profile || !['admin','ops','accounts'].includes(profile.role)) return false;
+  if(!profile || !['admin','ops','accounts','rep'].includes(profile.role)) return false;
 
   myRole = profile.role;
   myName = profile.full_name || null;
+  currentUser = user;
+  currentProfile = profile;
+  // Cache identity for the offline-first PIN path (startupFromCache(), below)
+  // — written on every login regardless of role; only a cached role==='rep'
+  // is ever acted on there, so this is inert for admin/ops/accounts.
+  try{
+    localStorage.setItem('cached_user_id', userId);
+    localStorage.setItem('cached_profile', JSON.stringify(profile));
+  }catch(e){}
+
   document.getElementById('auth-wrap').classList.add('hidden');
   document.getElementById('admin-shell').classList.add('active');
   renderNav();
-  showSection('overview');
-  OverviewApp.init(sb);
+  showSection(myRole === 'rep' ? 'sales' : 'overview');
   // Only init a section's data-fetching if this role can actually see it —
   // no point querying tables a hidden tab will never render.
+  if(SECTIONS.find(s=>s.key==='overview').roles.includes(myRole)) OverviewApp.init(sb);
   if(SECTIONS.find(s=>s.key==='accounts').roles.includes(myRole)) AccountsApp.init(sb);
   if(SECTIONS.find(s=>s.key==='logistics').roles.includes(myRole)) LogisticsApp.init(sb);
+  if(SECTIONS.find(s=>s.key==='sales').roles.includes(myRole)){
+    SalesApp.init(sb);
+    await SalesApp.loadUser(user, false); // no PIN needed — we just authenticated live
+  }
   registerServiceWorker();
   return true;
 }
@@ -1413,10 +1987,227 @@ function registerServiceWorker(){
   }
 }
 
-// Existing session restore (reload without re-typing credentials).
-sb.auth.getSession().then(async ({ data }) => {
-  if(data.session?.user) await enterWithProfile(data.session.user.id);
+// ---- PIN LOCK (rep offline unlock) ----
+// Shell-level, not owned by SalesApp — the lock screen has to be able to
+// cover the page before the shell knows what to render (see
+// startupFromCache() below). Ported unchanged from index.html.
+let lockBuf = '';
+let lockAttempts = 0;
+let lockTimerInterval = null;
+const DEFAULT_PIN = '123456';
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_SECS = 30;
+
+function getPinKey(userId) { return 'admin_sales_pin_' + userId; }
+function getStoredPin() {
+  if (!currentUser) return DEFAULT_PIN;
+  return localStorage.getItem(getPinKey(currentUser.id)) || DEFAULT_PIN;
+}
+
+function showLockScreen() {
+  document.getElementById('lock-screen').classList.add('active');
+  document.getElementById('admin-shell').classList.add('active');
+  document.getElementById('auth-wrap').classList.add('hidden');
+  lockBuf = '';
+  updateLockDots();
+  document.getElementById('lock-err').textContent = '';
+  document.getElementById('lock-timer').textContent = '';
+  if (currentProfile) {
+    document.getElementById('lock-user').textContent = 'Hi ' + currentProfile.full_name + ', enter your PIN';
+  }
+  checkLockout();
+}
+
+function hideLockScreen() {
+  document.getElementById('lock-screen').classList.remove('active');
+}
+
+function updateLockDots() {
+  for (let i = 0; i < 6; i++) {
+    document.getElementById('ld' + i).classList.toggle('filled', i < lockBuf.length);
+  }
+}
+
+function lockKey(k) {
+  const lockedUntil = parseInt(localStorage.getItem('admin_sales_lock_until') || '0');
+  if (Date.now() < lockedUntil) return;
+
+  if (k === 'clr') {
+    lockBuf = '';
+    updateLockDots();
+    document.getElementById('lock-err').textContent = '';
+    return;
+  }
+  if (k === 'del') {
+    lockBuf = lockBuf.slice(0, -1);
+    updateLockDots();
+    return;
+  }
+  if (lockBuf.length >= 6) return;
+
+  lockBuf += k;
+  updateLockDots();
+
+  if (lockBuf.length === 6) {
+    setTimeout(() => checkLockPin(), 100);
+  }
+}
+
+function checkLockPin() {
+  if (lockBuf === getStoredPin()) {
+    lockAttempts = 0;
+    localStorage.removeItem('admin_sales_lock_until');
+    localStorage.removeItem('admin_sales_lock_attempts');
+    hideLockScreen();
+    renderNav();
+    showSection('sales');
+    // Show whatever we already have instantly, then fetch the latest —
+    // loadSales() shows cached data first and is offline-safe either way.
+    SalesApp.renderSales();
+    SalesApp.renderDash();
+    SalesApp.loadSales();
+  } else {
+    lockAttempts++;
+    localStorage.setItem('admin_sales_lock_attempts', lockAttempts);
+    lockBuf = '';
+    updateLockDots();
+
+    if (lockAttempts >= MAX_ATTEMPTS) {
+      const until = Date.now() + LOCKOUT_SECS * 1000;
+      localStorage.setItem('admin_sales_lock_until', until);
+      localStorage.setItem('admin_sales_lock_attempts', '0');
+      lockAttempts = 0;
+      startLockTimer(until);
+      document.getElementById('lock-err').textContent = '';
+    } else {
+      const remaining = MAX_ATTEMPTS - lockAttempts;
+      document.getElementById('lock-err').textContent = 'Incorrect PIN - ' + remaining + ' attempt' + (remaining !== 1 ? 's' : '') + ' remaining';
+    }
+  }
+}
+
+function startLockTimer(until) {
+  if (lockTimerInterval) clearInterval(lockTimerInterval);
+  const timerEl = document.getElementById('lock-timer');
+  document.querySelectorAll('.lock-key').forEach(b => b.style.opacity = '0.4');
+
+  lockTimerInterval = setInterval(() => {
+    const remaining = Math.ceil((until - Date.now()) / 1000);
+    if (remaining <= 0) {
+      clearInterval(lockTimerInterval);
+      timerEl.textContent = '';
+      document.getElementById('lock-err').textContent = '';
+      document.querySelectorAll('.lock-key').forEach(b => b.style.opacity = '1');
+    } else {
+      timerEl.textContent = 'Too many attempts - try again in ' + remaining + 's';
+    }
+  }, 500);
+}
+
+function checkLockout() {
+  const lockedUntil = parseInt(localStorage.getItem('admin_sales_lock_until') || '0');
+  if (Date.now() < lockedUntil) {
+    startLockTimer(lockedUntil);
+  }
+  lockAttempts = parseInt(localStorage.getItem('admin_sales_lock_attempts') || '0');
+}
+
+async function signOutFromLock() {
+  if (!confirm('Sign out completely? You will need internet to sign back in.')) return;
+  if (currentUser) localStorage.removeItem(getPinKey(currentUser.id));
+  await sb.auth.signOut();
+  currentUser = null;
+  currentProfile = null;
+  myRole = null;
+  document.getElementById('lock-screen').classList.remove('active');
+  document.getElementById('admin-shell').classList.remove('active');
+  document.getElementById('auth-wrap').classList.remove('hidden');
+}
+
+// ---- OFFLINE-FIRST STARTUP (rep path only) ----
+// The golden rule: decide which screen to show using ONLY data already
+// saved on this device — never wait on the internet to pick a screen, so a
+// rep with no signal can still open the app. Ported from index.html's
+// startupFromCache(), scoped here to only intercept the boot sequence when
+// the cached identity is specifically a rep; every other role falls
+// through to the existing (unchanged, already-tested) getSession() restore
+// directly below.
+function startupFromCache() {
+  const uid = localStorage.getItem('cached_user_id');
+  const profileRaw = localStorage.getItem('cached_profile');
+  if (!uid || !profileRaw) return false;
+  let profile;
+  try { profile = JSON.parse(profileRaw); } catch (e) { return false; }
+  if (!profile || profile.role !== 'rep') return false;
+
+  currentUser = { id: uid };
+  currentProfile = profile;
+  myRole = 'rep';
+  document.getElementById('admin-shell').classList.add('active');
+  renderNav();
+  showSection('sales');
+  SalesApp.init(sb);
+  registerServiceWorker();
+
+  // Paint the PIN screen FIRST — before anything that could reach out.
+  showLockScreen();
+
+  // Then wire the customer/location boxes from their saved (cached) lists
+  // only — no network — safe and never blocks the PIN screen.
+  SalesApp.warmFromCacheOnly();
+
+  // ONLY NOW, with the PIN screen already up, touch the network — in the
+  // background, where a failure is harmless.
+  warmSessionInBackground(uid);
+  return true;
+}
+
+// Background-only. Safe to fail. Never blocks a screen. Never called before
+// a screen is showing.
+async function warmSessionInBackground(expectedUserId) {
+  if (!navigator.onLine) return;
+  try {
+    const { data } = await withTimeout(sb.auth.getSession(), 6000);
+    const session = data && data.session;
+    if (session && session.user) {
+      try { await withTimeout(sb.auth.refreshSession(), 8000); } catch (e) {}
+      try {
+        const { data: prof } = await withTimeout(
+          sb.from('profiles').select('*').eq('id', session.user.id).single(), 8000
+        );
+        if (prof) {
+          currentProfile = prof;
+          localStorage.setItem('cached_profile', JSON.stringify(prof));
+          localStorage.setItem('cached_user_id', session.user.id);
+        }
+      } catch (e) {}
+    }
+  } catch (e) {
+    // No session / slow network — nothing to do. PIN screen is already up.
+  }
+}
+
+// NOTE: startupFromCache() itself isn't invoked here — it calls
+// SalesApp.init(sb) synchronously for a cached rep, and `const SalesApp`
+// isn't defined until the very bottom of this script (after
+// Overview/Accounts/LogisticsApp). Calling it here would hit the temporal
+// dead zone and throw before ever reaching showLockScreen(). The actual
+// invocation sits at the bottom of the script, after all four `XxxApp`
+// consts exist. This function declaration can safely live here regardless
+// (declarations are hoisted; only the call site's timing matters).
+
+// ---- OFFLINE QUEUE SYNC TRIGGERS (rep sales) ----
+window.addEventListener('online', () => {
+  if (currentUser && myRole === 'rep' && SalesApp.getQueue().length > 0) {
+    SalesApp.setSyncBadge('queued');
+    SalesApp.syncQueue();
+  }
 });
+setInterval(() => {
+  if (navigator.onLine && currentUser && myRole === 'rep' && SalesApp.getQueue().length > 0) {
+    SalesApp.syncQueue();
+  }
+}, 30000);
 
 /* ================= OVERVIEW APP (ported from dashboard/index.html) ================= */
 // Wrapped in its own IIFE so none of its internal names (MN, renderAll,
@@ -3888,6 +4679,1649 @@ const LogisticsApp = (() => {
     flyToSite, flyToPlace,
   };
 })();
+
+/* ================= SALES APP (ported from index.html — the rep app) ================= */
+// Same IIFE-namespacing pattern as the other three sections. Two real
+// differences from them, both explained at the top of this file's PIN-lock
+// block above: (1) auth/PIN state (currentUser, currentProfile, the lock
+// screen) lives at shell level, not in here, since it has to work before
+// the shell knows what to render; SalesApp reads/writes those shell
+// globals directly via closure, same as it would read `myRole`. (2) every
+// localStorage key this section touches is prefixed `admin_sales_` (except
+// the shared cached_user_id/cached_profile used for rep detection) so a
+// rep trying this merged app can't collide with their existing, proven
+// index.html app's offline queue during the parallel trial period.
+const SalesApp = (() => {
+  let sb; // set by init()
+
+  let allSales = [];
+  const APP_VERSION = 'v17 — 29 Jul 2026 (admin app port)';
+
+  let curFuel = 'Diesel';
+  let curTerm = 'COD';
+  let priceTBA = false;
+  let editingSaleId = null;
+  let editingQueueId = null;
+
+  function toggleTBA(e){
+    if(e) e.preventDefault();
+    priceTBA = !priceTBA;
+    const box = document.getElementById('tba-box');
+    const price = document.getElementById('s-price');
+    box.classList.toggle('on', priceTBA);
+    if(priceTBA){
+      price.value = '';
+      price.classList.add('tba-off');
+      price.placeholder = 'TBA';
+    } else {
+      price.classList.remove('tba-off');
+      price.placeholder = 'e.g. 1.94';
+    }
+  }
+
+  // ---- CUSTOMER AUTOCOMPLETE ----
+  let CUSTOMER_LIST = [];
+  let selectedCustomerId = null;
+  let acIdx = -1;
+  let acCurrent = [];
+
+  async function loadCustomerList(){
+    try{
+      const cached = localStorage.getItem('admin_sales_customer_list');
+      if(cached) CUSTOMER_LIST = JSON.parse(cached);
+    }catch(e){}
+    try{
+      const { data, error } = await withTimeout(
+        sb.from('customer_locations').select('id,invoice_name,total_litres,order_count').order('total_litres',{ascending:false}),
+        8000
+      );
+      if(error) throw error;
+      CUSTOMER_LIST = data||[];
+      try{ localStorage.setItem('admin_sales_customer_list', JSON.stringify(CUSTOMER_LIST)); }catch(e){}
+    }catch(e){
+      console.log('Customer list: using cached (offline):', e.message);
+    }
+  }
+
+  function acNorm(s){ return (s||'').toLowerCase().replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim(); }
+
+  function acSearch(q){
+    const nq = acNorm(q);
+    if(nq.length < 2) return [];
+    const starts=[], wordStart=[], contains=[];
+    CUSTOMER_LIST.forEach(c=>{
+      const nc = acNorm(c.invoice_name);
+      if(nc.startsWith(nq)) starts.push(c);
+      else if(nc.split(' ').some(w=>w.startsWith(nq))) wordStart.push(c);
+      else if(nc.includes(nq)) contains.push(c);
+    });
+    const byVol=(a,b)=>(b.total_litres||0)-(a.total_litres||0);
+    return [...starts.sort(byVol), ...wordStart.sort(byVol), ...contains.sort(byVol)].slice(0,6);
+  }
+
+  function acHighlight(name,q){
+    const nq=acNorm(q), nn=acNorm(name);
+    const i=nn.indexOf(nq);
+    if(i<0) return name;
+    let count=-1,start=-1,end=-1;
+    for(let j=0;j<name.length;j++){
+      const ch=name[j].toLowerCase();
+      if(/[a-z0-9 ]/.test(ch)) count++;
+      if(count===i && start<0) start=j;
+      if(count===i+nq.length-1){ end=j+1; break; }
+    }
+    if(start<0||end<0) return name;
+    return name.slice(0,start)+'<b>'+name.slice(start,end)+'</b>'+name.slice(end);
+  }
+
+  function acRender(q){
+    acCurrent = acSearch(q);
+    const list = document.getElementById('ac-list');
+    const nq = acNorm(q);
+    if(nq.length<2){ list.classList.remove('show'); return; }
+    let html = acCurrent.map((c,i)=>{
+      const meta = (c.order_count||0)+' orders · '+Math.round((c.total_litres||0)/1000)+'k litres';
+      return '<div class="ac-item'+(i===acIdx?' sel':'')+'" onclick="SalesApp.acPick('+c.id+')">'+
+        '<div class="ac-name">'+acHighlight(c.invoice_name,q)+'</div>'+
+        '<div class="ac-meta">'+meta+'</div></div>';
+    }).join('');
+    const exact = acCurrent.some(c=>acNorm(c.invoice_name)===nq);
+    if(!exact){
+      const safe = q.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      html += '<div class="ac-new" onclick="SalesApp.acPickNew()">'+
+        '<div class="ac-name">+ Add "'+safe+'" as a new customer</div>'+
+        '<div class="ac-meta">not in the list yet</div></div>';
+    }
+    list.innerHTML = html;
+    list.classList.add('show');
+  }
+
+  function acPick(id){
+    const c = CUSTOMER_LIST.find(x=>x.id===id);
+    if(!c) return;
+    document.getElementById('s-customer').value = c.invoice_name;
+    selectedCustomerId = c.id;
+    document.getElementById('ac-list').classList.remove('show');
+    document.getElementById('cust-matched').classList.add('show');
+    document.getElementById('cust-new').classList.remove('show');
+    document.getElementById('cust-matched-txt').textContent = 'Linked to accounts record';
+  }
+
+  function acPickNew(){
+    selectedCustomerId = null;
+    document.getElementById('ac-list').classList.remove('show');
+    document.getElementById('cust-matched').classList.remove('show');
+    document.getElementById('cust-new').classList.add('show');
+  }
+
+  function clearCustomerMatch(){
+    selectedCustomerId = null;
+    document.getElementById('s-customer').value='';
+    document.getElementById('cust-matched').classList.remove('show');
+    document.getElementById('cust-new').classList.remove('show');
+    document.getElementById('s-customer').focus();
+  }
+
+  function initCustomerAutocomplete(){
+    const input = document.getElementById('s-customer');
+    if(!input || input.dataset.acWired) return;
+    input.addEventListener('input', e=>{
+      selectedCustomerId = null;
+      acIdx = -1;
+      document.getElementById('cust-matched').classList.remove('show');
+      document.getElementById('cust-new').classList.remove('show');
+      acRender(e.target.value);
+    });
+    input.addEventListener('keydown', e=>{
+      const list = document.getElementById('ac-list');
+      if(!list.classList.contains('show')) return;
+      if(e.key==='ArrowDown'){ e.preventDefault(); acIdx=Math.min(acIdx+1,acCurrent.length-1); acRender(input.value); }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); acIdx=Math.max(acIdx-1,-1); acRender(input.value); }
+      else if(e.key==='Enter'){ if(acIdx>=0&&acCurrent[acIdx]){ e.preventDefault(); acPick(acCurrent[acIdx].id); } }
+      else if(e.key==='Escape'){ list.classList.remove('show'); }
+    });
+    document.addEventListener('click', e=>{
+      if(!e.target.closest('.ac-wrap')) document.getElementById('ac-list').classList.remove('show');
+    });
+    input.dataset.acWired = '1';
+  }
+
+  // ---- LOCATION AUTOCOMPLETE ----
+  let PLACE_LIST = [];
+  let selectedPlace = null;
+  let locAcIdx = -1;
+  let locAcCurrent = [];
+
+  async function loadPlaceList(){
+    try{
+      const cached = localStorage.getItem('admin_sales_place_list');
+      if(cached) PLACE_LIST = JSON.parse(cached);
+    }catch(e){}
+    try{
+      const { data, error } = await withTimeout(
+        sb.from('place_coords').select('place,latitude,longitude,parent').order('place'),
+        8000
+      );
+      if(error) throw error;
+      PLACE_LIST = data||[];
+      try{ localStorage.setItem('admin_sales_place_list', JSON.stringify(PLACE_LIST)); }catch(e){}
+    }catch(e){
+      console.log('Place list: using cached (offline):', e.message);
+    }
+  }
+
+  function locAcSearch(q){
+    const nq = acNorm(q);
+    if(nq.length < 2) return [];
+    const starts=[], wordStart=[], contains=[];
+    PLACE_LIST.forEach(p=>{
+      const np = acNorm(p.place);
+      if(np.startsWith(nq)) starts.push(p);
+      else if(np.split(' ').some(w=>w.startsWith(nq))) wordStart.push(p);
+      else if(np.includes(nq)) contains.push(p);
+    });
+    return [...starts, ...wordStart, ...contains].slice(0,6);
+  }
+
+  function locAcRender(q){
+    locAcCurrent = locAcSearch(q);
+    const list = document.getElementById('loc-ac-list');
+    const nq = acNorm(q);
+    if(nq.length<2){ list.classList.remove('show'); return; }
+    let html = locAcCurrent.map((p,i)=>
+      '<div class="ac-item'+(i===locAcIdx?' sel':'')+'" onclick="SalesApp.locAcPick(\''+p.place.replace(/'/g,"\\'")+'\')">'+
+        '<div class="ac-name">'+acHighlight(p.place,q)+'</div>'+
+        (p.parent?'<div class="ac-meta">'+p.parent+'</div>':'')+
+      '</div>'
+    ).join('');
+    const exact = locAcCurrent.some(p=>acNorm(p.place)===nq);
+    if(!exact){
+      const safe = q.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      html += '<div class="ac-new" onclick="SalesApp.locAcPickNew()">'+
+        '<div class="ac-name">+ Add "'+safe+'" as a new location</div>'+
+        '<div class="ac-meta">not mapped yet</div></div>';
+    }
+    list.innerHTML = html;
+    list.classList.add('show');
+  }
+
+  function locAcPick(placeName){
+    const p = PLACE_LIST.find(x=>x.place===placeName);
+    if(!p) return;
+    document.getElementById('s-location').value = p.place;
+    selectedPlace = p;
+    document.getElementById('loc-ac-list').classList.remove('show');
+    document.getElementById('loc-new').classList.remove('show');
+    document.getElementById('loc-matched').classList.add('show');
+    document.getElementById('loc-matched-txt').textContent = selectedCustomerId
+      ? 'Will update this customer\u2019s pin on the Ops map'
+      : 'Recognized Ops location';
+  }
+
+  function locAcPickNew(){
+    const typed = document.getElementById('s-location').value.trim();
+    selectedPlace = { place: typed };
+    document.getElementById('loc-ac-list').classList.remove('show');
+    document.getElementById('loc-matched').classList.remove('show');
+    document.getElementById('loc-new').classList.add('show');
+  }
+
+  function clearLocationMatch(){
+    selectedPlace = null;
+    document.getElementById('s-location').value='';
+    document.getElementById('loc-matched').classList.remove('show');
+    document.getElementById('loc-new').classList.remove('show');
+    document.getElementById('s-location').focus();
+  }
+
+  function initLocationAutocomplete(){
+    const input = document.getElementById('s-location');
+    if(!input || input.dataset.acWired) return;
+    input.addEventListener('input', e=>{
+      selectedPlace = null;
+      locAcIdx = -1;
+      document.getElementById('loc-matched').classList.remove('show');
+      document.getElementById('loc-new').classList.remove('show');
+      locAcRender(e.target.value);
+    });
+    input.addEventListener('keydown', e=>{
+      const list = document.getElementById('loc-ac-list');
+      if(!list.classList.contains('show')) return;
+      if(e.key==='ArrowDown'){ e.preventDefault(); locAcIdx=Math.min(locAcIdx+1,locAcCurrent.length-1); locAcRender(input.value); }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); locAcIdx=Math.max(locAcIdx-1,-1); locAcRender(input.value); }
+      else if(e.key==='Enter'){ if(locAcIdx>=0&&locAcCurrent[locAcIdx]){ e.preventDefault(); locAcPick(locAcCurrent[locAcIdx].place); } }
+      else if(e.key==='Escape'){ list.classList.remove('show'); }
+    });
+    document.addEventListener('click', e=>{
+      if(!e.target.closest('#s-location') && !e.target.closest('#loc-ac-list')) document.getElementById('loc-ac-list').classList.remove('show');
+    });
+    input.dataset.acWired = '1';
+  }
+
+  // Best-effort lookup for a brand-new location using OpenStreetMap's free
+  // Nominatim geocoder. Never blocks the sale: a failed/slow/empty lookup
+  // just means the pin waits for ops staff to place it by hand.
+  async function geocodePlace(name){
+    if(!name) return null;
+    try{
+      const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=zw&q=' +
+        encodeURIComponent(name + ', Zimbabwe');
+      const res = await withTimeout(fetch(url, { headers: { 'Accept': 'application/json' } }), 6000);
+      if(!res.ok) return null;
+      const rows = await res.json();
+      if(!rows || !rows.length) return null;
+      const lat = parseFloat(rows[0].lat), lon = parseFloat(rows[0].lon);
+      if(isNaN(lat) || isNaN(lon)) return null;
+      return { latitude: lat, longitude: lon };
+    }catch(e){
+      console.log('Geocode lookup failed (non-blocking):', e.message);
+      return null;
+    }
+  }
+
+  async function syncCustomerSiteFromSale(customerId, place){
+    if(!customerId || !place || place.latitude == null || place.longitude == null) return;
+    try{
+      await sb.from('customer_sites').upsert({
+        customer_id: customerId,
+        place: place.place,
+        latitude: place.latitude,
+        longitude: place.longitude
+      }, { onConflict: 'customer_id,place' });
+    }catch(e){
+      console.log('Could not sync Ops map pin (non-blocking):', e.message);
+    }
+  }
+
+  async function ensureCanonicalCustomerAndSite(name, place){
+    if(!name) return;
+    try{
+      let cid = null;
+      const exact = CUSTOMER_LIST.find(c => (c.invoice_name||'').toLowerCase() === name.toLowerCase());
+      if(exact){
+        cid = exact.id;
+      } else {
+        const { data, error } = await sb.from('customer_locations')
+          .insert({ invoice_name: name, delivery_type: 'delivery' })
+          .select('id,invoice_name').single();
+        if(error) throw error;
+        cid = data.id;
+        CUSTOMER_LIST.push({ id: data.id, invoice_name: data.invoice_name, total_litres: 0, order_count: 0 });
+        try{ localStorage.setItem('admin_sales_customer_list', JSON.stringify(CUSTOMER_LIST)); }catch(e){}
+      }
+      if(cid && place) await syncCustomerSiteFromSale(cid, place);
+    }catch(e){
+      console.log('Could not canonicalize new customer (non-blocking):', e.message);
+    }
+  }
+
+  // ---- SALES ----
+  async function cancelSale(id) {
+    const sale = allSales.find(s => s.id === id);
+    if (!sale) return;
+    if (!confirm('DELETE this sale for ' + sale.customer + '?\n\n' +
+      (sale.litres||0).toLocaleString() + ' L will be removed from all totals ' +
+      'and graphs permanently. This cannot be undone.')) return;
+    const { error } = await sb.from('sales').delete().eq('id', id);
+    if (error) { alert('Error: ' + error.message); return; }
+    await loadSales();
+  }
+
+  function setEditMode(saleLabel) {
+    const status = document.getElementById('edit-status');
+    const cancelBtn = document.getElementById('cancel-edit-btn');
+    const submitBtn = document.getElementById('submit-btn');
+    if (saleLabel) {
+      status.style.display = 'block';
+      status.textContent = 'Editing sale: ' + saleLabel + '. Update the litres, price or delivery date as needed.';
+      cancelBtn.style.display = 'block';
+      submitBtn.textContent = 'Update Sale';
+    } else {
+      status.style.display = 'none';
+      status.textContent = '';
+      cancelBtn.style.display = 'none';
+      submitBtn.textContent = 'Record Sale';
+    }
+  }
+
+  function clearForm() {
+    document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('s-customer').value = '';
+    selectedCustomerId = null;
+    document.getElementById('cust-matched').classList.remove('show');
+    document.getElementById('cust-new').classList.remove('show');
+    document.getElementById('ac-list').classList.remove('show');
+    document.getElementById('s-location').value = '';
+    selectedPlace = null;
+    document.getElementById('loc-matched').classList.remove('show');
+    document.getElementById('loc-new').classList.remove('show');
+    document.getElementById('loc-ac-list').classList.remove('show');
+    document.getElementById('s-litres').value = '';
+    document.getElementById('s-price').value = '';
+    document.getElementById('s-cost').value = '';
+    if (priceTBA) toggleTBA();
+    document.getElementById('s-delivery').value = '';
+    document.getElementById('s-notes').value = '';
+    selectFuel('Diesel', document.getElementById('fuel-diesel'));
+    setPaymentTerm('COD');
+  }
+
+  function setPaymentTerm(termLabel) {
+    const buttons = Array.from(document.querySelectorAll('#terms-grid .term-btn'));
+    const exact = buttons.find(b => b.textContent.trim() === termLabel);
+    if (exact) { selTerm(termLabel, exact); return; }
+    const daysMatch = termLabel.match(/^(\d+)\s*days$/);
+    if (daysMatch) {
+      const days = daysMatch[1];
+      const match = buttons.find(b => b.textContent.trim() === days + ' days');
+      if (match) { selTerm(days, match); return; }
+      const other = buttons.find(b => b.textContent.trim() === 'Other');
+      if (other) {
+        selTerm('other', other);
+        document.getElementById('term-other-days').value = days;
+        return;
+      }
+    }
+    const defaultBtn = buttons.find(b => b.textContent.trim() === 'COD');
+    if (defaultBtn) selTerm('COD', defaultBtn);
+  }
+
+  function cancelEdit() {
+    editingSaleId = null;
+    editingQueueId = null;
+    clearForm();
+    setEditMode(null);
+  }
+
+  function fillSaleForm(sale) {
+    document.getElementById('s-date').value = sale.sale_date || '';
+    document.getElementById('s-customer').value = sale.customer || '';
+    selectedCustomerId = sale.customer_id || null;
+    if (selectedCustomerId) {
+      document.getElementById('cust-matched').classList.add('show');
+      document.getElementById('cust-new').classList.remove('show');
+      document.getElementById('cust-matched-txt').textContent = 'Linked to accounts record';
+    }
+    document.getElementById('s-location').value = sale.location || '';
+    selectFuel(sale.fuel_type || 'Diesel', sale.fuel_type === 'Petrol' ? document.getElementById('fuel-petrol') : document.getElementById('fuel-diesel'));
+    document.getElementById('s-litres').value = sale.litres || '';
+    const priceField = document.getElementById('s-price');
+    if (sale.price_tba) {
+      if (!priceTBA) toggleTBA();
+      priceField.value = '';
+    } else {
+      if (priceTBA) toggleTBA();
+      priceField.value = sale.price_per_litre || '';
+    }
+    document.getElementById('s-cost').value = sale.cost_price != null ? sale.cost_price : '';
+    document.getElementById('s-delivery').value = sale.delivery_date || '';
+    setPaymentTerm(sale.payment_term || 'COD');
+    document.getElementById('s-notes').value = sale.notes || '';
+  }
+
+  function openSaleForEdit(idOrLocalId) {
+    const queued = getQueue();
+    const queuedItem = queued.find(item => item._localId === idOrLocalId);
+    if (queuedItem) {
+      editingSaleId = null;
+      editingQueueId = idOrLocalId;
+      fillSaleForm(queuedItem.payload);
+      setEditMode(queuedItem.payload.customer + ' · ' + (queuedItem.payload.litres||0).toLocaleString() + ' L');
+      showTab('record', document.querySelectorAll('#sec-sales .tab')[0]);
+      return;
+    }
+    const sale = allSales.find(s => String(s.id) === String(idOrLocalId));
+    if (!sale) return;
+    editingSaleId = sale.id;
+    editingQueueId = null;
+    fillSaleForm(sale);
+    setEditMode(sale.customer + ' · ' + (sale.litres||0).toLocaleString() + ' L');
+    showTab('record', document.querySelectorAll('#sec-sales .tab')[0]);
+  }
+
+  async function loadSales() {
+    setSyncBadge('loading');
+    try {
+      const cached = localStorage.getItem('admin_sales_cache_' + (currentUser?.id || 'x'));
+      if (cached) {
+        allSales = JSON.parse(cached);
+        renderSales();
+        renderDash();
+      }
+    } catch(e) {}
+
+    try {
+      const { data, error } = await withTimeout(
+        sb.from('sales').select('*').order('created_at', { ascending: false }),
+        10000
+      );
+      if (error) throw error;
+      allSales = data || [];
+      try {
+        localStorage.setItem('admin_sales_cache_' + (currentUser?.id || 'x'), JSON.stringify(allSales));
+        localStorage.setItem('admin_sales_last_synced_at', new Date().toISOString());
+      } catch(e) {}
+      renderSales();
+      renderDash();
+      if (getQueue().length > 0) {
+        setSyncBadge('queued');
+        syncQueue();
+      } else {
+        setSyncBadge('synced');
+      }
+    } catch (e) {
+      console.log('Using cached sales (offline):', e.message);
+      if (getQueue().length > 0) setSyncBadge('queued');
+      else setSyncBadge(allSales.length ? 'offline' : 'error');
+    }
+  }
+
+  async function recordSale() {
+    const btn = document.getElementById('submit-btn');
+    const date = document.getElementById('s-date').value;
+    const customer = document.getElementById('s-customer').value.trim();
+    const location = document.getElementById('s-location').value.trim();
+    const litres = parseFloat(document.getElementById('s-litres').value);
+    const price = parseFloat(document.getElementById('s-price').value);
+    const delivery = document.getElementById('s-delivery').value;
+    const notes = document.getElementById('s-notes').value.trim();
+
+    const costRaw = document.getElementById('s-cost').value;
+    const costPrice = costRaw === '' ? null : parseFloat(costRaw);
+
+    if (!date || !customer || !litres || (!price && !priceTBA)) {
+      alert(priceTBA
+        ? 'Please fill in date, customer and litres.'
+        : 'Please fill in date, customer, litres and price.');
+      return;
+    }
+
+    const baseDate = delivery || date;
+    let pDays = curTerm === 'COD' ? 0 : curTerm === 'other' ?
+      parseInt(document.getElementById('term-other-days').value) || 0 : parseInt(curTerm);
+    const paymentDue = pDays > 0 ? addDays(baseDate, pDays) : baseDate;
+    const termLabel = curTerm === 'COD' ? 'COD' : curTerm === 'other' ?
+      document.getElementById('term-other-days').value + ' days' : curTerm + ' days';
+
+    if (litres <= 0 || litres > 40000) { alert('Litres must be between 1 and 40,000.'); return; }
+    if (!priceTBA && (price < 1.00 || price > 3.00)) { alert('Price per litre must be between $1.00 and $3.00.'); return; }
+    if (customer.length < 3) { alert('Customer name must be at least 3 characters.'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Recording...';
+    setSyncBadge('loading');
+
+    const salePayload = {
+      client_uid: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2,10),
+      rep_id: currentUser.id,
+      sale_date: date,
+      customer,
+      customer_id: selectedCustomerId,
+      location,
+      fuel_type: curFuel,
+      litres,
+      price_per_litre: priceTBA ? 0 : price,
+      cost_price: costPrice,
+      price_tba: priceTBA,
+      delivery_date: delivery || null,
+      payment_term: termLabel,
+      payment_due: paymentDue,
+      paid: curTerm === 'COD',
+      notes,
+      status: 'pending'
+    };
+
+    let savedOnline = false;
+    let updateFailed = false;
+
+    if (editingSaleId) {
+      try {
+        const { error } = await withTimeout(
+          sb.from('sales').update({
+            sale_date: date, location, fuel_type: curFuel, litres,
+            price_per_litre: priceTBA ? 0 : price, cost_price: costPrice, price_tba: priceTBA,
+            delivery_date: delivery || null, payment_term: termLabel, payment_due: paymentDue,
+            paid: curTerm === 'COD', notes
+          }).eq('id', editingSaleId),
+          8000
+        );
+        if (error) throw error;
+        savedOnline = true;
+      } catch (e) {
+        updateFailed = true;
+        alert('Could not update sale: ' + ((e && e.message) || e));
+      }
+    } else if (editingQueueId) {
+      const q = getQueue();
+      const item = q.find(item => item._localId === editingQueueId);
+      if (item) {
+        item.payload = {
+          ...item.payload, sale_date: date, customer, customer_id: selectedCustomerId, location,
+          fuel_type: curFuel, litres, price_per_litre: priceTBA ? 0 : price, cost_price: costPrice,
+          price_tba: priceTBA, delivery_date: delivery || null, payment_term: termLabel,
+          payment_due: paymentDue, paid: curTerm === 'COD', notes
+        };
+        saveQueue(q);
+        savedOnline = false;
+      } else {
+        alert('Could not find queued sale to update.');
+        updateFailed = true;
+      }
+    } else {
+      try {
+        const { error } = await withTimeout(sb.from('sales').insert(salePayload), 8000);
+        if (error) throw error;
+        savedOnline = true;
+      } catch (e) {
+        if (/duplicate|unique|23505/i.test((e && e.message) || '')) {
+          savedOnline = true;
+        } else {
+          queueSale(salePayload);
+        }
+      }
+    }
+
+    if (updateFailed) {
+      btn.disabled = false;
+      btn.textContent = editingSaleId ? 'Update Sale' : 'Record Sale';
+      return;
+    }
+
+    editingSaleId = null;
+    editingQueueId = null;
+    setEditMode(null);
+
+    // Keep the Ops map pin current for this customer — fire-and-forget so
+    // the form resets immediately, same pattern as the shared saveLost().
+    if (savedOnline) {
+      const placeSnapshot = selectedPlace ? { ...selectedPlace } : null;
+      const custIdSnapshot = selectedCustomerId;
+      const custNameSnapshot = customer;
+      (async () => {
+        if (placeSnapshot && placeSnapshot.place && placeSnapshot.latitude == null) {
+          const coords = await geocodePlace(placeSnapshot.place);
+          if (coords) {
+            placeSnapshot.latitude = coords.latitude;
+            placeSnapshot.longitude = coords.longitude;
+            try {
+              await sb.from('place_coords').insert({
+                place: placeSnapshot.place, latitude: coords.latitude, longitude: coords.longitude
+              });
+              PLACE_LIST.push({ place: placeSnapshot.place, latitude: coords.latitude, longitude: coords.longitude, parent: null });
+              try { localStorage.setItem('admin_sales_place_list', JSON.stringify(PLACE_LIST)); } catch (e) {}
+            } catch (e) {
+              console.log('Could not save geocoded place (non-blocking):', e.message);
+            }
+          }
+        }
+        if (custIdSnapshot) {
+          if (placeSnapshot) syncCustomerSiteFromSale(custIdSnapshot, placeSnapshot);
+        } else if (custNameSnapshot) {
+          ensureCanonicalCustomerAndSite(custNameSnapshot, placeSnapshot);
+        }
+      })();
+    }
+
+    document.getElementById('s-customer').value = '';
+    selectedCustomerId = null;
+    document.getElementById('cust-matched').classList.remove('show');
+    document.getElementById('cust-new').classList.remove('show');
+    document.getElementById('ac-list').classList.remove('show');
+    document.getElementById('s-location').value = '';
+    selectedPlace = null;
+    document.getElementById('loc-matched').classList.remove('show');
+    document.getElementById('loc-new').classList.remove('show');
+    document.getElementById('loc-ac-list').classList.remove('show');
+    document.getElementById('s-litres').value = '';
+    document.getElementById('s-price').value = '';
+    document.getElementById('s-cost').value = '';
+    if(priceTBA) toggleTBA();
+    document.getElementById('s-delivery').value = '';
+    document.getElementById('s-notes').value = '';
+    document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
+    selectFuel('Diesel', document.getElementById('fuel-diesel'));
+    curTerm = 'COD';
+    document.querySelectorAll('#terms-grid .term-btn').forEach((b,i) => b.classList.toggle('selected', i===0));
+    document.getElementById('term-other-wrap').style.display = 'none';
+
+    await loadSales();
+    showTab('sales', document.querySelectorAll('#sec-sales .tab')[1]);
+
+    if (savedOnline) {
+      setSyncBadge('synced');
+    } else {
+      setSyncBadge('queued');
+      alert('No internet right now — this sale is saved on your phone and will upload automatically when you are back online.');
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Record Sale';
+  }
+
+  // ============================================================
+  // OFFLINE QUEUE SYSTEM
+  // ============================================================
+  function queueKey() { return 'admin_sales_queue_' + (currentUser?.id || 'x'); }
+  function getQueue() { try { return JSON.parse(localStorage.getItem(queueKey()) || '[]'); } catch(e) { return []; } }
+  function saveQueue(q) { try { localStorage.setItem(queueKey(), JSON.stringify(q)); } catch(e) {} }
+
+  function queueSale(payload) {
+    const q = getQueue();
+    q.push({
+      _localId: 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+      _queuedAt: new Date().toISOString(),
+      payload: payload
+    });
+    saveQueue(q);
+  }
+
+  async function retrySync() {
+    const n = getQueue().length;
+    if (!n) { alert('Nothing waiting to upload — everything is saved to the system.'); return; }
+    syncQueue._warned = false;
+    syncQueue._authWarned = false;
+    setSyncBadge('loading');
+    await syncQueue();
+    const left = getQueue().length;
+    if (left === 0) {
+      alert('Uploaded. ' + n + (n === 1 ? ' sale is' : ' sales are') + ' now in the system.');
+    } else if (left < n) {
+      alert('Uploaded ' + (n - left) + ' of ' + n + '. ' + left + ' still waiting.');
+    }
+  }
+
+  async function syncQueue() {
+    const q = getQueue();
+    if (!q.length) return;
+    if (!currentUser) return;
+
+    let sess;
+    try {
+      ({ data: sess } = await withTimeout(sb.auth.getSession(), 6000));
+    } catch (e) { return; }
+
+    if (!sess || !sess.session) {
+      try {
+        const { data: refreshed } = await withTimeout(sb.auth.refreshSession(), 8000);
+        if (refreshed && refreshed.session) { sess = refreshed; } else { throw new Error('no session'); }
+      } catch (e) {
+        setSyncBadge('queued');
+        if (!syncQueue._authWarned) {
+          syncQueue._authWarned = true;
+          alert('Your session has expired, so saved sales cannot upload yet.\n\n' +
+                'Nothing is lost — please sign in with your email and password ' +
+                'from the More menu, and they will upload automatically.');
+        }
+        return;
+      }
+    }
+
+    const remaining = [];
+    let syncedCount = 0;
+    let networkDown = false;
+    let lastError = null;
+
+    for (const item of q) {
+      if (networkDown) { remaining.push(item); continue; }
+      try {
+        const { error } = await withTimeout(sb.from('sales').insert(item.payload), 8000);
+        if (error) throw error;
+        syncedCount++;
+      } catch (e) {
+        const msg = (e && e.message) || String(e);
+        if (/duplicate|unique|23505/i.test(msg)) {
+          syncedCount++;
+          continue;
+        }
+        if (/timeout/i.test(msg)) {
+          networkDown = true;
+          remaining.push(item);
+        } else {
+          item._error = msg;
+          item._attempts = (item._attempts || 0) + 1;
+          lastError = msg;
+          remaining.push(item);
+        }
+      }
+    }
+
+    saveQueue(remaining);
+    if (syncedCount > 0) { await loadSales(); }
+    setSyncBadge(remaining.length === 0 ? 'synced' : 'queued');
+    renderSales();
+
+    if (lastError && !networkDown) {
+      console.warn('Sync rejected:', lastError);
+      if (!syncQueue._warned) {
+        syncQueue._warned = true;
+        alert('A saved sale could not be uploaded:\n\n' + lastError +
+              '\n\nIt is still stored on this phone. Please show this message to Tom.');
+      }
+    }
+  }
+
+  async function markDelivered(id) {
+    if (!confirm('Mark this delivery as completed?')) return;
+    const { error } = await sb.from('sales').update({
+      status: 'delivered', delivered_at: new Date().toISOString()
+    }).eq('id', id);
+    if (!error) await loadSales();
+  }
+
+  // ---- RENDER ----
+  function salePriceHtml(litres, price, tba) {
+    if (tba) return `<div class="sale-price" style="color:var(--amber);">Price TBA</div>`;
+    const p = parseFloat(price) || 0;
+    const l = parseFloat(litres) || 0;
+    if (!p) return '';
+    const value = l * p;
+    return `<div class="sale-price">$${value.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+            <div class="sale-unit">$${p.toFixed(3)}/L</div>`;
+  }
+
+  function renderSales() {
+    const el = document.getElementById('sales-list');
+    if (!el) return;
+    const queued = getQueue();
+    const queuedRows = queued.map(item => {
+      const p = item.payload;
+      const fuelPill = p.fuel_type ? `<span class="pill ${p.fuel_type==='Petrol'?'p-petrol':'p-diesel'}">${p.fuel_type}</span>` : '';
+      const pendingPill = `<span class="pill" style="background:var(--amber-light);color:var(--amber);">⏳ Not synced yet</span>`;
+      const editBtn = `<button class="del-btn" style="background:#fff;color:#5a5a57;border:1px solid var(--gray-border);margin-top:6px;" onclick="SalesApp.openSaleForEdit('${item._localId}');event.stopPropagation()">✎ Edit sale</button>`;
+      return `<div class="sale-row" style="border-left:3px solid var(--amber);" onclick="SalesApp.openSaleForEdit('${item._localId}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div class="sale-customer">${p.customer}${fuelPill}${pendingPill}</div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div class="sale-litres">${(p.litres||0).toLocaleString()} L</div>
+            ${salePriceHtml(p.litres, p.price_per_litre, p.price_tba)}
+          </div>
+        </div>
+        <div class="sale-meta">${p.location||'—'} · ${fmtDate(p.sale_date)} · ${p.payment_term}</div>
+        <div class="sale-meta">Del: ${fmtDate(p.delivery_date)} · Pay due: ${fmtDate(p.payment_due)}</div>
+        <div class="sale-meta" style="color:var(--amber);font-weight:600;">Saved on this phone — will upload when back online</div>
+        ${editBtn}
+      </div>`;
+    }).join('');
+
+    if (!allSales.length && !queued.length) {
+      el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><p>No sales recorded yet</p></div>';
+      return;
+    }
+    el.innerHTML = queuedRows + allSales.map(s => {
+      const delivered = s.status === 'delivered';
+      const fuelPill = s.fuel_type ? `<span class="pill ${s.fuel_type==='Petrol'?'p-petrol':'p-diesel'}">${s.fuel_type}</span>` : '';
+      const delPill = delivered ? `<span class="pill p-del">✓ Delivered</span>` : '';
+      const paidPill = s.paid ? `<span class="pill p-del">✓ Paid</span>` : '';
+      const cancelledPill = s.status === 'cancelled' ? `<span class="pill" style="background:#F0F0EE;color:#5a5a57;">✗ Cancelled</span>` : '';
+      const tbaPill = s.price_tba ? `<span class="pill" style="background:#FBE7CF;color:#8a5a10;">⏳ Price TBA</span>` : '';
+      const isCancelled = s.status === 'cancelled';
+      const priceHtml = salePriceHtml(s.litres, s.price_per_litre, s.price_tba);
+      const delBtn = !delivered && !isCancelled && s.delivery_date ?
+        `<button class="del-btn" onclick="SalesApp.markDelivered(${s.id})">🚛 Mark as delivered</button>` : '';
+      const editBtn = !delivered && !isCancelled ?
+        `<button class="del-btn" style="background:#fff;color:#5a5a57;border:1px solid var(--gray-border);margin-top:6px;" onclick="SalesApp.openSaleForEdit(${s.id});event.stopPropagation()">✎ Edit sale</button>` : '';
+      const cancelBtn = !isCancelled && !delivered ?
+        `<button class="del-btn" style="background:transparent;color:var(--red);border:1px solid var(--red);margin-top:6px;" onclick="SalesApp.cancelSale(${s.id});event.stopPropagation()">🗑 Delete sale</button>` : '';
+      return `<div class="sale-row" style="opacity:${(delivered||isCancelled)?'0.6':'1'}" onclick="SalesApp.openSaleForEdit(${s.id})">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div class="sale-customer" style="${(delivered||isCancelled)?'text-decoration:line-through;color:var(--gray-text);':''}">${s.customer}${fuelPill}${delPill}${paidPill}${cancelledPill}${tbaPill}</div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div class="sale-litres">${(s.litres||0).toLocaleString()} L</div>
+            ${priceHtml}
+          </div>
+        </div>
+        <div class="sale-meta">${s.location||'—'} · ${fmtDate(s.sale_date)} · ${s.payment_term}</div>
+        <div class="sale-meta">Del: ${fmtDate(s.delivery_date)} · Pay due: ${fmtDate(s.payment_due)}</div>
+        ${delBtn}${editBtn}${cancelBtn}
+      </div>`;
+    }).join('');
+  }
+
+  function renderDash() {
+    const now = new Date();
+    const m = now.getMonth(), y = now.getFullYear();
+    const activeSales = allSales.filter(s => s.status !== 'cancelled');
+    const monthSales = activeSales.filter(s => {
+      const d = new Date(s.sale_date);
+      return d.getMonth()===m && d.getFullYear()===y;
+    });
+    const monthL = monthSales.reduce((a,s) => a + (s.litres||0), 0);
+    const monthV = monthSales.reduce((a,s) => a + (s.litres||0)*(s.price_per_litre||0), 0);
+    const pending = activeSales.filter(s => s.status==='pending' && s.delivery_date).length;
+
+    document.getElementById('d-month-l').textContent = monthL.toLocaleString();
+    document.getElementById('d-month-v').textContent = '$' + monthV.toLocaleString(undefined,{maximumFractionDigits:0});
+    document.getElementById('d-pending').textContent = pending;
+
+    const chartYear = now.getFullYear();
+    const curM2 = now.getMonth();
+    document.getElementById('chart-year').textContent = chartYear;
+    const MNS = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+    const monthly = Array(12).fill(0);
+    activeSales.forEach(s => {
+      const d = new Date((s.sale_date||'')+'T00:00:00');
+      if (d.getFullYear()===chartYear) monthly[d.getMonth()] += s.litres||0;
+    });
+    const maxM = Math.max(...monthly,1);
+    document.getElementById('rep-year-chart').innerHTML = MNS.map((mn,i) => {
+      const h = Math.max(Math.round((monthly[i]/maxM)*70),monthly[i]>0?3:2);
+      const col = i===curM2?'var(--red)':i<curM2&&monthly[i]>0?'var(--blue)':'#D3D1C7';
+      const val = monthly[i]>=1000?(monthly[i]/1000).toFixed(0)+'k':'';
+      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+        <div style="font-size:7px;font-weight:700;color:${col};height:10px;">${val}</div>
+        <div style="width:100%;height:${h}px;background:${col};border-radius:2px 2px 0 0;"></div>
+        <div style="font-size:7px;font-weight:600;color:${i===curM2?'var(--red)':'var(--gray-text)'};">${mn}</div>
+      </div>`;
+    }).join('');
+
+    const upcoming = activeSales.filter(s => s.delivery_date && s.status!=='delivered')
+      .sort((a,b) => new Date(a.delivery_date)-new Date(b.delivery_date))
+      .slice(0,5);
+
+    const delEl = document.getElementById('d-deliveries');
+    if (upcoming.length) {
+      delEl.innerHTML = upcoming.map(s => `
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-border);">
+          <div>
+            <div style="font-size:14px;font-weight:600;">${s.customer}</div>
+            <div style="font-size:12px;color:var(--gray-text);">${s.location||'—'} · ${fmtDate(s.delivery_date)}</div>
+          </div>
+          <div style="font-size:14px;font-weight:700;font-family:var(--mono);color:var(--green-dark);">${(s.litres||0).toLocaleString()} L</div>
+        </div>`).join('');
+    } else {
+      delEl.innerHTML = '<div class="empty" style="padding:16px;"><p style="font-size:13px;">No upcoming deliveries</p></div>';
+    }
+  }
+
+  // ---- MY CUSTOMERS — RIPENESS ----
+  const RIPE_STATUS_COL = {
+    gone_quiet: 'var(--red)', overdue: 'var(--amber)', due_now: 'var(--green-dark)',
+    due_soon: 'var(--blue)', not_yet: 'var(--gray-text)',
+    insufficient_history: 'var(--gray-text)', no_pattern: 'var(--gray-text)'
+  };
+  const RIPE_STATUS_LBL = {
+    gone_quiet: 'Gone quiet', overdue: 'Overdue', due_now: 'Due now', due_soon: 'Due soon',
+    not_yet: 'Not due yet', insufficient_history: 'New / not enough history', no_pattern: 'No clear pattern yet'
+  };
+
+  async function loadMyRipeness(){
+    const el = document.getElementById('d-ripeness');
+    if (!el || !currentProfile) return;
+    try {
+      const { data, error } = await withTimeout(
+        sb.from('app_rep_gaps').select('*').eq('rep', currentProfile.full_name).order('ripeness_pct', { ascending: false, nullsFirst: false }),
+        8000
+      );
+      if (error) throw error;
+      renderMyRipeness(data || []);
+    } catch(e) {
+      el.innerHTML = '<div class="empty" style="padding:16px;"><p style="font-size:13px;">Could not load — check your connection</p></div>';
+    }
+  }
+
+  function renderMyRipeness(rows){
+    const el = document.getElementById('d-ripeness');
+    if (!rows.length) {
+      el.innerHTML = '<div class="empty" style="padding:16px;"><p style="font-size:13px;">No customers assigned to you yet</p></div>';
+      return;
+    }
+    el.innerHTML = rows.map(r => {
+      const col = RIPE_STATUS_COL[r.gap_status] || 'var(--gray-text)';
+      const lbl = RIPE_STATUS_LBL[r.gap_status] || r.gap_status;
+      const removeBtn = r.gap_status === 'gone_quiet'
+        ? `<button onclick="SalesApp.removeGoneQuietCustomer('${r.customer.replace(/'/g,"\\'")}')" style="padding:7px 10px;background:transparent;border:1px solid var(--red);color:var(--red);border-radius:8px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">Remove</button>`
+        : '';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--gray-border);">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.customer}</div>
+          <div style="font-size:11px;color:var(--gray-text);margin-top:2px;">${r.days_since_last!=null?r.days_since_last+'d since last order':'No orders yet'}${r.avg_cycle_days?' · every '+r.avg_cycle_days+'d':''}</div>
+          <div style="font-size:11px;font-weight:600;color:${col};margin-top:2px;">${lbl}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:16px;font-weight:700;font-family:var(--mono);color:${col};">${r.ripeness_pct!=null?r.ripeness_pct+'%':'—'}</div>
+        </div>
+        ${removeBtn}
+      </div>`;
+    }).join('');
+  }
+
+  async function removeGoneQuietCustomer(customerName){
+    if (!confirm(customerName + ' has gone quiet. Remove them from your list?\n\nThey\u2019ll show as unassigned — any rep can pick them up from here.')) return;
+    try {
+      const { error } = await sb.from('customer_locations').update({
+        assigned_rep: 'Unassigned', assigned_rep_id: null,
+        assigned_at: new Date().toISOString(), assigned_by: currentProfile?.full_name || null
+      }).eq('invoice_name', customerName);
+      if (error) throw error;
+      await loadMyRipeness();
+    } catch(e) {
+      alert('Could not remove: ' + (e.message || e));
+    }
+  }
+
+  // ---- CALENDAR ----
+  let calYear = new Date().getFullYear();
+  let calMonth = new Date().getMonth();
+
+  function calNav(dir) {
+    calMonth += dir;
+    if (calMonth > 11) { calMonth = 0; calYear++; }
+    if (calMonth < 0) { calMonth = 11; calYear--; }
+    renderCal();
+  }
+
+  function renderCal() {
+    const MN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    document.getElementById('cal-title').textContent = MN[calMonth] + ' ' + calYear;
+    const firstDay = new Date(calYear, calMonth, 1).getDay();
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    const today = new Date().toISOString().split('T')[0];
+
+    const events = {};
+    allSales.forEach(s => {
+      const addEvent = (dateStr, type) => {
+        if (!dateStr) return;
+        const d = dateStr.split('T')[0];
+        if (!events[d]) events[d] = [];
+        events[d].push(type);
+      };
+      addEvent(s.delivery_date, 'delivery');
+      addEvent(s.payment_due, 'payment');
+    });
+
+    let html = '';
+    for (let i = 0; i < firstDay; i++) html += '<div></div>';
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+      const evs = events[dateStr] || [];
+      const isToday = dateStr === today;
+      const dots = evs.map(e => `<div style="width:6px;height:6px;border-radius:50%;background:${e==='delivery'?'#1D9E75':'#D4180A'};margin:0 1px;"></div>`).join('');
+      html += `<div onclick="SalesApp.showCalDay('${dateStr}')" style="min-height:44px;background:${isToday?'var(--red-light)':'#fff'};border:1px solid ${isToday?'var(--red)':'var(--gray-border)'};border-radius:6px;padding:4px;cursor:pointer;text-align:center;">
+        <div style="font-size:12px;font-weight:${isToday?'700':'500'};color:${isToday?'var(--red)':'var(--text)'};">${d}</div>
+        <div style="display:flex;justify-content:center;flex-wrap:wrap;margin-top:2px;">${dots}</div>
+      </div>`;
+    }
+    document.getElementById('cal-grid').innerHTML = html;
+    document.getElementById('cal-detail').innerHTML = '';
+  }
+
+  function showCalDay(dateStr) {
+    const dayEvents = [];
+    allSales.forEach(s => {
+      if ((s.delivery_date||'').split('T')[0] === dateStr) dayEvents.push({type:'delivery', sale:s});
+      if ((s.payment_due||'').split('T')[0] === dateStr) dayEvents.push({type:'payment', sale:s});
+    });
+    const el = document.getElementById('cal-detail');
+    if (!dayEvents.length) { el.innerHTML = ''; return; }
+    const icons = {delivery:'🟢',payment:'🔴'};
+    const labels = {delivery:'Delivery',payment:'Payment due'};
+    el.innerHTML = `<div class="card" style="margin-top:0;">
+      <div class="card-title">${dateStr.split('-').reverse().join('/')}</div>
+      ${dayEvents.map(e => `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--gray-border);">
+        <span style="font-size:16px;">${icons[e.type]}</span>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:600;">${e.sale.customer}</div>
+          <div style="font-size:11px;color:var(--gray-text);">${labels[e.type]} · ${(e.sale.litres||0).toLocaleString()} L</div>
+        </div>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  // ---- CALCULATOR ----
+  function calcDelivery() {
+    const dist = parseFloat(document.getElementById('calc-dist').value) || 0;
+    const litres = parseFloat(document.getElementById('calc-litres').value) || 0;
+    const depot = parseFloat(document.getElementById('calc-depot').value) || 0;
+    const markup = parseFloat(document.getElementById('calc-markup').value) || 0;
+    const cpkm = parseFloat(document.getElementById('calc-cpkm').value) || 2.20;
+    if (!dist || !litres || !depot) { alert('Please fill in distance, litres and depot price.'); return; }
+    const transport = (dist * 2 * cpkm) / litres;
+    const delivered = transport + depot + markup;
+    const totalValue = delivered * litres;
+    document.getElementById('r-transport').textContent = '$' + transport.toFixed(4);
+    document.getElementById('r-depot').textContent = '$' + depot.toFixed(4);
+    document.getElementById('r-markup').textContent = '$' + markup.toFixed(4);
+    document.getElementById('r-total').textContent = '$' + delivered.toFixed(4);
+    document.getElementById('r-value').textContent = '$' + totalValue.toFixed(2);
+    document.getElementById('calc-result').style.display = 'block';
+    localStorage.setItem('admin_sales_calc_cpkm', cpkm);
+  }
+
+  function changePin() {
+    const newPin = document.getElementById('new-pin').value;
+    const confirmPin = document.getElementById('confirm-pin').value;
+    const msg = document.getElementById('pin-msg');
+    if (!newPin || !confirmPin) { msg.style.color = 'var(--red)'; msg.textContent = 'Please fill in both fields.'; return; }
+    if (!/^[0-9]{6}$/.test(newPin)) { msg.style.color = 'var(--red)'; msg.textContent = 'PIN must be exactly 6 digits.'; return; }
+    if (newPin !== confirmPin) { msg.style.color = 'var(--red)'; msg.textContent = 'PINs do not match.'; return; }
+    localStorage.setItem(getPinKey(currentUser.id), newPin);
+    msg.style.color = 'var(--green-dark)';
+    msg.textContent = '✓ PIN updated successfully';
+    document.getElementById('new-pin').value = '';
+    document.getElementById('confirm-pin').value = '';
+  }
+
+  async function changePassword() {
+    const newPw = document.getElementById('new-pw').value;
+    const confirmPw = document.getElementById('confirm-pw').value;
+    const msg = document.getElementById('pw-msg');
+    if (!newPw || !confirmPw) { msg.style.color = 'var(--red)'; msg.textContent = 'Please fill in both fields.'; return; }
+    if (newPw.length < 6) { msg.style.color = 'var(--red)'; msg.textContent = 'Password must be at least 6 characters.'; return; }
+    if (newPw !== confirmPw) { msg.style.color = 'var(--red)'; msg.textContent = 'Passwords do not match.'; return; }
+    msg.style.color = 'var(--gray-text)';
+    msg.textContent = 'Updating...';
+    const { error } = await sb.auth.updateUser({ password: newPw });
+    if (error) {
+      msg.style.color = 'var(--red)';
+      msg.textContent = error.message;
+    } else {
+      msg.style.color = 'var(--green-dark)';
+      msg.textContent = '✓ Password updated successfully';
+      document.getElementById('new-pw').value = '';
+      document.getElementById('confirm-pw').value = '';
+    }
+  }
+
+  // ---- HELPERS ----
+  function showTab(id, btn) {
+    document.querySelectorAll('#sec-sales .tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('#sec-sales .tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-'+id).classList.add('active');
+    if (btn) btn.classList.add('active');
+    if (id === 'cal') renderCal();
+    if (id === 'dash') loadMyRipeness();
+    if (id === 'more') {
+      const saved = localStorage.getItem('admin_sales_calc_cpkm');
+      if (saved) document.getElementById('calc-cpkm').value = saved;
+      setupReportCard();
+    }
+  }
+
+  function selectFuel(val, btn) {
+    curFuel = val;
+    document.querySelectorAll('#fuel-diesel,#fuel-petrol').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+  }
+
+  function selTerm(val, btn) {
+    curTerm = val;
+    document.querySelectorAll('#terms-grid .term-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    document.getElementById('term-other-wrap').style.display = val==='other' ? 'block' : 'none';
+  }
+
+  function addDays(dateStr, days) {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().split('T')[0];
+  }
+
+  function fmtDate(ds) {
+    if (!ds) return '—';
+    const d = new Date(ds + 'T00:00:00');
+    if (isNaN(d)) return '—';
+    return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+  }
+
+  function setSyncBadge(state) {
+    const el = document.getElementById('sync-badge');
+    if (!el) return;
+    if (state==='loading') { el.textContent='Syncing...'; el.className='sync-badge pending'; }
+    else if (state==='synced') { el.textContent='Synced ✓'; el.className='sync-badge'; }
+    else if (state==='offline') { el.textContent='Offline — showing saved data'; el.className='sync-badge pending'; }
+    else if (state==='queued') {
+      const n = getQueue().length;
+      el.textContent = n > 0 ? ('⏳ ' + n + ' to upload') : 'Synced ✓';
+      el.className = n > 0 ? 'sync-badge pending' : 'sync-badge';
+    }
+    else if (state==='error') { el.textContent='Sync error'; el.className='sync-badge error'; }
+    updateLastSyncedLine();
+  }
+
+  function updateLastSyncedLine() {
+    const el = document.getElementById('last-synced');
+    if (!el) return;
+    const iso = localStorage.getItem('admin_sales_last_synced_at');
+    if (!iso) { el.innerHTML = '&nbsp;'; return; }
+    const then = new Date(iso);
+    const mins = Math.round((Date.now() - then.getTime()) / 60000);
+    let txt;
+    if (mins < 1) txt = 'Updated just now';
+    else if (mins < 60) txt = 'Updated ' + mins + 'm ago';
+    else if (mins < 1440) txt = 'Updated ' + Math.round(mins / 60) + 'h ago';
+    else txt = 'Updated ' + Math.round(mins / 1440) + 'd ago';
+    el.textContent = txt;
+  }
+
+  // ---- COMMISSION / PERFORMANCE REPORT ----
+  // Folded in directly rather than kept as its own nested IIFE — its
+  // original window.xxx= exports become entries in SalesApp's own returned
+  // object below instead.
+  let REPS = [];
+  const PRICE_PER_KM = 2.2;
+  const LOSS_FLOOR   = 0.005;
+  const RETAINER     = 1200;
+  const REP_ROLE     = "rep";
+  const DISTANCE_BY_LOCATION = {
+    "Mapinga": 90, "Norton": 66, "Chikurubi Prison Farm": 10, "Arcturus rd": 10,
+    "Mhangura": 210, "Sengwa": 352, "Bindura": 112, "Harare": 10, "Silobela": 0
+  };
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+  const colLetter = n => { let s=""; while(n>0){ s=String.fromCharCode(65+(n-1)%26)+s; n=Math.floor((n-1)/26);} return s; };
+  const addr = (r,c) => colLetter(c)+r;
+  const isReportAdmin = () => !!(currentProfile && currentProfile.role !== REP_ROLE);
+
+  function buildAndDownload(sales, { repName, monthLabel, fileTag }) {
+    const ws = {};
+    const set = (r,c,cell) => { ws[addr(r,c)] = cell; };
+    const S = v => ({ t:"s", v:String(v) });
+    const N = (v,z) => ({ t:"n", v:v, ...(z?{z}:{}) });
+    const F = (f,z) => ({ t:"n", f:f, ...(z?{z}:{}) });
+
+    set(1,1,S(repName.toUpperCase()+" — MONTHLY COMMISSION  |  Niel's structure (eff. 1 June 2026)  |  "+monthLabel));
+    set(2,1,S("From Supabase. Niel fills ONLY the yellow Cost Price. Loss or break-even deals auto-pay the half-cent floor. All sales included (paid or not)."));
+    set(3,1,S("Price per km ($):")); set(3,2,N(PRICE_PER_KM,"0.00"));
+    set(3,4,S("Loss floor ($/L):")); set(3,5,N(LOSS_FLOOR,"0.0000"));
+    set(3,6,S("Monthly retainer ($):")); set(3,8,N(RETAINER,"$#,##0"));
+
+    const headers = ["Date","Customer","Volume","Cost Price","Distance","Transport","Total Cost",
+      "Selling Price","Margin","Company GP Cent1 (60%)","Company Value Cent1","Carrie GP Cent1 (40%)",
+      "Carrie Value Cent1","Company GP Cent2 (75%)","Company Value Cent2","Carrie GP Cent2 (25%)",
+      "Carrie Value Cent2","Company GP Cent3 (50%)","Company Value Cent3","Carrie GP Cent3 (50%)",
+      "Carrie Value Cent3","Total Company GP Value","Total Carrie Commission","Paid?"];
+    const HR = 5;
+    headers.forEach((h,i)=> set(HR,i+1,S(h)));
+
+    const money = "$#,##0.00;($#,##0.00);-", D4 = "0.0000";
+    const r0 = HR+1;
+    sales.forEach((sale,k) => {
+      const r = r0+k;
+      const dist = DISTANCE_BY_LOCATION[sale.location] ?? 0;
+      const g = f => 'IF($D'+r+'="","",'+f+')';
+      const I="I"+r, C="C"+r;
+      const t1="MIN("+I+",0.01)", t2="MAX(0,MIN("+I+",0.02)-0.01)", t3="MAX(0,"+I+"-0.02)";
+      set(r,1,S(sale.sale_date));
+      set(r,2,S(sale.customer));
+      set(r,3,N(Number(sale.litres),"#,##0"));
+      const cp = (sale.cost_price === null || sale.cost_price === undefined || sale.cost_price === '')
+        ? null : Number(sale.cost_price);
+      set(r,4, cp === null
+        ? {t:"n", z:D4, s:{fill:{fgColor:{rgb:"FFFF00"}}}}
+        : {t:"n", v:cp, z:D4, s:{fill:{fgColor:{rgb:"FFFF00"}}}});
+      set(r,5,N(dist));
+      set(r,6,F("E"+r+"*$B$3*2/C"+r,D4));
+      set(r,7,F(g("$D"+r+"+F"+r),D4));
+      set(r,8,N(Number(sale.price_per_litre),D4));
+      set(r,9,F(g("H"+r+"-G"+r),D4));
+      set(r,10,F(g("0.6*"+t1),D4)); set(r,11,F(g("J"+r+"*"+C),money));
+      set(r,12,F(g("0.4*"+t1),D4)); set(r,13,F(g("L"+r+"*"+C),money));
+      set(r,14,F(g("0.75*"+t2),D4)); set(r,15,F(g("N"+r+"*"+C),money));
+      set(r,16,F(g("0.25*"+t2),D4)); set(r,17,F(g("P"+r+"*"+C),money));
+      set(r,18,F(g("0.5*"+t3),D4));  set(r,19,F(g("R"+r+"*"+C),money));
+      set(r,20,F(g("0.5*"+t3),D4));  set(r,21,F(g("T"+r+"*"+C),money));
+      set(r,22,F(g("K"+r+"+O"+r+"+S"+r),money));
+      set(r,23,F(g("IF("+I+"<=0,$E$3*C"+r+",M"+r+"+Q"+r+"+U"+r+")"),money));
+      set(r,24,S(sale.paid ? "Yes" : "No"));
+    });
+
+    const last = r0 + sales.length - 1, tr = last+1;
+    set(tr,2,S("MONTH TOTAL (all sales)"));
+    set(tr,22,F("SUM(V"+r0+":V"+last+")",money));
+    set(tr,23,F("SUM(W"+r0+":W"+last+")",money));
+    const sm = tr+2;
+    set(sm,2,S("Total commission (all sales, floor applied):")); set(sm,7,F("W"+tr,money));
+    set(sm+1,2,S("Plus monthly retainer:"));                     set(sm+1,7,F("$H$3",money));
+    set(sm+2,2,S("TOTAL PAYABLE TO "+repName.toUpperCase()+":")); set(sm+2,7,F("G"+sm+"+G"+(sm+1),money));
+
+    ws["!ref"] = "A1:"+addr(sm+2,24);
+    ws["!cols"] = [9,18,10,11,9,10,11,11,10,11,12,11,12,11,12,11,12,11,12,11,12,13,14,7].map(w=>({wch:w}));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "New contract");
+    XLSX.writeFile(wb, fileTag+".xlsx");
+  }
+
+  async function runCommissionReport() {
+    const repName = document.getElementById("perf-rep-select").value;
+    const mode = document.getElementById("tf-mode").value;
+    let start, endEx, monthLabel, fileTag;
+    if (mode === "range") {
+      start = document.getElementById("tf-start").value;
+      const endInput = document.getElementById("tf-end").value;
+      if (!start || !endInput) { alert("Pick both start and end dates."); return; }
+      const e = new Date(endInput+"T00:00:00"); e.setDate(e.getDate()+1);
+      endEx = e.toISOString().slice(0,10);
+      monthLabel = start+" to "+endInput;
+      fileTag = repName+"_Commission_"+start+"_to_"+endInput;
+    } else {
+      const m = parseInt(document.getElementById("tf-month").value,10);
+      const y = parseInt(document.getElementById("tf-year").value,10);
+      start = y+"-"+String(m+1).padStart(2,"0")+"-01";
+      const nm = m===11?0:m+1, ny = m===11?y+1:y;
+      endEx = ny+"-"+String(nm+1).padStart(2,"0")+"-01";
+      monthLabel = MONTHS[m].toUpperCase()+" "+y;
+      fileTag = repName+"_Commission_"+MONTHS[m]+"_"+y;
+    }
+    const btn = document.getElementById("report-btn");
+    const orig = btn.textContent; btn.disabled = true; btn.textContent = "Generating…";
+    try {
+      if (typeof XLSX === "undefined") { alert("Spreadsheet library still loading — check your connection and try again."); return; }
+      const { data: sales, error } = await sb.from("sales")
+        .select("sale_date, customer, location, litres, price_per_litre, cost_price, paid, status")
+        .eq("rep_name", repName).gte("sale_date", start).lt("sale_date", endEx)
+        .neq("status", "cancelled").order("sale_date", { ascending: true });
+      if (error) throw error;
+      if (!sales || !sales.length) { alert("No sales found for "+repName+" in "+monthLabel+"."); return; }
+      buildAndDownload(sales, { repName, monthLabel, fileTag });
+    } catch (e) {
+      alert("Could not generate report: " + (e.message || e));
+    } finally {
+      btn.disabled = false; btn.textContent = orig;
+    }
+  }
+
+  async function setupReportCard() {
+    const card = document.getElementById("report-card");
+    if (!card) return;
+    card.style.display = "block";
+    const admin = isReportAdmin();
+    const typeField = document.getElementById("report-type-field");
+    const repField = document.getElementById("rep-select-field");
+    const typeSel = document.getElementById("report-type");
+    typeField.style.display = admin ? "block" : "none";
+    repField.style.display = admin ? "block" : "none";
+    if (!admin) typeSel.value = "performance";
+
+    const rep = document.getElementById("perf-rep-select");
+    if (rep && !rep.dataset.filled) {
+      if (admin) {
+        try {
+          const { data: repProfiles, error } = await sb.from('profiles').select('full_name').in('role', ['rep','admin']).order('full_name');
+          if (!error && repProfiles && repProfiles.length) {
+            REPS = repProfiles.map(p => p.full_name);
+          } else {
+            const { data: salesReps } = await sb.from('sales').select('rep_name');
+            REPS = [...new Set((salesReps||[]).map(s => s.rep_name).filter(Boolean))].sort();
+          }
+        } catch(e) { console.log('Could not load reps for report:', e); }
+        rep.innerHTML = REPS.map(n=>'<option>'+n+'</option>').join("");
+      } else {
+        rep.innerHTML = '<option>'+(currentProfile?.full_name||'')+'</option>';
+      }
+      rep.dataset.filled = "1";
+    }
+    const now = new Date();
+    const mo = document.getElementById("tf-month");
+    if (mo && !mo.dataset.filled) { mo.innerHTML = MONTHS.map((mn,i)=>'<option value="'+i+'"'+(i===now.getMonth()?" selected":"")+'>'+mn+'</option>').join(""); mo.dataset.filled = "1"; }
+    const yr = document.getElementById("tf-year");
+    if (yr && !yr.dataset.filled) { const y=now.getFullYear(); yr.innerHTML=[y,y-1,y+1].map(v=>'<option>'+v+'</option>').join(""); yr.dataset.filled = "1"; }
+    const mode = document.getElementById("tf-mode");
+    if (mode && !mode.dataset.wired) {
+      mode.addEventListener("change", () => {
+        const range = mode.value === "range";
+        document.getElementById("tf-month-row").style.display = range ? "none" : "grid";
+        document.getElementById("tf-range-row").style.display = range ? "grid" : "none";
+      });
+      mode.dataset.wired = "1";
+    }
+    if (typeSel && !typeSel.dataset.wired) {
+      typeSel.addEventListener("change", updateReportButtonLabel);
+      typeSel.dataset.wired = "1";
+    }
+    updateReportButtonLabel();
+  }
+
+  function updateReportButtonLabel() {
+    const typeSel = document.getElementById("report-type");
+    const btn = document.getElementById("report-btn");
+    const hint = document.getElementById("report-hint");
+    const isPerf = !isReportAdmin() || typeSel.value === "performance";
+    btn.textContent = isPerf ? "View Performance Report" : "Generate Excel for Niel";
+    hint.textContent = isPerf
+      ? "See sales volume by week and how fast deliveries go out."
+      : "Cost price is left blank for Niel to fill in.";
+  }
+
+  function runReport() {
+    const typeSel = document.getElementById("report-type");
+    const isPerf = !isReportAdmin() || typeSel.value === "performance";
+    if (isPerf) runPerformanceReport(); else runCommissionReport();
+  }
+
+  async function runPerformanceReport() {
+    const admin = isReportAdmin();
+    const repName = admin ? document.getElementById("perf-rep-select").value : (currentProfile?.full_name || "");
+    if (!repName) { alert("No rep selected."); return; }
+    const mode = document.getElementById("tf-mode").value;
+    let start, endEx, periodLabel;
+    if (mode === "range") {
+      start = document.getElementById("tf-start").value;
+      const endInput = document.getElementById("tf-end").value;
+      if (!start || !endInput) { alert("Pick both start and end dates."); return; }
+      const e = new Date(endInput+"T00:00:00"); e.setDate(e.getDate()+1);
+      endEx = e.toISOString().slice(0,10);
+      periodLabel = fmtDate(start) + ' – ' + fmtDate(endInput);
+    } else {
+      const m = parseInt(document.getElementById("tf-month").value,10);
+      const y = parseInt(document.getElementById("tf-year").value,10);
+      start = y+"-"+String(m+1).padStart(2,"0")+"-01";
+      const nm = m===11?0:m+1, ny = m===11?y+1:y;
+      endEx = ny+"-"+String(nm+1).padStart(2,"0")+"-01";
+      periodLabel = MONTHS[m] + ' ' + y;
+    }
+    const btn = document.getElementById("report-btn");
+    const orig = btn.textContent; btn.disabled = true; btn.textContent = "Loading…";
+    try {
+      const { data: sales, error } = await withTimeout(sb.from("sales")
+        .select("sale_date, created_at, customer, litres, price_per_litre, price_tba, delivered_at, status, fuel_type")
+        .eq("rep_name", repName).gte("sale_date", start).lt("sale_date", endEx)
+        .neq("status", "cancelled").order("sale_date", { ascending: true }));
+      if (error) throw error;
+      renderPerformanceReport(repName, periodLabel, start, endEx, sales || []);
+    } catch (e) {
+      alert("Could not load performance report: " + (e.message || e));
+    } finally {
+      btn.disabled = false; btn.textContent = orig;
+    }
+  }
+
+  function renderPerformanceReport(repName, periodLabel, startStr, endExStr, sales) {
+    const totalL = sales.reduce((a,s) => a + (s.litres||0), 0);
+    const totalV = sales.reduce((a,s) => a + (s.price_tba ? 0 : (s.litres||0)*(s.price_per_litre||0)), 0);
+    const count = sales.length;
+
+    const delivered = sales.filter(s => s.delivered_at && s.created_at);
+    let avgDays = null;
+    if (delivered.length) {
+      const totalDays = delivered.reduce((a,s) => {
+        const sd = new Date(s.created_at);
+        const dd = new Date(s.delivered_at);
+        return a + Math.max(0,(dd - sd) / 86400000);
+      }, 0);
+      avgDays = totalDays / delivered.length;
+    }
+
+    const start = new Date(startStr+'T00:00:00');
+    const endEx = new Date(endExStr+'T00:00:00');
+    const today = new Date(); today.setHours(0,0,0,0);
+    const weeks = [];
+    let wkStart = new Date(start), wi = 1;
+    while (wkStart < endEx) {
+      let wkEnd = new Date(wkStart); wkEnd.setDate(wkEnd.getDate()+7);
+      if (wkEnd > endEx) wkEnd = new Date(endEx);
+      weeks.push({ label: 'Wk ' + wi, start: new Date(wkStart), end: new Date(wkEnd), litres: 0, value: 0 });
+      wkStart = wkEnd; wi++;
+    }
+    sales.forEach(s => {
+      const d = new Date(s.sale_date+'T00:00:00');
+      const wk = weeks.find(w => d >= w.start && d < w.end);
+      if (wk) { wk.litres += s.litres||0; wk.value += s.price_tba ? 0 : (s.litres||0)*(s.price_per_litre||0); }
+    });
+    const maxWk = Math.max(...weeks.map(w=>w.litres), 1);
+
+    const byCustomer = {};
+    sales.forEach(s => {
+      const name = s.customer || '(no customer)';
+      if (!byCustomer[name]) byCustomer[name] = { name, litres: 0, value: 0 };
+      byCustomer[name].litres += s.litres||0;
+      byCustomer[name].value += s.price_tba ? 0 : (s.litres||0)*(s.price_per_litre||0);
+    });
+    const topCustomers = Object.values(byCustomer).sort((a,b)=>b.litres-a.litres).slice(0,5);
+    const maxCust = Math.max(...topCustomers.map(c=>c.litres), 1);
+    const RANK_COLS = ['#D4AF37','#A8A8A8','#B87333','#9a9a97','#9a9a97'];
+
+    const DOW = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const dowLitres = Array(7).fill(0);
+    sales.forEach(s => {
+      const jsDay = new Date(s.sale_date+'T00:00:00').getDay();
+      const idx = jsDay === 0 ? 6 : jsDay - 1;
+      dowLitres[idx] += s.litres||0;
+    });
+    const maxDow = Math.max(...dowLitres, 1);
+    const peakDowIdx = dowLitres.indexOf(Math.max(...dowLitres));
+
+    const byDate = {};
+    sales.forEach(s => {
+      if (!byDate[s.sale_date]) byDate[s.sale_date] = { date: s.sale_date, litres: 0, count: 0 };
+      byDate[s.sale_date].litres += s.litres||0;
+      byDate[s.sale_date].count += 1;
+    });
+    const bestDay = Object.values(byDate).sort((a,b)=>b.litres-a.litres)[0] || null;
+
+    const uniqueCustomers = Object.keys(byCustomer).length;
+    const avgSaleSize = count ? Math.round(totalL / count) : 0;
+    const byFuel = {};
+    sales.forEach(s => { const f = s.fuel_type || 'Diesel'; byFuel[f] = (byFuel[f]||0) + (s.litres||0); });
+    const topFuel = Object.entries(byFuel).sort((a,b)=>b[1]-a[1])[0];
+    const topFuelPct = topFuel && totalL ? Math.round(topFuel[1]/totalL*100) : null;
+    const deliveryText = avgDays === null ? '—' : avgDays.toFixed(1) + 'd';
+
+    const chartHtml = weeks.map(w => {
+      const h = Math.max(Math.round((w.litres/maxWk)*95), w.litres>0?4:2);
+      const isFuture = w.start > today;
+      const isCurrent = today >= w.start && today < w.end;
+      const barColor = isFuture ? '#D3D1C7' : isCurrent ? 'var(--red)' : 'var(--blue)';
+      const val = w.litres>=1000?(w.litres/1000).toFixed(1)+'k':(w.litres>0?w.litres:'');
+      return `<div class="perf-bar-col" title="${w.label}: ${w.litres.toLocaleString()} L · $${w.value.toLocaleString(undefined,{maximumFractionDigits:0})}">
+        <div class="perf-bar-val" style="color:${barColor}">${val}</div>
+        <div class="perf-bar" style="height:${h}px;background:${barColor};"></div>
+        <div class="perf-bar-wk" style="color:${isCurrent?'var(--red)':'var(--gray-text)'};font-weight:${isCurrent?'700':'600'};">${w.label}</div>
+      </div>`;
+    }).join('');
+
+    const dowChartHtml = DOW.map((d,i) => {
+      const v = dowLitres[i];
+      const h = Math.max(Math.round((v/maxDow)*95), v>0?4:2);
+      const isPeak = i === peakDowIdx && v > 0;
+      const barColor = isPeak ? 'var(--red)' : 'var(--blue)';
+      const val = v>=1000?(v/1000).toFixed(1)+'k':(v>0?v:'');
+      return `<div class="perf-bar-col" title="${d}: ${v.toLocaleString()} L">
+        <div class="perf-bar-val" style="color:${barColor}">${val}</div>
+        <div class="perf-bar" style="height:${h}px;background:${barColor};"></div>
+        <div class="perf-bar-wk" style="color:${isPeak?'var(--red)':'var(--gray-text)'};font-weight:${isPeak?'700':'600'};">${d}</div>
+      </div>`;
+    }).join('');
+
+    const custRowsHtml = topCustomers.map((c,i) => `
+      <div class="perf-cust-row">
+        <div class="perf-cust-rank" style="background:${RANK_COLS[i]};">${i+1}</div>
+        <div class="perf-cust-info">
+          <div class="perf-cust-name">${c.name}</div>
+          <div class="perf-cust-bar-track"><div class="perf-cust-bar-fill" style="width:${Math.round(c.litres/maxCust*100)}%;"></div></div>
+        </div>
+        <div class="perf-cust-vol">${c.litres.toLocaleString()} L</div>
+      </div>`).join('');
+
+    document.getElementById('perf-name').textContent = repName;
+    document.getElementById('perf-period').textContent = periodLabel;
+
+    document.getElementById('perf-body').innerHTML = `
+      <div class="perf-hero">
+        <div class="perf-hero-value">${totalL.toLocaleString()} L</div>
+        <div class="perf-hero-label">Total litres sold</div>
+      </div>
+      <div class="perf-stat-grid">
+        <div class="perf-stat"><div class="perf-stat-label">Value</div><div class="perf-stat-value">$${totalV.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
+        <div class="perf-stat"><div class="perf-stat-label">Sales</div><div class="perf-stat-value">${count}</div></div>
+        <div class="perf-stat"><div class="perf-stat-label">Avg delivery time</div><div class="perf-stat-value">${deliveryText}</div></div>
+        <div class="perf-stat"><div class="perf-stat-label">Delivered</div><div class="perf-stat-value">${delivered.length}/${count}</div></div>
+      </div>
+      <div class="perf-card">
+        <div class="perf-card-title">Sales volume by week</div>
+        <div class="perf-card-sub">${periodLabel}</div>
+        ${count ? `<div class="perf-chart">${chartHtml}</div>
+        <div class="perf-legend">
+          <span><i style="background:var(--red);"></i> This week</span>
+          <span><i style="background:var(--blue);"></i> Earlier this period</span>
+          <span><i style="background:#D3D1C7;"></i> Not yet</span>
+        </div>` : `<div class="perf-empty">No sales recorded in this period yet.</div>`}
+      </div>
+      ${avgDays !== null ? `<div class="perf-tip">🚛 On average, deliveries go out <b>${deliveryText}</b> after the order comes in.</div>` : ''}
+
+      ${count ? `
+      <div class="perf-card">
+        <div class="perf-card-title">🏆 Top customers</div>
+        <div class="perf-card-sub">By litres, ${periodLabel}</div>
+        <div class="perf-cust-list">${custRowsHtml}</div>
+      </div>
+
+      <div class="perf-card">
+        <div class="perf-card-title">📅 Busiest day of the week</div>
+        <div class="perf-card-sub">${DOW[peakDowIdx]} is when the most volume lands</div>
+        <div class="perf-chart">${dowChartHtml}</div>
+      </div>
+
+      ${bestDay ? `<div class="perf-tip">🔥 Your best single day was <b>${fmtDate(bestDay.date)}</b> — <b>${bestDay.litres.toLocaleString()} L</b> across ${bestDay.count} sale${bestDay.count===1?'':'s'}.</div>` : ''}
+
+      <div class="perf-stat-grid">
+        <div class="perf-stat"><div class="perf-stat-label">Customers served</div><div class="perf-stat-value">${uniqueCustomers}</div></div>
+        <div class="perf-stat"><div class="perf-stat-label">Avg sale size</div><div class="perf-stat-value">${avgSaleSize.toLocaleString()} L</div></div>
+        ${topFuelPct !== null ? `<div class="perf-stat" style="grid-column:span 2;"><div class="perf-stat-label">Most-sold fuel</div><div class="perf-stat-value">${topFuel[0]} · ${topFuelPct}%</div></div>` : ''}
+      </div>` : ''}
+    `;
+
+    document.getElementById('perf-screen').classList.add('active');
+  }
+
+  function closePerfReport() {
+    document.getElementById('perf-screen').classList.remove('active');
+  }
+
+  // ---- INIT / ENTRY POINTS ----
+  let started = false;
+  function init(sbClient){
+    sb = sbClient;
+    if(started) return;
+    started = true;
+    initCustomerAutocomplete();
+    initLocationAutocomplete();
+  }
+
+  // Ported from index.html's loadUser(user, showLock) — called after a
+  // fresh sign-in (shell's enterWithProfile) or directly for a rep with no
+  // PIN needed this session. showLock=true is currently unused here (the
+  // rep PIN path goes through the shell's checkLockPin() instead, which
+  // already has currentUser/currentProfile set from cache) but kept for
+  // fidelity with the original function signature.
+  async function loadUser(user, showLock){
+    currentUser = user;
+    const profile = currentProfile;
+    document.getElementById('user-name-display').textContent = profile?.full_name || user.email || 'Rep';
+    document.getElementById('more-name').textContent = profile?.full_name || '—';
+    document.getElementById('more-email').textContent = user.email || '—';
+    document.getElementById('more-role').textContent = 'Role: ' + (profile?.role || 'rep');
+    document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
+
+    if (!localStorage.getItem(getPinKey(user.id))) {
+      localStorage.setItem(getPinKey(user.id), DEFAULT_PIN);
+    }
+
+    await loadCustomerList();
+    await loadPlaceList();
+
+    if (showLock) {
+      showLockScreen();
+      await loadSales();
+    } else {
+      await loadSales();
+    }
+  }
+
+  // Rep PIN path only: paint whatever's cached locally, no network at all —
+  // safe to call before the PIN has even been entered.
+  function warmFromCacheOnly(){
+    try{ const c = localStorage.getItem('admin_sales_customer_list'); if(c) CUSTOMER_LIST = JSON.parse(c); }catch(e){}
+    try{ const p = localStorage.getItem('admin_sales_place_list'); if(p) PLACE_LIST = JSON.parse(p); }catch(e){}
+    initCustomerAutocomplete();
+    initLocationAutocomplete();
+  }
+
+  return {
+    init, loadUser, warmFromCacheOnly,
+    getQueue, syncQueue, setSyncBadge, retrySync,
+    renderSales, renderDash, loadSales,
+    toggleTBA, clearCustomerMatch, clearLocationMatch,
+    acPick, acPickNew, locAcPick, locAcPickNew,
+    selectFuel, selTerm, recordSale, cancelEdit, openSaleForEdit, markDelivered, cancelSale,
+    showTab, calNav, showCalDay,
+    calcDelivery, changePin, changePassword,
+    removeGoneQuietCustomer,
+    runReport, runCommissionReport, runPerformanceReport, closePerfReport, setupReportCard,
+  };
+})();
+
+// Existing session restore (reload without re-typing credentials) — only
+// runs when startupFromCache() didn't already handle a cached rep. Invoked
+// here, at the very end of the script, specifically because
+// startupFromCache() calls SalesApp.init(sb) synchronously for a cached
+// rep — SalesApp (and Overview/Accounts/LogisticsApp) must already exist
+// by the time this runs, which they now do.
+if (!startupFromCache()) {
+  sb.auth.getSession().then(async ({ data }) => {
+    if(data.session?.user) await enterWithProfile(data.session.user);
+  });
+}
 </script>
 </body>
 </html>
