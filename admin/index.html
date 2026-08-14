@@ -468,6 +468,22 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 #sec-logistics .saved{font-size:11px;font-weight:700;color:var(--green-dark);opacity:0;transition:opacity .3s;margin-left:auto;}
 #sec-logistics .saved.on{opacity:1;}
 
+#sec-logistics .dropzone{border:2px dashed var(--line);border-radius:10px;padding:22px 14px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;}
+#sec-logistics .dropzone:hover,#sec-logistics .dropzone.drag{border-color:var(--blue);background:var(--blue-light);}
+#sec-logistics .dropzone .dz-icon{font-size:22px;margin-bottom:6px;}
+#sec-logistics .dropzone .dz-label{font-size:12px;font-weight:700;color:var(--text2);}
+#sec-logistics .dropzone .dz-sub{font-size:10px;color:var(--muted);margin-top:3px;}
+#sec-logistics .imp-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:12px;}
+#sec-logistics .imp-table th{text-align:left;padding:5px 7px;border-bottom:1.5px solid var(--line);color:var(--text2);position:sticky;top:0;background:#fff;}
+#sec-logistics .imp-table td{padding:5px 7px;border-bottom:1px solid var(--line);font-family:var(--mono);}
+#sec-logistics .imp-table tr.no-match{color:var(--muted);}
+#sec-logistics .imp-table .m-ok{color:var(--green-dark);font-weight:700;}
+#sec-logistics .imp-table .m-no{color:var(--amber);font-weight:700;}
+#sec-logistics .imp-wrap{max-height:280px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;margin-top:10px;}
+#sec-logistics .imp-summary{font-size:12px;font-weight:700;margin-top:12px;}
+#sec-logistics .imp-actions{display:flex;gap:8px;margin-top:10px;}
+#sec-logistics .imp-actions .btn{width:auto;flex:1;padding:10px;font-size:12px;}
+
 #sec-logistics .leaflet-popup-content{margin:11px 13px;font-family:var(--font);font-size:12px;min-width:195px;}
 #sec-logistics .leaflet-popup-content b{font-size:13px;}
 #sec-logistics .pop-btn{width:100%;margin-top:8px;padding:6px;background:var(--green);color:#fff;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;}
@@ -1320,6 +1336,36 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
                   <div class="hint">Only used when road routing can't reach the internet or you're out of daily requests. Straight-line × this ≈ road km. Raise it if the fallback keeps under-reading against your odometer.</div>
                 </div>
                 <button class="btn" style="background:var(--blue);" onclick="LogisticsApp.saveSettings()">Save</button>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="ph"><h2 style="color:var(--red);">🧮 Bonus settings</h2><span class="saved" id="sv-bonus-set">Saved</span></div>
+              <div style="padding:14px;">
+                <div class="sfld">
+                  <label>Odometer tolerance (km)</label>
+                  <input type="number" id="s-bonus-tol" step="1" min="0">
+                  <div class="hint">How far a driver's logged odometer distance can differ from the route's standard km before a trip gets flagged for review.</div>
+                </div>
+                <div class="sfld">
+                  <label>Delivery-bonus reference depot</label>
+                  <select id="s-bonus-depot"></select>
+                  <div class="hint">Which depot delivery-bonus distances are measured from.</div>
+                </div>
+                <button class="btn" style="background:var(--red);" onclick="LogisticsApp.saveBonusSettings()">Save</button>
+              </div>
+            </div>
+            <div class="panel" style="grid-column:1/-1;">
+              <div class="ph"><h2 style="color:var(--red);">📊 Collection bonus rates</h2></div>
+              <div style="padding:14px;">
+                <div class="dropzone" id="bonus-dropzone" onclick="document.getElementById('bonus-file-input').click()"
+                  ondragover="LogisticsApp.bonusDropHover(event,true)" ondragleave="LogisticsApp.bonusDropHover(event,false)" ondrop="LogisticsApp.bonusDrop(event)">
+                  <div class="dz-icon">📄</div>
+                  <div class="dz-label">Drop the collections bonus rate sheet here, or click to browse</div>
+                  <div class="dz-sub">.xlsx — same layout as Munya's rate sheet: Route, Running KM, then the four litres-tier columns</div>
+                </div>
+                <input type="file" id="bonus-file-input" accept=".xlsx,.xls" style="display:none;" onchange="LogisticsApp.handleBonusFile(this.files[0])">
+                <div id="bonus-import-preview"></div>
+                <div class="note">Updates each route's standard distance and bonus amounts. Routes in the file that don't match an existing route name are shown but skipped — add the route first (via the route picker) if one's missing.</div>
               </div>
             </div>
             <div class="panel">
@@ -4624,6 +4670,14 @@ const LogisticsApp = (() => {
     if(r) r.value=+SETTINGS.road_factor||1.3;
     const k=document.getElementById('s-ors');
     if(k) k.value=SETTINGS.ors_key||'';
+    const tol=document.getElementById('s-bonus-tol');
+    if(tol) tol.value=SETTINGS.bonus_km_tolerance!=null ? +SETTINGS.bonus_km_tolerance : 50;
+    const dsel=document.getElementById('s-bonus-depot');
+    if(dsel){
+      dsel.innerHTML=DEPOTS.length ? DEPOTS.map(d=>
+        '<option value="'+d.depot_key+'"'+(SETTINGS.bonus_delivery_depot_key===d.depot_key?' selected':'')+'>'+esc(d.depot_name)+'</option>'
+      ).join('') : '<option value="">No depots — run SQL 18.</option>';
+    }
   }
   async function saveTruck(k,v){
     const val=parseFloat(v);
@@ -4644,11 +4698,135 @@ const LogisticsApp = (() => {
     flash('sv-set');
     if(RUN.length) requestRoute();
   }
+  async function saveBonusSettings(){
+    const tol=parseFloat(document.getElementById('s-bonus-tol').value);
+    if(isNaN(tol)||tol<0){ alert('Tolerance must be a number, 0 or more.'); return; }
+    const depotKey2=document.getElementById('s-bonus-depot').value||null;
+    const {error}=await sb.from('app_settings')
+      .update({bonus_km_tolerance:tol,bonus_delivery_depot_key:depotKey2,updated_at:new Date().toISOString()}).eq('id',1);
+    if(error){ alert('Could not save: '+error.message); return; }
+    SETTINGS.bonus_km_tolerance=tol; SETTINGS.bonus_delivery_depot_key=depotKey2;
+    flash('sv-bonus-set');
+  }
   function flash(id){
     const e=document.getElementById(id);
     if(!e) return;
     e.classList.add('on');
     setTimeout(()=>e.classList.remove('on'),1600);
+  }
+
+  /* ============ COLLECTION BONUS RATE SHEET IMPORT ============
+     Drag/drop (or click-to-browse) an .xlsx with the same layout as
+     Munya's paper rate sheet: Route | Running KM | 40000 | 30000 |
+     17500 | 15000. Parsed client-side (the xlsx lib is already loaded
+     for the Excel export features elsewhere in this app), matched
+     against the already-loaded ROUTES by a loose name match (case,
+     spacing, dashes vs "to" all ignored — mirrors the one-off SQL
+     import used to seed this table originally), previewed, and only
+     written to Supabase once the user confirms. Unmatched routes are
+     shown, not silently created — a typo'd name should be fixed or the
+     route added properly, not auto-created from an import. */
+  let BONUS_IMPORT=[];
+
+  function normRoute(s){
+    return String(s||'').replace(/\s+to\s+/gi,' ').toLowerCase().replace(/[^a-z0-9]+/g,'');
+  }
+  function bonusDropHover(e,on){
+    e.preventDefault();
+    document.getElementById('bonus-dropzone').classList.toggle('drag',on);
+  }
+  function bonusDrop(e){
+    e.preventDefault();
+    document.getElementById('bonus-dropzone').classList.remove('drag');
+    const f=e.dataTransfer.files && e.dataTransfer.files[0];
+    if(f) handleBonusFile(f);
+  }
+  function handleBonusFile(file){
+    if(!file) return;
+    if(typeof XLSX==='undefined'){ alert('Excel reader not loaded — refresh the page and try again.'); return; }
+    const reader=new FileReader();
+    reader.onload=(e)=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:'array'});
+        const sheet=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:null});
+        const parsed=[];
+        for(const row of rows){
+          const name=row[0], km=row[1];
+          if(typeof name!=='string' || !name.trim()) continue;
+          if(typeof km!=='number') continue;
+          const tiers=[row[2],row[3],row[4],row[5]].map(v=>typeof v==='number'?v:null);
+          if(tiers.every(v=>v==null)) continue;
+          const rn=name.trim();
+          const match=ROUTES.find(r=>normRoute(r.route_name)===normRoute(rn));
+          parsed.push({
+            route_name:rn, running_km:km,
+            bonus_40000:tiers[0], bonus_30000:tiers[1], bonus_17500:tiers[2], bonus_15000:tiers[3],
+            route_key:match?match.route_key:null
+          });
+        }
+        if(!parsed.length){ alert('No readable route rows found in that file.'); return; }
+        BONUS_IMPORT=parsed;
+        renderBonusImportPreview();
+      }catch(err){ alert('Could not read that file: '+(err.message||err)); }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+  function renderBonusImportPreview(){
+    const el=document.getElementById('bonus-import-preview');
+    if(!el) return;
+    if(!BONUS_IMPORT.length){ el.innerHTML=''; return; }
+    const matched=BONUS_IMPORT.filter(r=>r.route_key).length;
+    const unmatched=BONUS_IMPORT.length-matched;
+    el.innerHTML=
+      '<div class="imp-wrap"><table class="imp-table"><thead><tr>'+
+        '<th>Route</th><th>KM</th><th>40000</th><th>30000</th><th>17500</th><th>15000</th><th>Match</th>'+
+      '</tr></thead><tbody>'+
+      BONUS_IMPORT.map(r=>
+        '<tr class="'+(r.route_key?'':'no-match')+'">'+
+          '<td>'+esc(r.route_name)+'</td>'+
+          '<td>'+r.running_km+'</td>'+
+          '<td>'+(r.bonus_40000??'—')+'</td>'+
+          '<td>'+(r.bonus_30000??'—')+'</td>'+
+          '<td>'+(r.bonus_17500??'—')+'</td>'+
+          '<td>'+(r.bonus_15000??'—')+'</td>'+
+          '<td>'+(r.route_key?'<span class="m-ok">✓ matched</span>':'<span class="m-no">⚠ no route</span>')+'</td>'+
+        '</tr>').join('')+
+      '</tbody></table></div>'+
+      '<div class="imp-summary">'+matched+' route'+(matched===1?'':'s')+' will be updated'+
+        (unmatched?', '+unmatched+' skipped (no matching route name)':'')+'.</div>'+
+      '<div class="imp-actions">'+
+        '<button class="btn" onclick="LogisticsApp.confirmBonusImport()">Confirm import</button>'+
+        '<button class="btn ghost" onclick="LogisticsApp.cancelBonusImport()">Cancel</button>'+
+      '</div>';
+  }
+  function cancelBonusImport(){
+    BONUS_IMPORT=[];
+    document.getElementById('bonus-import-preview').innerHTML='';
+    document.getElementById('bonus-file-input').value='';
+  }
+  async function confirmBonusImport(){
+    const matched=BONUS_IMPORT.filter(r=>r.route_key);
+    if(!matched.length){ alert('Nothing to import — no matched routes.'); return; }
+    const tierDefs=[[40000,null,'bonus_40000'],[30000,40000,'bonus_30000'],[17500,30000,'bonus_17500'],[15000,17500,'bonus_15000']];
+    const rateRows=[];
+    for(const r of matched){
+      for(const [min,max,field] of tierDefs){
+        if(r[field]!=null) rateRows.push({route_key:r.route_key,min_litres:min,max_litres:max,bonus_amount:r[field]});
+      }
+    }
+    const kmRows=matched.map(r=>({route_key:r.route_key,standard_km:r.running_km}));
+    const [rateRes,kmRes]=await Promise.all([
+      sb.from('bonus_collection_rates').upsert(rateRows,{onConflict:'route_key,min_litres'}),
+      sb.from('routes').upsert(kmRows,{onConflict:'route_key'})
+    ]);
+    if(rateRes.error){ alert('Could not save bonus rates: '+rateRes.error.message); return; }
+    if(kmRes.error){ alert('Could not save route distances: '+kmRes.error.message); return; }
+    alert('Imported '+matched.length+' route'+(matched.length===1?'':'s')+'.');
+    BONUS_IMPORT=[];
+    document.getElementById('bonus-import-preview').innerHTML='';
+    document.getElementById('bonus-file-input').value='';
+    await loadRefs();
   }
 
   let started = false;
@@ -4682,7 +4860,8 @@ const LogisticsApp = (() => {
     drawPins, mapSearch, toggleDrag, startAdd, toggleLayer,
     openDirections, clearRun,
     setPat, sortBook, renderBook,
-    saveTruck, saveSettings,
+    saveTruck, saveSettings, saveBonusSettings,
+    bonusDropHover, bonusDrop, handleBonusFile, confirmBonusImport, cancelBonusImport,
     closeAdd, saveCustomer, suggest, pickName,
     pickTruck, setStopLitres, removeStop, addStop,
     pickDepot,
