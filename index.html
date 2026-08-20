@@ -75,7 +75,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .terms-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
 .term-btn{padding:9px 6px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:#fff;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;text-align:center;color:var(--text2);transition:all 0.15s;}
 .term-btn.selected{border-color:var(--red);background:var(--red-light);color:var(--red-dark);}
-.fuel-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.fuel-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
 textarea{width:100%;padding:10px 12px;background:var(--gray);border:1.5px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);font-size:14px;outline:none;resize:none;min-height:70px;}
 textarea:focus{border-color:var(--red);background:#fff;}
 
@@ -95,6 +95,7 @@ textarea:focus{border-color:var(--red);background:#fff;}
 .pill{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:5px;vertical-align:middle;}
 .p-diesel{background:var(--blue-light);color:#0C447C;}
 .p-petrol{background:var(--red-light);color:var(--red-dark);}
+.p-paraffin{background:var(--amber-light);color:var(--amber);}
 .p-del{background:var(--green-light);color:var(--green-dark);}
 .del-btn{width:100%;margin-top:10px;padding:9px;background:var(--green);color:#fff;border:none;border-radius:var(--radius-sm);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;}
 .del-btn:disabled{background:var(--green-light);color:var(--green-dark);cursor:default;}
@@ -353,6 +354,7 @@ textarea:focus{border-color:var(--red);background:#fff;}
         <div class="fuel-grid">
           <button class="term-btn selected" id="fuel-diesel" onclick="selectFuel('Diesel',this)">⛽ Diesel</button>
           <button class="term-btn" id="fuel-petrol" onclick="selectFuel('Petrol',this)">🔴 Petrol</button>
+          <button class="term-btn" id="fuel-paraffin" onclick="selectFuel('Paraffin',this)">🟡 Paraffin</button>
         </div>
       </div>
       <div class="field">
@@ -1473,7 +1475,7 @@ function fillSaleForm(sale) {
     document.getElementById('cust-matched-txt').textContent = 'Linked to accounts record';
   }
   document.getElementById('s-location').value = sale.location || '';
-  selectFuel(sale.fuel_type || 'Diesel', sale.fuel_type === 'Petrol' ? document.getElementById('fuel-petrol') : document.getElementById('fuel-diesel'));
+  selectFuel(sale.fuel_type || 'Diesel', document.getElementById(fuelBtnId(sale.fuel_type)));
   document.getElementById('s-litres').value = sale.litres || '';
   const priceField = document.getElementById('s-price');
   if (sale.price_tba) {
@@ -1972,7 +1974,7 @@ function renderSales() {
   const queued = getQueue();
   const queuedRows = queued.map(item => {
     const p = item.payload;
-    const fuelPill = p.fuel_type ? `<span class="pill ${p.fuel_type==='Petrol'?'p-petrol':'p-diesel'}">${p.fuel_type}</span>` : '';
+    const fuelPill = p.fuel_type ? `<span class="pill ${fuelPillClass(p.fuel_type)}">${p.fuel_type}</span>` : '';
     const pendingPill = `<span class="pill" style="background:var(--amber-light);color:var(--amber);">⏳ Not synced yet</span>`;
     const editBtn = `<button class="del-btn" style="background:#fff;color:var(--text2);border:1px solid var(--border);margin-top:6px;" onclick="openSaleForEdit('${item._localId}');event.stopPropagation()">✎ Edit sale</button>`;
     return `<div class="sale-row" style="border-left:3px solid var(--amber);" onclick="openSaleForEdit('${item._localId}')">
@@ -1996,7 +1998,7 @@ function renderSales() {
   }
   el.innerHTML = queuedRows + allSales.map(s => {
     const delivered = s.status === 'delivered';
-    const fuelPill = s.fuel_type ? `<span class="pill ${s.fuel_type==='Petrol'?'p-petrol':'p-diesel'}">${s.fuel_type}</span>` : '';
+    const fuelPill = s.fuel_type ? `<span class="pill ${fuelPillClass(s.fuel_type)}">${s.fuel_type}</span>` : '';
     const delPill = delivered ? `<span class="pill p-del">✓ Delivered</span>` : '';
     const paidPill = s.paid ? `<span class="pill p-del">✓ Paid</span>` : '';
     const cancelledPill = s.status === 'cancelled' ? `<span class="pill" style="background:#F0F0EE;color:#5a5a57;">✗ Cancelled</span>` : '';
@@ -2196,8 +2198,16 @@ function showTab(id, btn) {
 
 function selectFuel(val, btn) {
   curFuel = val;
-  document.querySelectorAll('#fuel-diesel,#fuel-petrol').forEach(b => b.classList.remove('selected'));
+  document.querySelectorAll('#fuel-diesel,#fuel-petrol,#fuel-paraffin').forEach(b => b.classList.remove('selected'));
   btn.classList.add('selected');
+}
+
+function fuelBtnId(fuelType) {
+  return fuelType === 'Petrol' ? 'fuel-petrol' : fuelType === 'Paraffin' ? 'fuel-paraffin' : 'fuel-diesel';
+}
+
+function fuelPillClass(fuelType) {
+  return fuelType === 'Petrol' ? 'p-petrol' : fuelType === 'Paraffin' ? 'p-paraffin' : 'p-diesel';
 }
 
 function selTerm(val, btn) {
