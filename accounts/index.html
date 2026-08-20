@@ -241,10 +241,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
                 <th onclick="sortTrack('price')" style="text-align:right;">Price/L</th>
                 <th onclick="sortTrack('value')" style="text-align:right;">Value</th>
                 <th onclick="sortTrack('paymentTerm')">Terms</th>
+                <th onclick="sortTrack('invoiced')" style="text-align:center;">Invoiced</th>
               </tr>
             </thead>
             <tbody id="track-body">
-              <tr><td colspan="9" class="empty-msg">Loading...</td></tr>
+              <tr><td colspan="10" class="empty-msg">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -489,7 +490,7 @@ async function fetchData(){
     const fromDate=new Date();
     fromDate.setDate(fromDate.getDate()-daysBack);
     const {data,error}=await sb.from('sales')
-      .select('id,sale_date,delivery_date,payment_due,payment_term,customer,location,litres,price_per_litre,price_tba,fuel_type,rep_name,status,paid,notes,delivered_at')
+      .select('id,sale_date,delivery_date,payment_due,payment_term,customer,location,litres,price_per_litre,price_tba,fuel_type,rep_name,status,paid,invoiced,notes,delivered_at')
       .gte('sale_date',fromDate.toISOString().split('T')[0])
       .order('payment_due',{ascending:true});
     if(error)throw error;
@@ -507,6 +508,7 @@ async function fetchData(){
       fuelType:s.fuel_type||'',
       rep:s.rep_name||'',
       paid:s.paid,
+      invoiced:!!s.invoiced,
       notes:s.notes||'',
       priceTba:!!s.price_tba,
       deliveredAt:s.delivered_at||null,
@@ -586,7 +588,7 @@ function renderTracker(){
 
   const body = document.getElementById('track-body');
   if(!rows.length){
-    body.innerHTML = '<tr><td colspan="9" class="empty-msg">'+
+    body.innerHTML = '<tr><td colspan="10" class="empty-msg">'+
       (q?'No sale matches that search.':'No sales to show.')+'</td></tr>';
     return;
   }
@@ -624,8 +626,28 @@ function renderTracker(){
       '<td class="mono" style="text-align:right;">'+priceCell+'</td>'+
       '<td class="mono" style="text-align:right;font-weight:700;">'+valueCell+'</td>'+
       '<td style="white-space:nowrap;">'+(s.paymentTerm||'&mdash;')+due+'</td>'+
+      '<td style="text-align:center;"><input type="checkbox" style="width:16px;height:16px;cursor:pointer;"'+
+        (s.invoiced?' checked':'')+' onchange="toggleInvoiced(\''+s.id+'\',this.checked,this)"></td>'+
     '</tr>';
   }).join('');
+}
+
+// Ticked by an accountant once they've actually invoiced the customer —
+// reference only, nothing else in the app reads this field.
+async function toggleInvoiced(id, checked, cb){
+  cb.disabled = true;
+  const sale = allSales.find(s=>String(s.id)===String(id));
+  const prev = sale ? sale.invoiced : !checked;
+  if(sale) sale.invoiced = checked;
+  try{
+    const {error} = await sb.from('sales').update({invoiced: checked}).eq('id', id);
+    if(error) throw error;
+  }catch(e){
+    if(sale) sale.invoiced = prev;
+    cb.checked = prev;
+    alert('Could not save — try again: '+e.message);
+  }
+  cb.disabled = false;
 }
 
 
