@@ -138,6 +138,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 #sec-overview .pill{display:inline-flex;align-items:center;font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;margin-left:4px;vertical-align:middle;}
 #sec-overview .p-diesel{background:var(--blue-light);color:var(--blue-dark);}
 #sec-overview .p-petrol{background:var(--red-light);color:var(--red-dark);}
+#sec-overview .p-paraffin{background:var(--amber-light);color:var(--amber);}
 #sec-overview .p-del{background:var(--green-light);color:var(--green-dark);}
 #sec-overview .p-new{background:var(--text);color:#fff;}
 
@@ -248,6 +249,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 #sec-accounts .pill{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;}
 #sec-accounts .p-diesel{background:var(--blue-light);color:var(--blue-dark);}
 #sec-accounts .p-petrol{background:var(--red-light);color:var(--red-dark);}
+#sec-accounts .p-paraffin{background:var(--amber-light);color:var(--amber);}
 #sec-accounts .mark-paid-btn{padding:5px 10px;background:var(--green);color:#fff;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
 
 #sec-accounts .empty-msg{padding:24px;text-align:center;color:var(--gray-text);font-size:13px;}
@@ -320,6 +322,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 #sec-logistics .pill{display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:5px;}
 #sec-logistics .p-diesel{background:var(--blue-light);color:var(--blue-dark);}
 #sec-logistics .p-petrol{background:var(--red-light);color:var(--red-dark);}
+#sec-logistics .p-paraffin{background:var(--amber-light);color:var(--amber);}
 #sec-logistics .p-done{background:var(--green-light);color:var(--green-dark);}
 #sec-logistics .p-place{background:#EFEFED;color:var(--text2);margin-left:0;margin-right:4px;}
 
@@ -591,7 +594,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 #sec-sales .terms-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
 #sec-sales .term-btn{padding:9px 6px;border:1.5px solid var(--gray-border);border-radius:8px;background:#fff;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;text-align:center;color:#5a5a57;transition:all 0.15s;}
 #sec-sales .term-btn.selected{border-color:var(--red);background:var(--red-light);color:var(--red-dark);}
-#sec-sales .fuel-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+#sec-sales .fuel-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
 #sec-sales textarea{width:100%;padding:10px 12px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:14px;outline:none;resize:none;min-height:70px;}
 #sec-sales textarea:focus{border-color:var(--red);background:#fff;}
 
@@ -608,6 +611,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 #sec-sales .pill{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:5px;vertical-align:middle;}
 #sec-sales .p-diesel{background:var(--blue-light);color:var(--blue-dark);}
 #sec-sales .p-petrol{background:var(--red-light);color:var(--red-dark);}
+#sec-sales .p-paraffin{background:var(--amber-light);color:var(--amber);}
 #sec-sales .p-del{background:var(--green-light);color:var(--green-dark);}
 #sec-sales .del-btn{width:100%;margin-top:10px;padding:9px;background:var(--green);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;}
 #sec-sales .del-btn:disabled{background:var(--green-light);color:var(--green-dark);cursor:default;}
@@ -1501,6 +1505,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
               <div class="fuel-grid">
                 <button class="term-btn selected" id="fuel-diesel" onclick="SalesApp.selectFuel('Diesel',this)">⛽ Diesel</button>
                 <button class="term-btn" id="fuel-petrol" onclick="SalesApp.selectFuel('Petrol',this)">🔴 Petrol</button>
+                <button class="term-btn" id="fuel-paraffin" onclick="SalesApp.selectFuel('Paraffin',this)">🟡 Paraffin</button>
               </div>
             </div>
             <div class="field">
@@ -2481,6 +2486,10 @@ const OverviewApp = (() => {
     return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   }
 
+  function fuelPillClass(fuelType) {
+    return fuelType === 'Petrol' ? 'p-petrol' : fuelType === 'Paraffin' ? 'p-paraffin' : 'p-diesel';
+  }
+
   function renderAll() {
     // Exclude cancelled sales from all views
     const activeSales = allSales.filter(s => s.status !== 'cancelled');
@@ -2497,7 +2506,7 @@ const OverviewApp = (() => {
     const toEl = document.getElementById('today-list');
     if (todayDeliveries.length) {
       toEl.innerHTML = todayDeliveries.map(s => {
-        const fp = s.fuelType ? `<span class="pill ${s.fuelType==='Petrol'?'p-petrol':'p-diesel'}">${s.fuelType}</span>` : '';
+        const fp = s.fuelType ? `<span class="pill ${fuelPillClass(s.fuelType)}">${s.fuelType}</span>` : '';
         return `<div class="today-row">
           <div class="today-icon">🚛</div>
           <div style="flex:1;min-width:0;">
@@ -2545,7 +2554,7 @@ const OverviewApp = (() => {
         const allDelDates = upcomingSales.map(x => (x.deliveryDate||'').split('T')[0]).filter(Boolean);
         const dateColour = colourForDate(deldate, allDelDates);
         const isNew = !lastKnownIds.has(String(s.id)) && !isFirstLoad;
-        const fp = s.fuelType ? `<span class="pill ${s.fuelType==='Petrol'?'p-petrol':'p-diesel'}">${s.fuelType}</span>` : '';
+        const fp = s.fuelType ? `<span class="pill ${fuelPillClass(s.fuelType)}">${s.fuelType}</span>` : '';
         const dp = s.delivered ? `<span class="pill p-del">✓ Delivered</span>` : '';
         const np = isNew ? `<span class="pill p-new">NEW</span>` : '';
         const ts = fmtTime(s.created_at);
@@ -2576,7 +2585,7 @@ const OverviewApp = (() => {
       delEl.innerHTML = deliveredSales.map(s => {
         const dd = (s.deliveryDate||'').split('T')[0];
         const d = dd ? new Date(dd+'T00:00:00') : null;
-        const fp = s.fuelType ? `<span class="pill ${s.fuelType==='Petrol'?'p-petrol':'p-diesel'}">${s.fuelType}</span>` : '';
+        const fp = s.fuelType ? `<span class="pill ${fuelPillClass(s.fuelType)}">${s.fuelType}</span>` : '';
         return `<div class="order-row" style="opacity:0.6;">
           <div class="date-box" style="background:var(--green-light);border-color:var(--green);">
             <div class="date-num" style="color:var(--green-dark);">${d?String(d.getDate()).padStart(2,'0'):'—'}</div>
@@ -2849,7 +2858,7 @@ const AccountsApp = (() => {
         ? '<span class="tpill" style="background:var(--green-light);color:var(--green-dark);">delivered</span>'
         : '<span class="tpill" style="background:var(--amber-light);color:var(--amber);">pending</span>';
       const fuelPill = s.fuelType
-        ? '<span class="pill '+(s.fuelType==='Petrol'?'p-petrol':'p-diesel')+'">'+s.fuelType+'</span>'
+        ? '<span class="pill '+(s.fuelType==='Petrol'?'p-petrol':s.fuelType==='Paraffin'?'p-paraffin':'p-diesel')+'">'+s.fuelType+'</span>'
         : '<span style="color:var(--gray-text);">&mdash;</span>';
       const priceCell = s.priceTba
         ? '<span style="color:var(--amber);font-weight:700;">TBA</span>'
@@ -3784,7 +3793,7 @@ const LogisticsApp = (() => {
 
   function row(s,opts){
     const done = s.status==='delivered';
-    const fp = s.fuel_type?'<span class="pill '+(s.fuel_type==='Petrol'?'p-petrol':'p-diesel')+'">'+esc(s.fuel_type)+'</span>':'';
+    const fp = s.fuel_type?'<span class="pill '+(s.fuel_type==='Petrol'?'p-petrol':s.fuel_type==='Paraffin'?'p-paraffin':'p-diesel')+'">'+esc(s.fuel_type)+'</span>':'';
     const dp = done?'<span class="pill p-done">✓</span>':'';
     const btn = (!done && opts.showBtn)
       ? '<button class="mark" onclick="LogisticsApp.markDelivered('+s.id+')">Mark delivered</button>' : '';
@@ -5356,7 +5365,7 @@ const SalesApp = (() => {
       document.getElementById('cust-matched-txt').textContent = 'Linked to accounts record';
     }
     document.getElementById('s-location').value = sale.location || '';
-    selectFuel(sale.fuel_type || 'Diesel', sale.fuel_type === 'Petrol' ? document.getElementById('fuel-petrol') : document.getElementById('fuel-diesel'));
+    selectFuel(sale.fuel_type || 'Diesel', document.getElementById(fuelBtnId(sale.fuel_type)));
     document.getElementById('s-litres').value = sale.litres || '';
     const priceField = document.getElementById('s-price');
     if (sale.price_tba) {
@@ -5768,7 +5777,7 @@ const SalesApp = (() => {
     const queued = getQueue();
     const queuedRows = queued.map(item => {
       const p = item.payload;
-      const fuelPill = p.fuel_type ? `<span class="pill ${p.fuel_type==='Petrol'?'p-petrol':'p-diesel'}">${p.fuel_type}</span>` : '';
+      const fuelPill = p.fuel_type ? `<span class="pill ${fuelPillClass(p.fuel_type)}">${p.fuel_type}</span>` : '';
       const pendingPill = `<span class="pill" style="background:var(--amber-light);color:var(--amber);">⏳ Not synced yet</span>`;
       const editBtn = `<button class="del-btn" style="background:#fff;color:#5a5a57;border:1px solid var(--gray-border);margin-top:6px;" onclick="SalesApp.openSaleForEdit('${item._localId}');event.stopPropagation()">✎ Edit sale</button>`;
       return `<div class="sale-row" style="border-left:3px solid var(--amber);" onclick="SalesApp.openSaleForEdit('${item._localId}')">
@@ -5792,7 +5801,7 @@ const SalesApp = (() => {
     }
     el.innerHTML = queuedRows + allSales.map(s => {
       const delivered = s.status === 'delivered';
-      const fuelPill = s.fuel_type ? `<span class="pill ${s.fuel_type==='Petrol'?'p-petrol':'p-diesel'}">${s.fuel_type}</span>` : '';
+      const fuelPill = s.fuel_type ? `<span class="pill ${fuelPillClass(s.fuel_type)}">${s.fuel_type}</span>` : '';
       const delPill = delivered ? `<span class="pill p-del">✓ Delivered</span>` : '';
       const paidPill = s.paid ? `<span class="pill p-del">✓ Paid</span>` : '';
       const cancelledPill = s.status === 'cancelled' ? `<span class="pill" style="background:#F0F0EE;color:#5a5a57;">✗ Cancelled</span>` : '';
@@ -6082,8 +6091,16 @@ const SalesApp = (() => {
 
   function selectFuel(val, btn) {
     curFuel = val;
-    document.querySelectorAll('#fuel-diesel,#fuel-petrol').forEach(b => b.classList.remove('selected'));
+    document.querySelectorAll('#fuel-diesel,#fuel-petrol,#fuel-paraffin').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
+  }
+
+  function fuelBtnId(fuelType) {
+    return fuelType === 'Petrol' ? 'fuel-petrol' : fuelType === 'Paraffin' ? 'fuel-paraffin' : 'fuel-diesel';
+  }
+
+  function fuelPillClass(fuelType) {
+    return fuelType === 'Petrol' ? 'p-petrol' : fuelType === 'Paraffin' ? 'p-paraffin' : 'p-diesel';
   }
 
   function selTerm(val, btn) {

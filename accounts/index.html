@@ -121,6 +121,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .pill{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;}
 .p-diesel{background:var(--blue-light);color:var(--blue-dark);}
 .p-petrol{background:var(--red-light);color:var(--red-dark);}
+.p-paraffin{background:var(--amber-light);color:var(--amber);}
 .mark-paid-btn{padding:5px 10px;background:var(--green);color:#fff;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
 
 .empty-msg{padding:24px;text-align:center;color:var(--gray-text);font-size:13px;}
@@ -599,7 +600,7 @@ function renderTracker(){
       ? '<span class="tpill" style="background:var(--green-light);color:var(--green-dark);">delivered</span>'
       : '<span class="tpill" style="background:var(--amber-light);color:var(--amber);">pending</span>';
     const fuelPill = s.fuelType
-      ? '<span class="pill '+(s.fuelType==='Petrol'?'p-petrol':'p-diesel')+'">'+s.fuelType+'</span>'
+      ? '<span class="pill '+(s.fuelType==='Petrol'?'p-petrol':s.fuelType==='Paraffin'?'p-paraffin':'p-diesel')+'">'+s.fuelType+'</span>'
       : '<span style="color:var(--gray-text);">&mdash;</span>';
     const priceCell = s.priceTba
       ? '<span style="color:var(--amber);font-weight:700;">TBA</span>'

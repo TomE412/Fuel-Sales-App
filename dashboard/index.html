@@ -124,6 +124,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .pill{display:inline-flex;align-items:center;font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;margin-left:4px;vertical-align:middle;}
 .p-diesel{background:var(--blue-light);color:var(--blue-dark);}
 .p-petrol{background:var(--red-light);color:var(--red-dark);}
+.p-paraffin{background:var(--amber-light);color:var(--amber);}
 .p-del{background:var(--green-light);color:var(--green-dark);}
 .p-new{background:var(--text);color:#fff;}
 
@@ -514,7 +515,7 @@ function renderAll() {
   const toEl = document.getElementById('today-list');
   if (todayDeliveries.length) {
     toEl.innerHTML = todayDeliveries.map(s => {
-      const fp = s.fuelType ? `<span class="pill ${s.fuelType==='Petrol'?'p-petrol':'p-diesel'}">${s.fuelType}</span>` : '';
+      const fp = s.fuelType ? `<span class="pill ${s.fuelType==='Petrol'?'p-petrol':s.fuelType==='Paraffin'?'p-paraffin':'p-diesel'}">${s.fuelType}</span>` : '';
       return `<div class="today-row">
         <div class="today-icon">🚛</div>
         <div style="flex:1;min-width:0;">
@@ -562,7 +563,7 @@ function renderAll() {
       const allDelDates = upcomingSales.map(x => (x.deliveryDate||'').split('T')[0]).filter(Boolean);
       const dateColour = colourForDate(deldate, allDelDates);
       const isNew = !lastKnownIds.has(String(s.id)) && !isFirstLoad;
-      const fp = s.fuelType ? `<span class="pill ${s.fuelType==='Petrol'?'p-petrol':'p-diesel'}">${s.fuelType}</span>` : '';
+      const fp = s.fuelType ? `<span class="pill ${s.fuelType==='Petrol'?'p-petrol':s.fuelType==='Paraffin'?'p-paraffin':'p-diesel'}">${s.fuelType}</span>` : '';
       const dp = s.delivered ? `<span class="pill p-del">✓ Delivered</span>` : '';
       const np = isNew ? `<span class="pill p-new">NEW</span>` : '';
       const ts = fmtTime(s.created_at);
@@ -593,7 +594,7 @@ function renderAll() {
     delEl.innerHTML = deliveredSales.map(s => {
       const dd = (s.deliveryDate||'').split('T')[0];
       const d = dd ? new Date(dd+'T00:00:00') : null;
-      const fp = s.fuelType ? `<span class="pill ${s.fuelType==='Petrol'?'p-petrol':'p-diesel'}">${s.fuelType}</span>` : '';
+      const fp = s.fuelType ? `<span class="pill ${s.fuelType==='Petrol'?'p-petrol':s.fuelType==='Paraffin'?'p-paraffin':'p-diesel'}">${s.fuelType}</span>` : '';
       return `<div class="order-row" style="opacity:0.6;">
         <div class="date-box" style="background:var(--green-light);border-color:var(--green);">
           <div class="date-num" style="color:var(--green-dark);">${d?String(d.getDate()).padStart(2,'0'):'—'}</div>

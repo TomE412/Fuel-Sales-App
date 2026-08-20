@@ -85,6 +85,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .pill{display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:5px;}
 .p-diesel{background:var(--blue-light);color:var(--blue-dark);}
 .p-petrol{background:var(--red-light);color:var(--red-dark);}
+.p-paraffin{background:var(--amber-light);color:var(--amber);}
 .p-done{background:var(--green-light);color:var(--green-dark);}
 .p-place{background:#EFEFED;color:var(--text2);margin-left:0;margin-right:4px;}
 
@@ -741,7 +742,7 @@ async function markDelivered(id){
 
 function row(s,opts){
   const done = s.status==='delivered';
-  const fp = s.fuel_type?'<span class="pill '+(s.fuel_type==='Petrol'?'p-petrol':'p-diesel')+'">'+esc(s.fuel_type)+'</span>':'';
+  const fp = s.fuel_type?'<span class="pill '+(s.fuel_type==='Petrol'?'p-petrol':s.fuel_type==='Paraffin'?'p-paraffin':'p-diesel')+'">'+esc(s.fuel_type)+'</span>':'';
   const dp = done?'<span class="pill p-done">✓</span>':'';
   const btn = (!done && opts.showBtn)
     ? '<button class="mark" onclick="markDelivered('+s.id+')">Mark delivered</button>' : '';
