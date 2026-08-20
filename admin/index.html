@@ -824,6 +824,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
                     <th onclick="AccountsApp.sortTrack('deliveryDate')">Delivery</th>
                     <th onclick="AccountsApp.sortTrack('customer')">Customer</th>
                     <th onclick="AccountsApp.sortTrack('status')">Status</th>
+                    <th onclick="AccountsApp.sortTrack('fuelType')">Product</th>
                     <th onclick="AccountsApp.sortTrack('litres')" style="text-align:right;">Litres</th>
                     <th onclick="AccountsApp.sortTrack('price')" style="text-align:right;">Price/L</th>
                     <th onclick="AccountsApp.sortTrack('value')" style="text-align:right;">Value</th>
@@ -831,7 +832,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
                   </tr>
                 </thead>
                 <tbody id="track-body">
-                  <tr><td colspan="8" class="empty-msg">Loading...</td></tr>
+                  <tr><td colspan="9" class="empty-msg">Loading...</td></tr>
                 </tbody>
               </table>
             </div>
@@ -2837,7 +2838,7 @@ const AccountsApp = (() => {
 
     const body = document.getElementById('track-body');
     if(!rows.length){
-      body.innerHTML = '<tr><td colspan="8" class="empty-msg">'+
+      body.innerHTML = '<tr><td colspan="9" class="empty-msg">'+
         (q?'No sale matches that search.':'No sales to show.')+'</td></tr>';
       return;
     }
@@ -2847,6 +2848,9 @@ const AccountsApp = (() => {
       const statusPill = delivered
         ? '<span class="tpill" style="background:var(--green-light);color:var(--green-dark);">delivered</span>'
         : '<span class="tpill" style="background:var(--amber-light);color:var(--amber);">pending</span>';
+      const fuelPill = s.fuelType
+        ? '<span class="pill '+(s.fuelType==='Petrol'?'p-petrol':'p-diesel')+'">'+s.fuelType+'</span>'
+        : '<span style="color:var(--gray-text);">&mdash;</span>';
       const priceCell = s.priceTba
         ? '<span style="color:var(--amber);font-weight:700;">TBA</span>'
         : '$'+(s.price||0).toFixed(3);
@@ -2866,6 +2870,7 @@ const AccountsApp = (() => {
           '<div style="font-size:10px;color:var(--gray-text);">'+(s.location||'&mdash;')+' &middot; '+(s.rep||'&mdash;')+'</div>'+
           notes+'</td>'+
         '<td>'+statusPill+'</td>'+
+        '<td>'+fuelPill+'</td>'+
         '<td class="mono" style="text-align:right;">'+(s.litres||0).toLocaleString()+'</td>'+
         '<td class="mono" style="text-align:right;">'+priceCell+'</td>'+
         '<td class="mono" style="text-align:right;font-weight:700;">'+valueCell+'</td>'+
