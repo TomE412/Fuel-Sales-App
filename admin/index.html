@@ -4891,6 +4891,7 @@ const SalesApp = (() => {
   let priceTBA = false;
   let editingSaleId = null;
   let editingQueueId = null;
+  let editingOriginalDistanceKm = null;
 
   function toggleTBA(e){
     if(e) e.preventDefault();
@@ -5048,7 +5049,7 @@ const SalesApp = (() => {
     }catch(e){}
     try{
       const { data, error } = await withTimeout(
-        sb.from('place_coords').select('place,latitude,longitude,parent').order('place'),
+        sb.from('place_coords').select('place,latitude,longitude,parent,depot_distance_km').order('place'),
         8000
       );
       if(error) throw error;
@@ -5057,6 +5058,58 @@ const SalesApp = (() => {
     }catch(e){
       console.log('Place list: using cached (offline):', e.message);
     }
+  }
+
+  // ---- DEPOT REFERENCE (for per-sale distance) ----
+  // Same idea as LogisticsApp's DEPOT()/haversine(), duplicated locally
+  // (this IIFE doesn't share scope with LogisticsApp — every section here
+  // is self-contained). Cached to localStorage the same way PLACE_LIST is
+  // so distance still computes while offline once loaded once.
+  let DEPOT_REF = null; // {lat, lng, road_factor}
+
+  function haversine(a,b,c,d){
+    const R=6371,t=x=>x*Math.PI/180;
+    const dLa=t(c-a),dLo=t(d-b);
+    const h=Math.sin(dLa/2)**2+Math.cos(t(a))*Math.cos(t(c))*Math.sin(dLo/2)**2;
+    return 2*R*Math.asin(Math.sqrt(h));
+  }
+
+  async function loadDepotRef(){
+    try{
+      const cached = localStorage.getItem('admin_sales_depot_ref');
+      if(cached) DEPOT_REF = JSON.parse(cached);
+    }catch(e){}
+    try{
+      const [d,s] = await Promise.all([
+        withTimeout(sb.from('depots').select('*').eq('active',true).order('sort_order'), 8000),
+        withTimeout(sb.from('app_settings').select('road_factor,bonus_delivery_depot_key').eq('id',1).maybeSingle(), 8000)
+      ]);
+      if(d.error) throw d.error;
+      const depots = d.data||[];
+      const settings = (s.data)||{};
+      const depot = depots.find(x=>x.depot_key===settings.bonus_delivery_depot_key) || depots[0];
+      if(depot){
+        DEPOT_REF = { lat:+depot.latitude, lng:+depot.longitude, road_factor:+settings.road_factor||1.3 };
+        try{ localStorage.setItem('admin_sales_depot_ref', JSON.stringify(DEPOT_REF)); }catch(e){}
+      }
+    }catch(e){
+      console.log('Depot reference: using cached (offline):', e.message);
+    }
+  }
+
+  // Prefers the real depot-to-town distance (place_coords.depot_distance_km,
+  // loaded from the user's actual driving-distance list — see
+  // supabase/migrations/phase_b2_town_distances.sql) when the place has
+  // one. Falls back to the straight-line x road-factor estimate
+  // LogisticsApp uses elsewhere for "no real routing available" only for
+  // places not covered by that list. Returns null (not 0) when there's
+  // nothing to compute from yet, so callers can tell "unknown" apart from
+  // "genuinely zero km away".
+  function distanceFromDepot(place){
+    if(!place) return null;
+    if(place.depot_distance_km != null) return +place.depot_distance_km;
+    if(!DEPOT_REF || place.latitude==null || place.longitude==null) return null;
+    return haversine(DEPOT_REF.lat, DEPOT_REF.lng, +place.latitude, +place.longitude) * DEPOT_REF.road_factor;
   }
 
   function locAcSearch(q){
@@ -5283,6 +5336,12 @@ const SalesApp = (() => {
   }
 
   function fillSaleForm(sale) {
+    // Editing doesn't re-populate selectedPlace (the form only shows the
+    // location as text), so stash the sale's existing distance_km here —
+    // recordSale() falls back to it when the location isn't re-picked,
+    // instead of silently nulling out a previously-correct value just
+    // because some other field on the sale got edited.
+    editingOriginalDistanceKm = sale.distance_km != null ? +sale.distance_km : null;
     document.getElementById('s-date').value = sale.sale_date || '';
     document.getElementById('s-customer').value = sale.customer || '';
     selectedCustomerId = sale.customer_id || null;
@@ -5400,6 +5459,20 @@ const SalesApp = (() => {
     btn.textContent = 'Recording...';
     setSyncBadge('loading');
 
+    // Distance from depot, straight-line x road-factor estimate — only
+    // computable right now if the picked/typed location already has
+    // coordinates (the common case, an existing PLACE_LIST match). A
+    // brand-new location has none yet; distance_km stays null and gets
+    // filled in by the async geocode step further down once it resolves.
+    // When editing, the form doesn't re-populate selectedPlace, so a
+    // fresh pick wins if there is one, otherwise fall back to whatever
+    // this sale already had rather than wiping it out.
+    const wasNewInsert = !editingSaleId && !editingQueueId;
+    const freshDistanceKm = distanceFromDepot(selectedPlace);
+    const distanceKm = wasNewInsert
+      ? freshDistanceKm
+      : (freshDistanceKm != null ? freshDistanceKm : editingOriginalDistanceKm);
+
     const salePayload = {
       client_uid: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2,10),
       rep_id: currentUser.id,
@@ -5417,7 +5490,8 @@ const SalesApp = (() => {
       payment_due: paymentDue,
       paid: curTerm === 'COD',
       notes,
-      status: 'pending'
+      status: 'pending',
+      distance_km: distanceKm
     };
 
     let savedOnline = false;
@@ -5430,7 +5504,7 @@ const SalesApp = (() => {
             sale_date: date, location, fuel_type: curFuel, litres,
             price_per_litre: priceTBA ? 0 : price, cost_price: costPrice, price_tba: priceTBA,
             delivery_date: delivery || null, payment_term: termLabel, payment_due: paymentDue,
-            paid: curTerm === 'COD', notes
+            paid: curTerm === 'COD', notes, distance_km: distanceKm
           }).eq('id', editingSaleId),
           8000
         );
@@ -5448,7 +5522,7 @@ const SalesApp = (() => {
           ...item.payload, sale_date: date, customer, customer_id: selectedCustomerId, location,
           fuel_type: curFuel, litres, price_per_litre: priceTBA ? 0 : price, cost_price: costPrice,
           price_tba: priceTBA, delivery_date: delivery || null, payment_term: termLabel,
-          payment_due: paymentDue, paid: curTerm === 'COD', notes
+          payment_due: paymentDue, paid: curTerm === 'COD', notes, distance_km: distanceKm
         };
         saveQueue(q);
         savedOnline = false;
@@ -5500,6 +5574,21 @@ const SalesApp = (() => {
               try { localStorage.setItem('admin_sales_place_list', JSON.stringify(PLACE_LIST)); } catch (e) {}
             } catch (e) {
               console.log('Could not save geocoded place (non-blocking):', e.message);
+            }
+            // Fill in the distance we couldn't compute at save time because
+            // this was a brand-new, not-yet-geocoded location. Only for a
+            // fresh insert — client_uid is meaningless for an edit (edits
+            // go through .eq('id', ...) instead) and would just match zero
+            // rows, harmlessly.
+            if (wasNewInsert) {
+              const dkm = distanceFromDepot({ latitude: coords.latitude, longitude: coords.longitude });
+              if (dkm != null) {
+                try {
+                  await sb.from('sales').update({ distance_km: dkm }).eq('client_uid', salePayload.client_uid);
+                } catch (e) {
+                  console.log('Could not backfill distance_km (non-blocking):', e.message);
+                }
+              }
             }
           }
         }
@@ -6051,10 +6140,13 @@ const SalesApp = (() => {
   const LOSS_FLOOR   = 0.005;
   const RETAINER     = 1200;
   const REP_ROLE     = "rep";
-  const DISTANCE_BY_LOCATION = {
-    "Mapinga": 90, "Norton": 66, "Chikurubi Prison Farm": 10, "Arcturus rd": 10,
-    "Mhangura": 210, "Sengwa": 352, "Bindura": 112, "Harare": 10, "Silobela": 0
-  };
+  // Distance now comes from sale.distance_km (real, computed when the
+  // rep recorded the sale — see SalesApp.recordSale()/distanceFromDepot),
+  // not a hardcoded table. Sales recorded before that shipped have
+  // distance_km = null and show 0 here, same as they did before —
+  // deliberately not backfilled (see the driver-bonus/commission-report
+  // plan notes: changing historical figures that may already have been
+  // used to pay commission is a real decision, not a default to assume).
   const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
   const colLetter = n => { let s=""; while(n>0){ s=String.fromCharCode(65+(n-1)%26)+s; n=Math.floor((n-1)/26);} return s; };
@@ -6086,7 +6178,7 @@ const SalesApp = (() => {
     const r0 = HR+1;
     sales.forEach((sale,k) => {
       const r = r0+k;
-      const dist = DISTANCE_BY_LOCATION[sale.location] ?? 0;
+      const dist = sale.distance_km != null ? Math.round(sale.distance_km*10)/10 : 0;
       const g = f => 'IF($D'+r+'="","",'+f+')';
       const I="I"+r, C="C"+r;
       const t1="MIN("+I+",0.01)", t2="MAX(0,MIN("+I+",0.02)-0.01)", t3="MAX(0,"+I+"-0.02)";
@@ -6098,7 +6190,7 @@ const SalesApp = (() => {
       set(r,4, cp === null
         ? {t:"n", z:D4, s:{fill:{fgColor:{rgb:"FFFF00"}}}}
         : {t:"n", v:cp, z:D4, s:{fill:{fgColor:{rgb:"FFFF00"}}}});
-      set(r,5,N(dist));
+      set(r,5,N(dist,"0.0"));
       set(r,6,F("E"+r+"*$B$3*2/C"+r,D4));
       set(r,7,F(g("$D"+r+"+F"+r),D4));
       set(r,8,N(Number(sale.price_per_litre),D4));
@@ -6157,7 +6249,7 @@ const SalesApp = (() => {
     try {
       if (typeof XLSX === "undefined") { alert("Spreadsheet library still loading — check your connection and try again."); return; }
       const { data: sales, error } = await sb.from("sales")
-        .select("sale_date, customer, location, litres, price_per_litre, cost_price, paid, status")
+        .select("sale_date, customer, location, litres, price_per_litre, cost_price, paid, status, distance_km")
         .eq("rep_name", repName).gte("sale_date", start).lt("sale_date", endEx)
         .neq("status", "cancelled").order("sale_date", { ascending: true });
       if (error) throw error;
@@ -6468,6 +6560,7 @@ const SalesApp = (() => {
 
     await loadCustomerList();
     await loadPlaceList();
+    await loadDepotRef();
 
     if (showLock) {
       showLockScreen();
