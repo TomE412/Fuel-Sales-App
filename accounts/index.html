@@ -190,6 +190,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
       <button class="view-tab active" id="vt-tracker" onclick="switchView('tracker')">🧾 Sales tracker</button>
       <button class="view-tab" id="vt-retention" onclick="switchView('retention')">📉 Customer retention</button>
       <button class="view-tab" id="vt-reps" onclick="switchView('reps')">👥 By rep</button>
+      <button class="view-tab" id="vt-forecast" onclick="switchView('forecast')">📅 Weekly forecast</button>
     </div>
 
     <!-- ===== SALES TRACKER VIEW ===== -->
@@ -309,6 +310,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
             <span class="rt-tab" data-b="overdue" onclick="setRetTab('overdue')">Overdue</span>
             <span class="rt-tab" data-b="due_now" onclick="setRetTab('due_now')">Due now</span>
           </div>
+          <input type="text" id="ret-search" placeholder="Search customer..." oninput="renderRetention()"
+            style="margin-left:auto;padding:6px 10px;border:1px solid var(--gray-light);border-radius:7px;font-family:inherit;font-size:12px;width:190px;outline:none;">
         </div>
         <div style="overflow-x:auto;">
           <table>
@@ -431,6 +434,98 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
         <div id="gap-groups"><div class="empty-msg">Loading…</div></div>
       </div>
     </div><!-- /view-reps -->
+
+    <!-- ===== WEEKLY FORECAST VIEW ===== -->
+    <div id="view-forecast" style="display:none;">
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="ph">
+          <div class="ph-title" style="color:var(--red);">📅 Week of</div>
+          <div style="display:flex;gap:8px;align-items:center;margin-left:auto;">
+            <input type="date" id="fc-week-start" onchange="loadForecast()"
+              style="padding:6px 10px;border:1px solid var(--gray-light);border-radius:7px;font-family:inherit;font-size:12px;outline:none;">
+            <button class="gen-btn" id="fc-excel-btn" onclick="downloadForecastExcel()">Download Excel</button>
+          </div>
+        </div>
+        <div style="padding:10px 16px;font-size:11px;color:var(--gray-text);" id="fc-week-label">—</div>
+      </div>
+
+      <div class="summary-grid" style="margin-bottom:14px;">
+        <div class="sum-card">
+          <div class="sum-label">Potential deliveries</div>
+          <div class="sum-value" id="fc-count" style="color:var(--red);">0</div>
+          <div class="sum-sub">customers likely to order this week</div>
+        </div>
+        <div class="sum-card">
+          <div class="sum-label">Confirmed cash</div>
+          <div class="sum-value" id="fc-cash-confirmed" style="color:var(--green-dark);">$0</div>
+          <div class="sum-sub">already on the books, due this week</div>
+        </div>
+        <div class="sum-card">
+          <div class="sum-label">Predicted cash</div>
+          <div class="sum-value" id="fc-cash-predicted" style="color:var(--amber);">$0</div>
+          <div class="sum-sub">estimated COD from predicted orders</div>
+        </div>
+        <div class="sum-card">
+          <div class="sum-label">Fuel to order</div>
+          <div class="sum-value" id="fc-fuel-total" style="color:var(--blue);">0 L</div>
+          <div class="sum-sub" id="fc-fuel-sub">scheduled + predicted</div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="ph"><div class="ph-title" style="color:var(--blue);">⛽ Fuel to order, by product</div></div>
+        <div style="overflow-x:auto;">
+          <table class="tbl">
+            <thead>
+              <tr><th>Product</th><th style="text-align:right;">Scheduled (confirmed)</th><th style="text-align:right;">Predicted (estimate)</th><th style="text-align:right;">Total</th></tr>
+            </thead>
+            <tbody id="fc-fuel-body"><tr><td colspan="4" class="empty-msg">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="ph"><div class="ph-title" style="color:var(--red);">🚛 Busiest routes / locations this week</div></div>
+        <div id="fc-routes-body" style="padding:8px 16px;"><div class="empty-msg">Loading…</div></div>
+      </div>
+
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="ph"><div class="ph-title" style="color:var(--red);">📉 Who's likely to order — day by day</div></div>
+        <div style="overflow-x:auto;">
+          <table class="tbl">
+            <thead>
+              <tr><th>Customer</th><th>Expected day</th><th style="text-align:right;">Est. litres</th><th>Product</th><th>Route / location</th></tr>
+            </thead>
+            <tbody id="fc-deliveries-body"><tr><td colspan="5" class="empty-msg">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="ph"><div class="ph-title" style="color:var(--green-dark);">💵 Confirmed cash — already due this week</div></div>
+        <div style="overflow-x:auto;">
+          <table class="tbl">
+            <thead><tr><th>Customer</th><th>Due date</th><th style="text-align:right;">Amount</th></tr></thead>
+            <tbody id="fc-cash-confirmed-body"><tr><td colspan="3" class="empty-msg">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="ph"><div class="ph-title" style="color:var(--amber);">💰 Predicted cash — from likely COD orders</div></div>
+        <div style="overflow-x:auto;">
+          <table class="tbl">
+            <thead><tr><th>Customer</th><th>Expected day</th><th style="text-align:right;">Est. amount</th></tr></thead>
+            <tbody id="fc-cash-predicted-body"><tr><td colspan="3" class="empty-msg">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <div style="padding:10px 16px;font-size:11px;color:var(--gray-text);border-top:1px solid var(--gray-light);">
+          Estimated from each customer's usual order size and last known price — a guide for supply planning, not a
+          guarantee. Credit-term customers are left out of this figure since their cash wouldn't land this week even
+          if they do order.
+        </div>
+      </div>
+    </div><!-- /view-forecast -->
   </div>
 </div>
 
@@ -875,11 +970,14 @@ function switchView(v){
   document.getElementById('view-tracker').style.display    = v==='tracker'?'block':'none';
   document.getElementById('view-retention').style.display  = v==='retention'?'block':'none';
   document.getElementById('view-reps').style.display       = v==='reps'?'block':'none';
+  document.getElementById('view-forecast').style.display   = v==='forecast'?'block':'none';
   document.getElementById('vt-tracker').classList.toggle('active', v==='tracker');
   document.getElementById('vt-retention').classList.toggle('active', v==='retention');
   document.getElementById('vt-reps').classList.toggle('active', v==='reps');
+  document.getElementById('vt-forecast').classList.toggle('active', v==='forecast');
   if(v==='retention' && !retentionLoaded){ loadRetention(); loadMonthly(); loadBook(); }
   if(v==='reps' && !gapsLoaded){ loadGaps(); }
+  if(v==='forecast' && !forecastLoaded){ loadForecast(); }
 }
 
 // ===== CUSTOMER EDITOR (rep assignment + details) =====
@@ -1158,7 +1256,9 @@ function fmtD(d){
 }
 
 function renderRetention(){
+  const q = (document.getElementById('ret-search')?.value||'').toLowerCase().trim();
   let rows = (RETENTION[retTab]||[]).slice();
+  if(q) rows = rows.filter(r=>(r.customer||'').toLowerCase().includes(q));
   const k=retSort.key, dir=retSort.dir;
   rows.sort((a,b)=>{
     let av=a[k], bv=b[k];
@@ -1167,7 +1267,7 @@ function renderRetention(){
   });
   const body=document.getElementById('retention-body');
   if(!rows.length){
-    const msg = retTab==='gone_quiet' ? 'No customers have gone quiet — good sign.' : 'Nobody in this bucket right now.';
+    const msg = q ? 'No customer matches that search.' : (retTab==='gone_quiet' ? 'No customers have gone quiet — good sign.' : 'Nobody in this bucket right now.');
     body.innerHTML='<tr><td colspan="7" class="empty-msg">'+msg+'</td></tr>';
     return;
   }
@@ -1452,6 +1552,289 @@ async function confirmSale(customer){
     await loadRetention();
     if(typeof loadBook==='function') await loadBook();
   }catch(e){ alert('Could not confirm sale: '+(e.message||e)); }
+}
+
+// ===== WEEKLY FORECAST =====
+// Projects the existing Ripeness meter (app_customer_retention) forward
+// across a 7-day window instead of just showing today's snapshot, and
+// combines it with sales already on the books to give a Monday-morning
+// picture: who's likely to order, what cash is coming in, how much fuel
+// to have ready, and which route/location will be busiest.
+let forecastLoaded = false;
+let FORECAST = { potential:[], confirmedCash:[], predictedCash:[], confirmedCashTotal:0, predictedCashTotal:0, scheduledFuel:{}, predictedFuel:{}, routeList:[], weekStart:'', weekEnd:'' };
+
+function fcMonday(base){
+  const d = base ? new Date(base+'T00:00:00') : new Date();
+  d.setHours(0,0,0,0);
+  const day = d.getDay(); // 0=Sun..6=Sat
+  const back = day===0 ? 6 : day-1; // days since the most recent Monday
+  d.setDate(d.getDate()-back);
+  return d;
+}
+function fcISO(d){ return d.toISOString().split('T')[0]; }
+function fcAddDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function fcDayName(d){ return DAYS[d.getDay()].slice(0,3); }
+
+async function loadForecast(){
+  const input = document.getElementById('fc-week-start');
+  if(!input.value) input.value = fcISO(fcMonday());
+  const weekStart = fcMonday(input.value);
+  const weekEnd = fcAddDays(weekStart,6);
+  const wsISO = fcISO(weekStart), weISO = fcISO(weekEnd);
+  document.getElementById('fc-week-label').textContent =
+    'Forecasting '+fmtDate(wsISO)+' – '+fmtDate(weISO)+'. Re-open this tab each Monday for the latest picture.';
+
+  const loading = (id,cols) => { const el=document.getElementById(id); if(el) el.innerHTML='<tr><td colspan="'+cols+'" class="empty-msg">Loading…</td></tr>'; };
+  loading('fc-fuel-body',4); loading('fc-deliveries-body',5);
+  loading('fc-cash-confirmed-body',3); loading('fc-cash-predicted-body',3);
+  document.getElementById('fc-routes-body').innerHTML='<div class="empty-msg">Loading…</div>';
+
+  try{
+    const from=new Date(); from.setDate(from.getDate()-400);
+    const [retRes,salesRes,custRes,boardRes]=await Promise.all([
+      sb.from('app_customer_retention')
+        .select('customer,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,status'),
+      sb.from('sales')
+        .select('customer,customer_id,location,litres,fuel_type,sale_date,delivery_date,payment_due,payment_term,price_per_litre,price_tba,paid,status')
+        .gte('sale_date',from.toISOString().split('T')[0])
+        .neq('status','cancelled')
+        .order('sale_date',{ascending:false}),
+      sb.from('customer_locations').select('id,invoice_name'),
+      sb.from('app_route_board').select('place,route_key,route_name,customer_id')
+    ]);
+    if(retRes.error) throw retRes.error;
+    if(salesRes.error) throw salesRes.error;
+
+    const retention=retRes.data||[];
+    const sales=salesRes.data||[];
+    const custNames=custRes.data||[];
+    const board=boardRes.data||[];
+
+    // ---- Place/route lookups, ported from ops/index.html's "Ripe to
+    // pair" (renderChase()) — the only place->route mapping in the app.
+    const idToName={};
+    custNames.forEach(c=>{ idToName[c.id]=(c.invoice_name||'').trim().toLowerCase(); });
+    const locBy={};          // customer name (lower) -> place
+    const routeOfPlace={};   // place (lower) -> {key, name}
+    board.forEach(bd=>{
+      if(!bd.place) return;
+      const pl=bd.place.trim().toLowerCase();
+      if(bd.route_key && !routeOfPlace[pl]) routeOfPlace[pl]={key:bd.route_key,name:bd.route_name};
+      if(bd.customer_id!=null){
+        const nm=idToName[bd.customer_id];
+        if(nm && !locBy[nm]) locBy[nm]=bd.place;
+      }
+    });
+    const placeFor=(name)=>locBy[(name||'').trim().toLowerCase()]||null;
+    const routeLabelFor=(name,fallbackLocation)=>{
+      const place=placeFor(name);
+      if(place){
+        const rt=routeOfPlace[place.trim().toLowerCase()];
+        if(rt) return rt.name;
+        return place;
+      }
+      return fallbackLocation || 'Unmapped / other';
+    };
+
+    // ---- Most recent sale per customer: a proxy for fuel type/payment
+    // term/price on a NOT-YET-HAPPENED predicted sale. `sales` is already
+    // sorted newest first, so the first hit per customer wins.
+    const recentByCustomer={};
+    sales.forEach(s=>{
+      const key=(s.customer||'').trim().toLowerCase();
+      if(key && !recentByCustomer[key]) recentByCustomer[key]=s;
+    });
+
+    // ---- Ripeness projection: anchor to today's known ripeness_pct and
+    // project forward at the implied daily rate (avg_cycle_days days =
+    // 100%), rather than guessing the view's exact backend formula.
+    // "Potential delivery" = projected ripeness reaches 85%+ (the app's
+    // own amber/red cutoff, confirmed with user) at some point in the
+    // selected week.
+    const todayMid=new Date(); todayMid.setHours(0,0,0,0);
+    const potential=[];
+    retention.forEach(r=>{
+      if(!r.avg_cycle_days || r.ripeness_pct==null) return; // not enough history to predict
+      const ratePerDay=100/r.avg_cycle_days;
+      let expected=null;
+      for(let n=0;n<7;n++){
+        const day=fcAddDays(weekStart,n);
+        const daysFromToday=Math.round((day-todayMid)/86400000);
+        const projected=r.ripeness_pct + daysFromToday*ratePerDay;
+        if(projected>=85){ expected=day; break; }
+      }
+      if(!expected) return;
+      const proxy=recentByCustomer[(r.customer||'').trim().toLowerCase()]||null;
+      potential.push({
+        customer:r.customer,
+        expectedDate:fcISO(expected),
+        expectedDay:fcDayName(expected),
+        litres:r.avg_litres||0,
+        fuelType:(proxy&&proxy.fuel_type)||'Diesel',
+        route:routeLabelFor(r.customer, proxy&&proxy.location),
+        paymentTerm: proxy ? (proxy.payment_term||'') : '',
+        price: (proxy && !proxy.price_tba) ? (parseFloat(proxy.price_per_litre)||0) : 0
+      });
+    });
+    potential.sort((a,b)=> a.expectedDate<b.expectedDate?-1:a.expectedDate>b.expectedDate?1:(a.customer||'').localeCompare(b.customer||''));
+
+    // ---- Cash: confirmed (already recorded, due this week) ----
+    const confirmedCash = sales
+      .filter(s=> !s.paid && !s.price_tba && s.payment_due && s.payment_due.split('T')[0]>=wsISO && s.payment_due.split('T')[0]<=weISO)
+      .map(s=>({ customer:s.customer, due:s.payment_due.split('T')[0], amount:(parseFloat(s.litres)||0)*(parseFloat(s.price_per_litre)||0) }))
+      .sort((a,b)=> a.due<b.due?-1:a.due>b.due?1:0);
+    const confirmedCashTotal = confirmedCash.reduce((a,c)=>a+c.amount,0);
+
+    // ---- Cash: predicted (COD-only — credit-term wouldn't land this week) ----
+    const predictedCash = potential
+      .filter(p=> (p.paymentTerm||'').toUpperCase()==='COD' && p.price>0)
+      .map(p=>({ customer:p.customer, expectedDay:p.expectedDay, expectedDate:p.expectedDate, amount:p.litres*p.price }));
+    const predictedCashTotal = predictedCash.reduce((a,c)=>a+c.amount,0);
+
+    // ---- Fuel: scheduled (already-confirmed deliveries this week) ----
+    const scheduledFuel={};
+    sales.forEach(s=>{
+      const dd=(s.delivery_date||'').split('T')[0];
+      if(dd && dd>=wsISO && dd<=weISO){
+        const f=s.fuel_type||'Diesel';
+        scheduledFuel[f]=(scheduledFuel[f]||0)+(parseFloat(s.litres)||0);
+      }
+    });
+    // ---- Fuel: predicted (from the potential-delivery list) ----
+    const predictedFuel={};
+    potential.forEach(p=>{
+      const f=p.fuelType||'Diesel';
+      predictedFuel[f]=(predictedFuel[f]||0)+(p.litres||0);
+    });
+
+    // ---- Busiest routes/locations: scheduled sales this week + predicted ----
+    const routeGroups={}; // label -> {litres, customers:Set}
+    const bump=(label,litres,customer)=>{
+      if(!routeGroups[label]) routeGroups[label]={litres:0,customers:new Set()};
+      routeGroups[label].litres += litres;
+      if(customer) routeGroups[label].customers.add(customer);
+    };
+    sales.forEach(s=>{
+      const dd=(s.delivery_date||'').split('T')[0];
+      if(dd && dd>=wsISO && dd<=weISO) bump(routeLabelFor(s.customer,s.location), parseFloat(s.litres)||0, s.customer);
+    });
+    potential.forEach(p=>{ bump(p.route, p.litres, p.customer); });
+    const routeList = Object.keys(routeGroups)
+      .map(label=>({ label, litres:routeGroups[label].litres, customers:[...routeGroups[label].customers] }))
+      .sort((a,b)=>b.litres-a.litres);
+
+    FORECAST = { potential, confirmedCash, predictedCash, confirmedCashTotal, predictedCashTotal, scheduledFuel, predictedFuel, routeList, weekStart:wsISO, weekEnd:weISO };
+    forecastLoaded = true;
+    renderForecast();
+  }catch(e){
+    document.getElementById('fc-deliveries-body').innerHTML =
+      '<tr><td colspan="5" class="empty-msg">Forecast unavailable ('+(e.message||e)+')</td></tr>';
+    document.getElementById('fc-fuel-body').innerHTML='<tr><td colspan="4" class="empty-msg">—</td></tr>';
+    document.getElementById('fc-cash-confirmed-body').innerHTML='<tr><td colspan="3" class="empty-msg">—</td></tr>';
+    document.getElementById('fc-cash-predicted-body').innerHTML='<tr><td colspan="3" class="empty-msg">—</td></tr>';
+    document.getElementById('fc-routes-body').innerHTML='<div class="empty-msg">—</div>';
+  }
+}
+
+function renderForecast(){
+  const F=FORECAST;
+  document.getElementById('fc-count').textContent = F.potential.length;
+  document.getElementById('fc-cash-confirmed').textContent = moneyShort(F.confirmedCashTotal);
+  document.getElementById('fc-cash-predicted').textContent = moneyShort(F.predictedCashTotal);
+
+  const fuelTypes = [...new Set([...Object.keys(F.scheduledFuel), ...Object.keys(F.predictedFuel)])].sort();
+  let fuelTotal=0;
+  document.getElementById('fc-fuel-body').innerHTML = fuelTypes.length
+    ? fuelTypes.map(f=>{
+        const sch=F.scheduledFuel[f]||0, pred=F.predictedFuel[f]||0;
+        fuelTotal += sch+pred;
+        return '<tr><td style="font-weight:700;">'+f+'</td>'+
+          '<td class="mono" style="text-align:right;">'+Math.round(sch).toLocaleString()+' L</td>'+
+          '<td class="mono" style="text-align:right;">'+Math.round(pred).toLocaleString()+' L</td>'+
+          '<td class="mono" style="text-align:right;font-weight:700;">'+Math.round(sch+pred).toLocaleString()+' L</td></tr>';
+      }).join('')
+    : '<tr><td colspan="4" class="empty-msg">Nothing scheduled or predicted this week.</td></tr>';
+  document.getElementById('fc-fuel-total').textContent = Math.round(fuelTotal).toLocaleString()+' L';
+
+  const routes = F.routeList.slice(0,5);
+  document.getElementById('fc-routes-body').innerHTML = routes.length
+    ? routes.map((r,i)=>
+        '<div style="padding:10px 0;'+(i<routes.length-1?'border-bottom:1px solid var(--gray-light);':'')+'">'+
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;">'+
+            '<div style="font-weight:700;">'+(i===0?'\u{1F947} ':'')+r.label+'</div>'+
+            '<div class="mono" style="font-weight:700;color:var(--blue);">'+Math.round(r.litres).toLocaleString()+' L</div>'+
+          '</div>'+
+          '<div style="font-size:11px;color:var(--gray-text);margin-top:3px;">'+r.customers.join(', ')+'</div>'+
+        '</div>'
+      ).join('')
+    : '<div class="empty-msg">No scheduled or predicted deliveries this week.</div>';
+
+  document.getElementById('fc-deliveries-body').innerHTML = F.potential.length
+    ? F.potential.map(p=>
+        '<tr><td style="font-weight:700;">'+p.customer+'</td>'+
+        '<td>'+p.expectedDay+' <span style="color:var(--gray-text);font-size:10px;">'+fmtDate(p.expectedDate)+'</span></td>'+
+        '<td class="mono" style="text-align:right;">'+Math.round(p.litres).toLocaleString()+' L</td>'+
+        '<td><span class="pill '+(p.fuelType==='Petrol'?'p-petrol':p.fuelType==='Paraffin'?'p-paraffin':'p-diesel')+'">'+p.fuelType+'</span></td>'+
+        '<td>'+p.route+'</td></tr>'
+      ).join('')
+    : '<tr><td colspan="5" class="empty-msg">No customers projected to be ripe this week.</td></tr>';
+
+  document.getElementById('fc-cash-confirmed-body').innerHTML = F.confirmedCash.length
+    ? F.confirmedCash.map(c=>
+        '<tr><td style="font-weight:700;">'+c.customer+'</td><td class="mono">'+fmtDate(c.due)+'</td>'+
+        '<td class="mono" style="text-align:right;font-weight:700;">'+money(c.amount)+'</td></tr>'
+      ).join('') + '<tr><td style="font-weight:700;">TOTAL</td><td></td><td class="mono" style="text-align:right;font-weight:700;">'+money(F.confirmedCashTotal)+'</td></tr>'
+    : '<tr><td colspan="3" class="empty-msg">Nothing already on the books due this week.</td></tr>';
+
+  document.getElementById('fc-cash-predicted-body').innerHTML = F.predictedCash.length
+    ? F.predictedCash.map(c=>
+        '<tr><td style="font-weight:700;">'+c.customer+'</td><td>'+c.expectedDay+'</td>'+
+        '<td class="mono" style="text-align:right;font-weight:700;">'+money(c.amount)+'</td></tr>'
+      ).join('') + '<tr><td style="font-weight:700;">TOTAL</td><td></td><td class="mono" style="text-align:right;font-weight:700;">'+money(F.predictedCashTotal)+'</td></tr>'
+    : '<tr><td colspan="3" class="empty-msg">No predicted COD orders this week.</td></tr>';
+}
+
+function downloadForecastExcel(){
+  const F=FORECAST;
+  if(!forecastLoaded){ alert('Forecast is still loading — try again in a moment.'); return; }
+  const wb=XLSX.utils.book_new();
+
+  const summaryRows=[
+    ['SKELSEE TRADING — WEEKLY FORECAST'],
+    ['Week of '+fmtDate(F.weekStart)+' – '+fmtDate(F.weekEnd)],
+    ['Generated: '+new Date().toLocaleString()],
+    [],
+    ['Potential deliveries', F.potential.length],
+    ['Confirmed cash due this week', F.confirmedCashTotal],
+    ['Predicted cash (COD)', F.predictedCashTotal],
+    [],
+    ['Fuel to order','Scheduled (L)','Predicted (L)','Total (L)']
+  ];
+  [...new Set([...Object.keys(F.scheduledFuel),...Object.keys(F.predictedFuel)])].sort().forEach(f=>{
+    const sch=F.scheduledFuel[f]||0, pred=F.predictedFuel[f]||0;
+    summaryRows.push([f, Math.round(sch), Math.round(pred), Math.round(sch+pred)]);
+  });
+  summaryRows.push([]);
+  summaryRows.push(['Busiest routes/locations','Litres','Customers']);
+  F.routeList.forEach(r=> summaryRows.push([r.label, Math.round(r.litres), r.customers.join(', ')]));
+  const wsSummary=XLSX.utils.aoa_to_sheet(summaryRows);
+  wsSummary['!cols']=[{wch:28},{wch:14},{wch:14},{wch:40}];
+  XLSX.utils.book_append_sheet(wb,wsSummary,'Summary');
+
+  const delivRows=[['Customer','Expected day','Expected date','Est. litres','Product','Route / location']];
+  F.potential.forEach(p=> delivRows.push([p.customer,p.expectedDay,p.expectedDate,Math.round(p.litres),p.fuelType,p.route]));
+  const wsDeliv=XLSX.utils.aoa_to_sheet(delivRows);
+  wsDeliv['!cols']=[{wch:24},{wch:12},{wch:14},{wch:12},{wch:10},{wch:22}];
+  XLSX.utils.book_append_sheet(wb,wsDeliv,'Potential Deliveries');
+
+  const cashRows=[['Type','Customer','Date','Amount']];
+  F.confirmedCash.forEach(c=> cashRows.push(['Confirmed',c.customer,c.due,c.amount]));
+  F.predictedCash.forEach(c=> cashRows.push(['Predicted (COD)',c.customer,c.expectedDate,c.amount]));
+  const wsCash=XLSX.utils.aoa_to_sheet(cashRows);
+  wsCash['!cols']=[{wch:16},{wch:24},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,wsCash,'Cash Forecast');
+
+  XLSX.writeFile(wb,'Weekly_Forecast_'+F.weekStart+'.xlsx');
 }
 </script>
 
