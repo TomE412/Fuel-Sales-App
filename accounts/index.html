@@ -1659,6 +1659,7 @@ async function loadForecast(){
     const todayMid=new Date(); todayMid.setHours(0,0,0,0);
     const potential=[];
     retention.forEach(r=>{
+      if(r.status==='gone_quiet') return; // churned, not a recurring customer — not a real prediction
       if(!r.avg_cycle_days || r.ripeness_pct==null) return; // not enough history to predict
       const ratePerDay=100/r.avg_cycle_days;
       let expected=null;
