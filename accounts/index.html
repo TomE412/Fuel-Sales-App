@@ -449,6 +449,16 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
         <div style="padding:10px 16px;font-size:11px;color:var(--gray-text);" id="fc-week-label">—</div>
       </div>
 
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="ph"><div class="ph-title" style="color:var(--red);">📈 Forecast vs. actual — litres per week</div></div>
+        <div id="fc-history-chart" style="padding:16px;"><div class="empty-msg">Loading…</div></div>
+        <div style="padding:10px 16px;font-size:11px;color:var(--gray-text);border-top:1px solid var(--gray-light);">
+          Each point is saved the first time that week's forecast is viewed, then never changed — so this is an honest
+          record of what was predicted vs. what actually happened. Builds up one point per week; there's no way to
+          show history from before this was added.
+        </div>
+      </div>
+
       <div class="summary-grid" style="margin-bottom:14px;">
         <div class="sum-card">
           <div class="sum-label">Potential deliveries</div>
@@ -1738,6 +1748,11 @@ async function loadForecast(){
     FORECAST = { potential, confirmedCash, predictedCash, confirmedCashTotal, predictedCashTotal, scheduledFuel, predictedFuel, routeList, weekStart:wsISO, weekEnd:weISO };
     forecastLoaded = true;
     renderForecast();
+
+    const scheduledTotal = Object.values(scheduledFuel).reduce((a,v)=>a+v,0);
+    const predictedTotal = Object.values(predictedFuel).reduce((a,v)=>a+v,0);
+    await ensureForecastSnapshot(wsISO, scheduledTotal, predictedTotal, potential.length);
+    loadForecastHistory();
   }catch(e){
     document.getElementById('fc-deliveries-body').innerHTML =
       '<tr><td colspan="5" class="empty-msg">Forecast unavailable ('+(e.message||e)+')</td></tr>';
@@ -1847,6 +1862,97 @@ function downloadForecastExcel(){
   XLSX.utils.book_append_sheet(wb,wsCash,'Cash Forecast');
 
   XLSX.writeFile(wb,'Weekly_Forecast_'+F.weekStart+'.xlsx');
+}
+
+// Saves this week's forecast the FIRST time it's viewed, never overwrites
+// it later — the whole point is a fixed record of "what we predicted" to
+// compare against reality afterward. Non-blocking: a failed save (e.g.
+// the table's RLS policy isn't set up yet) shouldn't break the forecast
+// itself, just means that week's history point is missing.
+async function ensureForecastSnapshot(weekStartISO, scheduledLitres, predictedLitres, potentialCount){
+  try{
+    const {data:existing} = await sb.from('weekly_forecast_snapshots')
+      .select('id').eq('week_start', weekStartISO).maybeSingle();
+    if(existing) return;
+    await sb.from('weekly_forecast_snapshots').insert({
+      week_start: weekStartISO,
+      scheduled_litres: scheduledLitres,
+      predicted_litres: predictedLitres,
+      potential_count: potentialCount
+    });
+  }catch(e){
+    console.log('Could not save forecast snapshot (non-blocking):', e.message);
+  }
+}
+
+async function loadForecastHistory(){
+  const el = document.getElementById('fc-history-chart');
+  if(!el) return;
+  el.innerHTML = '<div class="empty-msg">Loading…</div>';
+  try{
+    const {data:snaps, error} = await sb.from('weekly_forecast_snapshots')
+      .select('week_start,scheduled_litres,predicted_litres')
+      .order('week_start',{ascending:true});
+    if(error) throw error;
+    if(!snaps || !snaps.length){
+      el.innerHTML = '<div class="empty-msg">No forecast history yet — this builds up automatically each Monday you review the forecast.</div>';
+      return;
+    }
+    const recent = snaps.slice(-26); // ~6 months, plenty of headroom for a while
+    const earliest = recent[0].week_start;
+    const {data:actualSales} = await sb.from('sales')
+      .select('litres,delivery_date,status')
+      .gte('delivery_date', earliest)
+      .neq('status','cancelled');
+    const rows = recent.map(s=>{
+      const wsD = s.week_start;
+      const weD = fcISO(fcAddDays(new Date(wsD+'T00:00:00'),6));
+      const actual = (actualSales||[]).reduce((sum,x)=>{
+        const dd=(x.delivery_date||'').split('T')[0];
+        return (dd && dd>=wsD && dd<=weD) ? sum+(parseFloat(x.litres)||0) : sum;
+      },0);
+      return { weekStart: wsD, forecast:(s.scheduled_litres||0)+(s.predicted_litres||0), actual };
+    });
+    renderForecastChart(rows);
+  }catch(e){
+    el.innerHTML = '<div class="empty-msg">Forecast history unavailable ('+(e.message||e)+')</div>';
+  }
+}
+
+function renderForecastChart(rows){
+  const el = document.getElementById('fc-history-chart');
+  if(!rows.length){ el.innerHTML='<div class="empty-msg">No forecast history yet.</div>'; return; }
+  const W=700,H=220,padL=50,padR=16,padT=16,padB=34;
+  const chartW=W-padL-padR, chartH=H-padT-padB;
+  const maxV=Math.max(...rows.map(r=>Math.max(r.forecast,r.actual)),1);
+  const x=i=>padL+(rows.length===1?chartW/2:i*(chartW/(rows.length-1)));
+  const y=v=>padT+chartH-(v/maxV)*chartH;
+  const pathFor=key=>rows.map((r,i)=>(i===0?'M':'L')+x(i).toFixed(1)+','+y(r[key]).toFixed(1)).join(' ');
+  const dotsFor=(key,color)=>rows.map((r,i)=>
+    '<circle cx="'+x(i).toFixed(1)+'" cy="'+y(r[key]).toFixed(1)+'" r="3.5" fill="'+color+'"><title>'+fmtDate(r.weekStart)+': '+Math.round(r[key]).toLocaleString()+' L</title></circle>'
+  ).join('');
+  const gridLines=[0,0.25,0.5,0.75,1].map(f=>{
+    const yy=padT+chartH-f*chartH;
+    return '<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="var(--gray-light)" stroke-width="1"/>'+
+      '<text x="'+(padL-8)+'" y="'+(yy+3)+'" font-size="9" fill="var(--gray-text)" text-anchor="end">'+Math.round(maxV*f).toLocaleString()+'</text>';
+  }).join('');
+  const xLabels=rows.map((r,i)=>{
+    if(rows.length>10 && i%Math.ceil(rows.length/10)!==0 && i!==rows.length-1) return '';
+    const d=new Date(r.weekStart+'T00:00:00');
+    return '<text x="'+x(i).toFixed(1)+'" y="'+(H-10)+'" font-size="9" fill="var(--gray-text)" text-anchor="middle">'+d.getDate()+'/'+(d.getMonth()+1)+'</text>';
+  }).join('');
+  el.innerHTML =
+    '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:220px;">'+
+      gridLines+
+      '<path d="'+pathFor('forecast')+'" fill="none" stroke="var(--amber)" stroke-width="2"/>'+
+      '<path d="'+pathFor('actual')+'" fill="none" stroke="var(--green-dark)" stroke-width="2"/>'+
+      dotsFor('forecast','var(--amber)')+dotsFor('actual','var(--green-dark)')+
+      xLabels+
+    '</svg>'+
+    '<div style="display:flex;gap:16px;justify-content:center;margin-top:6px;font-size:11px;">'+
+      '<span style="color:var(--amber);font-weight:700;">● Forecasted</span>'+
+      '<span style="color:var(--green-dark);font-weight:700;">● Actual</span>'+
+    '</div>';
 }
 </script>
 

@@ -76,8 +76,12 @@ test.describe('admin app — Accounts section', () => {
 
   test('Weekly forecast tab loads with no console errors', async ({ page }) => {
     const errors = [];
+    let missingSnapshotTable404s = 0;
     page.on('pageerror', (err) => errors.push(err.message));
     page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+    page.on('response', (res) => {
+      if (res.status() === 404 && res.url().includes('weekly_forecast_snapshots')) missingSnapshotTable404s++;
+    });
 
     await page.click('#vt-forecast');
     await expect(page.locator('#view-forecast')).toBeVisible();
@@ -93,8 +97,27 @@ test.describe('admin app — Accounts section', () => {
     await expect(page.locator('#fc-fuel-body')).not.toContainText('Loading…');
     await expect(page.locator('#fc-cash-confirmed-body')).not.toContainText('Loading…');
     await expect(page.locator('#fc-cash-predicted-body')).not.toContainText('Loading…');
+    // Forecast-vs-actual chart: resolves to either the empty state (no
+    // history yet) or a rendered SVG once at least one week is saved —
+    // not asserting which, since that depends on whether the
+    // weekly_forecast_snapshots migration has been run and how many
+    // weeks have accumulated.
+    await expect(page.locator('#fc-history-chart')).not.toContainText('Loading…', { timeout: 15000 });
 
-    expect(errors, `console/page errors:\n${errors.join('\n')}`).toEqual([]);
+    // weekly_forecast_snapshots won't exist until the phase_b7 migration
+    // is run — until then, its 404s surface as generic browser "Failed to
+    // load resource" console entries (the app itself handles the missing
+    // table gracefully, no thrown exception). Allow only exactly as many
+    // generic resource-load errors as confirmed 404s against that one
+    // table, so any other unexpected error — including a 404 on some
+    // other resource — still fails this test. Once the migration is run,
+    // this collapses back to "zero errors allowed" on its own.
+    const genericLoadErrors = errors.filter(e => e.includes('Failed to load resource'));
+    const otherErrors = errors.filter(e => !e.includes('Failed to load resource'));
+    expect(otherErrors, `console/page errors:\n${otherErrors.join('\n')}`).toEqual([]);
+    expect(genericLoadErrors.length,
+      `expected at most ${missingSnapshotTable404s} generic resource-load errors (weekly_forecast_snapshots not migrated yet), got ${genericLoadErrors.length}:\n${genericLoadErrors.join('\n')}`
+    ).toBeLessThanOrEqual(missingSnapshotTable404s);
   });
 
   test('view tabs switch which view is displayed', async ({ page }) => {
