@@ -67,6 +67,9 @@ test.describe('standalone Accounts app', () => {
     // weekly_forecast_snapshots migration has been run and how many
     // weeks have accumulated.
     await expect(page.locator('#fc-history-chart')).not.toContainText('Loading…', { timeout: 15000 });
+    // "This month so far" roll-up: same underlying data, resolves at the
+    // same time as the chart above.
+    await expect(page.locator('#fc-month-body')).not.toContainText('Loading…', { timeout: 15000 });
 
     // weekly_forecast_snapshots won't exist until the phase_b7 migration
     // is run — until then, its 404s surface as generic browser "Failed to

@@ -1040,6 +1040,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
           </div>
 
           <div class="panel" style="margin-bottom:14px;">
+            <div class="ph"><div class="ph-title" style="color:var(--red);">📅 This month so far</div></div>
+            <div id="fc-month-body" style="padding:16px;"><div class="empty-msg">Loading…</div></div>
+            <div style="padding:10px 16px;font-size:11px;color:var(--gray-text);border-top:1px solid var(--gray-light);">
+              The current week is shown for context only, not scored as a finished result — comparing a full week's
+              target against a partly-finished actual would always look artificially behind.
+            </div>
+          </div>
+
+          <div class="panel" style="margin-bottom:14px;">
             <div class="ph"><div class="ph-title" style="color:var(--red);">📈 Forecast vs. actual — litres per week</div></div>
             <div id="fc-history-chart" style="padding:16px;"><div class="empty-msg">Loading…</div></div>
             <div style="padding:10px 16px;font-size:11px;color:var(--gray-text);border-top:1px solid var(--gray-light);">
@@ -4022,36 +4031,149 @@ const AccountsApp = (() => {
 
   async function loadForecastHistory(){
     const el = document.getElementById('fc-history-chart');
+    const monthEl = document.getElementById('fc-month-body');
     if(!el) return;
     el.innerHTML = '<div class="empty-msg">Loading…</div>';
+    if(monthEl) monthEl.innerHTML = '<div class="empty-msg">Loading…</div>';
     try{
       const {data:snaps, error} = await sb.from('weekly_forecast_snapshots')
         .select('week_start,scheduled_litres,predicted_litres')
         .order('week_start',{ascending:true});
       if(error) throw error;
       if(!snaps || !snaps.length){
-        el.innerHTML = '<div class="empty-msg">No forecast history yet — this builds up automatically each Monday you review the forecast.</div>';
+        const msg = '<div class="empty-msg">No forecast history yet — this builds up automatically each Monday you review the forecast.</div>';
+        el.innerHTML = msg;
+        if(monthEl) monthEl.innerHTML = msg;
         return;
       }
-      const recent = snaps.slice(-26);
-      const earliest = recent[0].week_start;
+      const earliest = snaps[0].week_start;
       const {data:actualSales} = await sb.from('sales')
         .select('litres,delivery_date,status')
         .gte('delivery_date', earliest)
         .neq('status','cancelled');
-      const rows = recent.map(s=>{
+      const allRows = snaps.map(s=>{
         const wsD = s.week_start;
         const weD = fcISO(fcAddDays(new Date(wsD+'T00:00:00'),6));
         const actual = (actualSales||[]).reduce((sum,x)=>{
           const dd=(x.delivery_date||'').split('T')[0];
           return (dd && dd>=wsD && dd<=weD) ? sum+(parseFloat(x.litres)||0) : sum;
         },0);
-        return { weekStart: wsD, forecast:(s.scheduled_litres||0)+(s.predicted_litres||0), actual };
+        return { weekStart: wsD, weekEnd: weD, forecast:(s.scheduled_litres||0)+(s.predicted_litres||0), actual };
       });
-      renderForecastChart(rows);
+      renderForecastChart(allRows.slice(-26));
+
+      const todayISOStr = fcISO(new Date());
+      const monthPrefix = todayISOStr.slice(0,7);
+      const monthRows = allRows.filter(r=>r.weekStart.slice(0,7)===monthPrefix);
+      if(monthEl) renderMonthChart(monthRows);
     }catch(e){
-      el.innerHTML = '<div class="empty-msg">Forecast history unavailable ('+(e.message||e)+')</div>';
+      const msg = '<div class="empty-msg">Forecast history unavailable ('+(e.message||e)+')</div>';
+      el.innerHTML = msg;
+      if(monthEl) monthEl.innerHTML = msg;
     }
+  }
+
+  // Rolls the same weekly snapshots up to "this calendar month" — completed
+  // weeks (fair, finished comparison) shown separately from the current
+  // week (in-progress, context only, not scored as behind/ahead since it
+  // isn't over). Same underlying data as renderForecastChart(), just
+  // grouped differently.
+  function renderMonthChart(monthRows){
+    const el = document.getElementById('fc-month-body');
+    const monthLabel = MONTHS[new Date().getMonth()]+' '+new Date().getFullYear();
+    if(!monthRows.length){
+      el.innerHTML = '<div class="empty-msg">No weeks recorded yet for '+monthLabel+' — this fills in automatically as you review each week\'s forecast.</div>';
+      return;
+    }
+    const todayISOStr = fcISO(new Date());
+    const rows = monthRows.map(r=>({
+      ...r,
+      status: r.weekEnd < todayISOStr ? 'done' : (r.weekStart > todayISOStr ? 'upcoming' : 'inprogress')
+    }));
+    const done = rows.filter(r=>r.status==='done');
+    const current = rows.find(r=>r.status==='inprogress');
+
+    const doneForecast = done.reduce((a,r)=>a+r.forecast,0);
+    const doneActual = done.reduce((a,r)=>a+r.actual,0);
+    const doneDelta = doneActual-doneForecast;
+    const doneDeltaPct = doneForecast>0 ? Math.abs(doneDelta/doneForecast*100) : 0;
+
+    const statCard1 = done.length
+      ? '<div class="sum-card">'+
+          '<div class="sum-label">Weeks finished this month ('+done.length+')</div>'+
+          '<div style="display:flex;gap:16px;flex-wrap:wrap;margin:6px 0 8px;">'+
+            '<div><div style="font-size:10px;color:var(--gray-text);font-weight:600;">Forecasted</div><div class="mono" style="font-size:19px;font-weight:700;color:var(--amber);">'+Math.round(doneForecast).toLocaleString()+' L</div></div>'+
+            '<div><div style="font-size:10px;color:var(--gray-text);font-weight:600;">Actually sold</div><div class="mono" style="font-size:19px;font-weight:700;color:var(--green-dark);">'+Math.round(doneActual).toLocaleString()+' L</div></div>'+
+          '</div>'+
+          '<span class="mono" style="display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;background:'+(doneDelta>=0?'var(--green-light)':'var(--red-light)')+';color:'+(doneDelta>=0?'var(--green-dark)':'var(--red-dark)')+';">'+(doneDelta>=0?'▲ +':'▼ -')+Math.round(Math.abs(doneDelta)).toLocaleString()+' L · '+(doneDelta>=0?'+':'-')+doneDeltaPct.toFixed(1)+'%</span>'+
+        '</div>'
+      : '<div class="sum-card"><div class="sum-label">Weeks finished this month</div><div class="empty-msg" style="padding:8px 0;">None finished yet — check back once this week is over.</div></div>';
+
+    let statCard2;
+    if(current){
+      const wsDate = new Date(current.weekStart+'T00:00:00');
+      const todayMid = new Date(); todayMid.setHours(0,0,0,0);
+      const daysElapsed = Math.min(7, Math.round((todayMid-wsDate)/86400000)+1);
+      statCard2 = '<div class="sum-card">'+
+          '<div class="sum-label">This week (in progress)</div>'+
+          '<div style="display:flex;gap:16px;flex-wrap:wrap;margin:6px 0 8px;">'+
+            '<div><div style="font-size:10px;color:var(--gray-text);font-weight:600;">Target</div><div class="mono" style="font-size:19px;font-weight:700;color:var(--amber);">'+Math.round(current.forecast).toLocaleString()+' L</div></div>'+
+            '<div><div style="font-size:10px;color:var(--gray-text);font-weight:600;">Sold so far</div><div class="mono" style="font-size:19px;font-weight:700;color:var(--green-dark);">'+Math.round(current.actual).toLocaleString()+' L</div></div>'+
+          '</div>'+
+          '<span class="mono" style="display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;background:var(--blue-light);color:var(--blue);">'+daysElapsed+' of 7 days elapsed</span>'+
+        '</div>';
+    }else{
+      statCard2 = '<div class="sum-card"><div class="sum-label">This week</div><div class="empty-msg" style="padding:8px 0;">Not tracked yet — open the Weekly Forecast for the current week to start.</div></div>';
+    }
+
+    const W=700,H=220,padL=50,padR=16,padT=14,padB=34;
+    const chartW=W-padL-padR, chartH=H-padT-padB;
+    const maxV=Math.max(...rows.flatMap(r=>[r.forecast,r.actual]),1)*1.08;
+    const groupW=chartW/rows.length;
+    const barW=Math.min(28,groupW*0.32), barGap=6;
+    const y=v=>padT+chartH-(v/maxV)*chartH;
+    let bars='';
+    rows.forEach((r,i)=>{
+      const gx=padL+i*groupW+groupW/2;
+      const fx=gx-barGap/2-barW;
+      const ax=gx+barGap/2;
+      const d=new Date(r.weekStart+'T00:00:00');
+      const dayLabel=d.getDate()+'/'+(d.getMonth()+1);
+      const fH=Math.max(chartH-(y(r.forecast)-padT),0);
+      const aH=Math.max(chartH-(y(r.actual)-padT),0);
+      const isDone=r.status==='done';
+      bars+='<rect x="'+fx.toFixed(1)+'" y="'+y(r.forecast).toFixed(1)+'" width="'+barW+'" height="'+fH.toFixed(1)+'" rx="4" fill="var(--amber)"><title>'+dayLabel+' — Forecast: '+Math.round(r.forecast).toLocaleString()+' L</title></rect>';
+      bars+='<rect x="'+ax.toFixed(1)+'" y="'+y(r.actual).toFixed(1)+'" width="'+barW+'" height="'+aH.toFixed(1)+'" rx="4" fill="'+(isDone?'var(--green-dark)':'url(#fcMonthHatch)')+'"'+(isDone?'':' stroke="var(--green-dark)" stroke-width="1.25"')+'><title>'+dayLabel+' — Actual'+(isDone?'':' so far')+': '+Math.round(r.actual).toLocaleString()+' L</title></rect>';
+      bars+='<text x="'+gx.toFixed(1)+'" y="'+(H-12)+'" text-anchor="middle" font-size="10" font-weight="600" fill="var(--gray-text)">'+dayLabel+'</text>';
+      if(!isDone){
+        const chipW=76, chipX=gx-chipW/2, chipY=y(Math.max(r.forecast,r.actual))-26;
+        const chipTxt=r.status==='upcoming'?'NOT STARTED':'IN PROGRESS';
+        bars+='<rect x="'+chipX.toFixed(1)+'" y="'+chipY.toFixed(1)+'" width="'+chipW+'" height="17" rx="8.5" fill="#fff" stroke="var(--gray-light)"/>'+
+          '<text x="'+gx.toFixed(1)+'" y="'+(chipY+12).toFixed(1)+'" text-anchor="middle" font-size="8.5" font-weight="700" fill="var(--amber)">'+chipTxt+'</text>';
+      }
+    });
+    const gridLines=[0,0.5,1].map(f=>{
+      const yy=padT+chartH-f*chartH;
+      return '<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="var(--gray-light)" stroke-width="1"/>'+
+        '<text x="'+(padL-8)+'" y="'+(yy+3)+'" font-size="9" fill="var(--gray-text)" text-anchor="end">'+Math.round(maxV*f/1000)+'k</text>';
+    }).join('');
+
+    el.innerHTML =
+      '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px;">'+
+        '<div style="flex:1;min-width:220px;">'+statCard1+'</div>'+
+        '<div style="flex:1;min-width:220px;">'+statCard2+'</div>'+
+      '</div>'+
+      '<div style="display:flex;gap:16px;margin-bottom:8px;font-size:11px;">'+
+        '<span style="display:flex;align-items:center;gap:5px;color:var(--gray-text);font-weight:600;"><span style="width:9px;height:9px;border-radius:2px;background:var(--amber);display:inline-block;"></span>Forecasted</span>'+
+        '<span style="display:flex;align-items:center;gap:5px;color:var(--gray-text);font-weight:600;"><span style="width:9px;height:9px;border-radius:2px;background:var(--green-dark);display:inline-block;"></span>Actual</span>'+
+      '</div>'+
+      '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:220px;">'+
+        '<defs><pattern id="fcMonthHatch" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">'+
+          '<rect width="6" height="6" fill="var(--green-dark)" opacity="0.22"/>'+
+          '<line x1="0" y1="0" x2="0" y2="6" stroke="var(--green-dark)" stroke-width="2.4"/>'+
+        '</pattern></defs>'+
+        gridLines+bars+
+      '</svg>';
   }
 
   function renderForecastChart(rows){
