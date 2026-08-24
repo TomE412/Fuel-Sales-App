@@ -56,6 +56,40 @@ test.describe('admin app — Accounts section', () => {
     expect(errors, `console/page errors:\n${errors.join('\n')}`).toEqual([]);
   });
 
+  test('Customer retention search filters the chase table with no console errors', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+    await page.click('#vt-retention');
+    await expect(page.locator('#view-retention')).toBeVisible();
+    await expect(page.locator('#retention-body')).not.toContainText('Loading…', { timeout: 15000 });
+
+    await page.fill('#ret-search', 'zzz-no-such-customer-zzz');
+    await expect(page.locator('#retention-body')).toContainText('No customer matches that search.');
+
+    await page.fill('#ret-search', '');
+    await expect(page.locator('#retention-body')).not.toContainText('No customer matches that search.');
+
+    expect(errors, `console/page errors:\n${errors.join('\n')}`).toEqual([]);
+  });
+
+  test('Weekly forecast tab loads with no console errors', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+    await page.click('#vt-forecast');
+    await expect(page.locator('#view-forecast')).toBeVisible();
+    await expect(page.locator('#fc-week-start')).not.toHaveValue('', { timeout: 15000 });
+    await expect(page.locator('#fc-deliveries-body')).not.toContainText('Loading…', { timeout: 15000 });
+    await expect(page.locator('#fc-fuel-body')).not.toContainText('Loading…');
+    await expect(page.locator('#fc-cash-confirmed-body')).not.toContainText('Loading…');
+    await expect(page.locator('#fc-cash-predicted-body')).not.toContainText('Loading…');
+
+    expect(errors, `console/page errors:\n${errors.join('\n')}`).toEqual([]);
+  });
+
   test('view tabs switch which view is displayed', async ({ page }) => {
     await page.click('#vt-retention');
     await expect(page.locator('#view-retention')).toBeVisible();

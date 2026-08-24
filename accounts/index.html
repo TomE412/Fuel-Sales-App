@@ -1669,7 +1669,11 @@ async function loadForecast(){
         customer:r.customer,
         expectedDate:fcISO(expected),
         expectedDay:fcDayName(expected),
-        litres:r.avg_litres||0,
+        // Their last actual order size, not app_customer_retention's
+        // all-time running average — a long-standing customer's average
+        // can drift far from what they order today. Falls back to the
+        // average only if we somehow have no sale history to look up.
+        litres: proxy ? (parseFloat(proxy.litres)||0) : (r.avg_litres||0),
         fuelType:(proxy&&proxy.fuel_type)||'Diesel',
         route:routeLabelFor(r.customer, proxy&&proxy.location),
         paymentTerm: proxy ? (proxy.payment_term||'') : '',
@@ -1695,7 +1699,9 @@ async function loadForecast(){
     const scheduledFuel={};
     sales.forEach(s=>{
       const dd=(s.delivery_date||'').split('T')[0];
-      if(dd && dd>=wsISO && dd<=weISO){
+      // Excludes delivered sales — once a sale is marked delivered it has
+      // already happened, so it drops off a forward-looking forecast.
+      if(dd && dd>=wsISO && dd<=weISO && s.status!=='delivered'){
         const f=s.fuel_type||'Diesel';
         scheduledFuel[f]=(scheduledFuel[f]||0)+(parseFloat(s.litres)||0);
       }
@@ -1716,7 +1722,7 @@ async function loadForecast(){
     };
     sales.forEach(s=>{
       const dd=(s.delivery_date||'').split('T')[0];
-      if(dd && dd>=wsISO && dd<=weISO) bump(routeLabelFor(s.customer,s.location), parseFloat(s.litres)||0, s.customer);
+      if(dd && dd>=wsISO && dd<=weISO && s.status!=='delivered') bump(routeLabelFor(s.customer,s.location), parseFloat(s.litres)||0, s.customer);
     });
     potential.forEach(p=>{ bump(p.route, p.litres, p.customer); });
     const routeList = Object.keys(routeGroups)
