@@ -1571,7 +1571,12 @@ function fcMonday(base){
   d.setDate(d.getDate()-back);
   return d;
 }
-function fcISO(d){ return d.toISOString().split('T')[0]; }
+// NOT d.toISOString() — that converts to UTC first, which silently shifts
+// the date back a day for any positive-UTC-offset timezone (e.g. Harare,
+// UTC+2 year-round). Build the string from local date parts instead.
+function fcISO(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 function fcAddDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function fcDayName(d){ return DAYS[d.getDay()].slice(0,3); }
 

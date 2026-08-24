@@ -17,6 +17,12 @@ module.exports = defineConfig({
     baseURL: 'http://localhost:4173',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    // Real users are in Harare (UTC+2, no DST). Testing in the runner's
+    // default timezone (often UTC) missed a real bug: a date helper used
+    // toISOString(), which converts to UTC first and silently shifts the
+    // date back a day for any positive-UTC-offset timezone — invisible in
+    // UTC, guaranteed to reproduce here.
+    timezoneId: 'Africa/Harare',
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },

@@ -81,7 +81,14 @@ test.describe('admin app — Accounts section', () => {
 
     await page.click('#vt-forecast');
     await expect(page.locator('#view-forecast')).toBeVisible();
+    // Must land on a real Monday — used to silently drift to the wrong
+    // week for anyone in a positive-UTC-offset timezone (e.g. Harare)
+    // because the date helper used toISOString(), which converts to UTC
+    // first. Checked via noon-UTC so the assertion itself is timezone-safe.
     await expect(page.locator('#fc-week-start')).not.toHaveValue('', { timeout: 15000 });
+    const weekStartValue = await page.locator('#fc-week-start').inputValue();
+    const weekday = new Date(weekStartValue + 'T12:00:00Z').getUTCDay();
+    expect(weekday, `#fc-week-start (${weekStartValue}) should be a Monday`).toBe(1);
     await expect(page.locator('#fc-deliveries-body')).not.toContainText('Loading…', { timeout: 15000 });
     await expect(page.locator('#fc-fuel-body')).not.toContainText('Loading…');
     await expect(page.locator('#fc-cash-confirmed-body')).not.toContainText('Loading…');

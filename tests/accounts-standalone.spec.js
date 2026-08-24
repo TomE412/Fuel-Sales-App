@@ -43,8 +43,16 @@ test.describe('standalone Accounts app', () => {
 
     await page.click('#vt-forecast');
     await expect(page.locator('#view-forecast')).toBeVisible();
-    // Week-start date picker should have auto-filled a default date.
+    // Week-start date picker should have auto-filled a default date, and
+    // it must land on a real Monday — this used to silently drift to the
+    // wrong week for anyone in a positive-UTC-offset timezone (e.g.
+    // Harare) because the date helper used toISOString(), which converts
+    // to UTC first. Checked via noon-UTC so this assertion itself can't
+    // be thrown off by any timezone.
     await expect(page.locator('#fc-week-start')).not.toHaveValue('', { timeout: 15000 });
+    const weekStartValue = await page.locator('#fc-week-start').inputValue();
+    const weekday = new Date(weekStartValue + 'T12:00:00Z').getUTCDay();
+    expect(weekday, `#fc-week-start (${weekStartValue}) should be a Monday`).toBe(1);
     await expect(page.locator('#fc-deliveries-body')).not.toContainText('Loading…', { timeout: 15000 });
     await expect(page.locator('#fc-fuel-body')).not.toContainText('Loading…');
     await expect(page.locator('#fc-cash-confirmed-body')).not.toContainText('Loading…');
