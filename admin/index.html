@@ -1050,11 +1050,18 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
           <div class="panel" style="margin-bottom:14px;">
             <div class="ph"><div class="ph-title" style="color:var(--red);">📈 Forecast vs. actual — litres per week</div></div>
+            <div style="padding:10px 16px 0;">
+              <div class="sum-card" id="fc-accuracy-card" style="margin:0;">
+                <div class="sum-label">Monday review — forecast accuracy</div>
+                <div class="sum-value" id="fc-accuracy-summary" style="color:var(--blue);font-size:22px;">—</div>
+                <div class="sum-sub" id="fc-accuracy-detail">Completed Mon–Fri weeks only</div>
+              </div>
+            </div>
             <div id="fc-history-chart" style="padding:16px;"><div class="empty-msg">Loading…</div></div>
             <div style="padding:10px 16px;font-size:11px;color:var(--gray-text);border-top:1px solid var(--gray-light);">
-              Each point is saved the first time that week's forecast is viewed, then never changed — so this is an honest
-              record of what was predicted vs. what actually happened. Builds up one point per week; there's no way to
-              show history from before this was added.
+              This review compares the forecast made each Monday against the sales completed in that same Monday-to-Friday
+              working week. Weekend activity is excluded, because the team does not operate a weekend delivery cycle and
+              any catch-up sales are captured in the following week's review.
             </div>
           </div>
 
@@ -3729,6 +3736,7 @@ const AccountsApp = (() => {
   // mapping in the app; LogisticsApp in this same file already loads
   // app_route_board too but as a separate IIFE it can't be reused here,
   // so this section loads its own copy.
+  const FORECAST_WORKING_DAYS = 5;
   let forecastLoaded = false;
   let FORECAST = { potential:[], confirmedCash:[], predictedCash:[], confirmedCashTotal:0, predictedCashTotal:0, scheduledFuel:{}, predictedFuel:{}, routeList:[], weekStart:'', weekEnd:'' };
 
@@ -3753,10 +3761,10 @@ const AccountsApp = (() => {
     const input = document.getElementById('fc-week-start');
     if(!input.value) input.value = fcISO(fcMonday());
     const weekStart = fcMonday(input.value);
-    const weekEnd = fcAddDays(weekStart,6);
+    const weekEnd = fcAddDays(weekStart, FORECAST_WORKING_DAYS - 1);
     const wsISO = fcISO(weekStart), weISO = fcISO(weekEnd);
     document.getElementById('fc-week-label').textContent =
-      'Forecasting '+fmtDate(wsISO)+' – '+fmtDate(weISO)+'. Re-open this tab each Monday for the latest picture.';
+      'Forecasting '+fmtDate(wsISO)+' – '+fmtDate(weISO)+' (Mon–Fri). Re-open this tab each Monday for the latest picture.';
 
     const loading = (id,cols) => { const el=document.getElementById(id); if(el) el.innerHTML='<tr><td colspan="'+cols+'" class="empty-msg">Loading…</td></tr>'; };
     loading('fc-fuel-body',4); loading('fc-deliveries-body',5);
@@ -3821,7 +3829,7 @@ const AccountsApp = (() => {
         if(!r.avg_cycle_days || r.ripeness_pct==null) return;
         const ratePerDay=100/r.avg_cycle_days;
         let expected=null;
-        for(let n=0;n<7;n++){
+        for(let n=0;n<FORECAST_WORKING_DAYS;n++){
           const day=fcAddDays(weekStart,n);
           const daysFromToday=Math.round((day-todayMid)/86400000);
           const projected=r.ripeness_pct + daysFromToday*ratePerDay;
@@ -4053,7 +4061,7 @@ const AccountsApp = (() => {
         .neq('status','cancelled');
       const allRows = snaps.map(s=>{
         const wsD = s.week_start;
-        const weD = fcISO(fcAddDays(new Date(wsD+'T00:00:00'),6));
+        const weD = fcISO(fcAddDays(new Date(wsD+'T00:00:00'), FORECAST_WORKING_DAYS - 1));
         const actual = (actualSales||[]).reduce((sum,x)=>{
           const dd=(x.delivery_date||'').split('T')[0];
           return (dd && dd>=wsD && dd<=weD) ? sum+(parseFloat(x.litres)||0) : sum;
@@ -4061,6 +4069,19 @@ const AccountsApp = (() => {
         return { weekStart: wsD, weekEnd: weD, forecast:(s.scheduled_litres||0)+(s.predicted_litres||0), actual };
       });
       renderForecastChart(allRows.slice(-26));
+
+      const completedWeeks = allRows.filter(r => r.weekEnd < fcISO(new Date()));
+      const completedForecast = completedWeeks.reduce((sum, r) => sum + (r.forecast || 0), 0);
+      const completedActual = completedWeeks.reduce((sum, r) => sum + (r.actual || 0), 0);
+      const accuracyPct = completedWeeks.length && completedForecast > 0
+        ? Math.max(0, 100 - (Math.abs(completedActual - completedForecast) / completedForecast) * 100)
+        : 0;
+      const accEl = document.getElementById('fc-accuracy-summary');
+      const accDetail = document.getElementById('fc-accuracy-detail');
+if (accEl) accEl.textContent = completedWeeks.length ? accuracyPct.toFixed(1)+'%' : 'No full week yet';
+    if (accDetail) accDetail.textContent = completedWeeks.length
+      ? completedWeeks.length + ' completed Mon–Fri week' + (completedWeeks.length === 1 ? '' : 's') + ' · ' + Math.round(Math.abs(completedActual - completedForecast)).toLocaleString() + ' L variance'
+      : 'The Monday review builds once a full Mon–Fri week is complete.';
 
       const todayISOStr = fcISO(new Date());
       const monthPrefix = todayISOStr.slice(0,7);
@@ -4113,14 +4134,15 @@ const AccountsApp = (() => {
     if(current){
       const wsDate = new Date(current.weekStart+'T00:00:00');
       const todayMid = new Date(); todayMid.setHours(0,0,0,0);
-      const daysElapsed = Math.min(7, Math.round((todayMid-wsDate)/86400000)+1);
+      const elapsedDays = Math.max(0, Math.min(FORECAST_WORKING_DAYS, Math.round((todayMid-wsDate)/86400000)+1));
+      const daysElapsed = todayMid.getDay() === 0 || todayMid.getDay() === 6 ? FORECAST_WORKING_DAYS : elapsedDays;
       statCard2 = '<div class="sum-card">'+
           '<div class="sum-label">This week (in progress)</div>'+
           '<div style="display:flex;gap:16px;flex-wrap:wrap;margin:6px 0 8px;">'+
             '<div><div style="font-size:10px;color:var(--gray-text);font-weight:600;">Target</div><div class="mono" style="font-size:19px;font-weight:700;color:var(--amber);">'+Math.round(current.forecast).toLocaleString()+' L</div></div>'+
             '<div><div style="font-size:10px;color:var(--gray-text);font-weight:600;">Sold so far</div><div class="mono" style="font-size:19px;font-weight:700;color:var(--green-dark);">'+Math.round(current.actual).toLocaleString()+' L</div></div>'+
           '</div>'+
-          '<span class="mono" style="display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;background:var(--blue-light);color:var(--blue);">'+daysElapsed+' of 7 days elapsed</span>'+
+          '<span class="mono" style="display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;background:var(--blue-light);color:var(--blue);">'+daysElapsed+' of '+FORECAST_WORKING_DAYS+' working days elapsed</span>'+
         '</div>';
     }else{
       statCard2 = '<div class="sum-card"><div class="sum-label">This week</div><div class="empty-msg" style="padding:8px 0;">Not tracked yet — open the Weekly Forecast for the current week to start.</div></div>';
