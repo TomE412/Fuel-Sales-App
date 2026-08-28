@@ -468,6 +468,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
           </div>
         </div>
         <div id="fc-history-chart" style="padding:16px;"><div class="empty-msg">Loading…</div></div>
+        <div id="fc-review-breakdown" style="padding:0 16px 16px;"><div class="empty-msg">Loading…</div></div>
         <div style="padding:10px 16px;font-size:11px;color:var(--gray-text);border-top:1px solid var(--gray-light);">
           This review compares the forecast made each Monday against the sales completed in that same Monday-to-Friday
           working week. Weekend activity is excluded, because the team does not operate a weekend delivery cycle and
@@ -1764,6 +1765,7 @@ async function loadForecast(){
 
     const scheduledTotal = Object.values(scheduledFuel).reduce((a,v)=>a+v,0);
     const predictedTotal = Object.values(predictedFuel).reduce((a,v)=>a+v,0);
+    await saveForecastPredictions(wsISO, potential);
     await ensureForecastSnapshot(wsISO, scheduledTotal, predictedTotal, potential.length);
     loadForecastHistory();
   }catch(e){
@@ -1898,6 +1900,63 @@ async function ensureForecastSnapshot(weekStartISO, scheduledLitres, predictedLi
   }
 }
 
+async function saveForecastPredictions(weekStartISO, potential){
+  try{
+    const {error:delErr} = await sb.from('weekly_forecast_predictions').delete().eq('week_start', weekStartISO);
+    if(delErr) throw delErr;
+    if(!potential || !potential.length) return;
+    const rows = potential.map(p => ({
+      week_start: weekStartISO,
+      customer: p.customer,
+      expected_date: p.expectedDate || null,
+      expected_litres: Number(p.litres || 0),
+      fuel_type: p.fuelType || null,
+      route: p.route || null,
+      payment_term: p.paymentTerm || null,
+      amount_estimate: (Number(p.litres || 0) * Number(p.price || 0)) || 0
+    }));
+    const {error:insErr} = await sb.from('weekly_forecast_predictions').insert(rows);
+    if(insErr) throw insErr;
+  }catch(e){
+    console.log('Could not save forecast expectation rows (non-blocking):', e.message);
+  }
+}
+
+function renderForecastBreakdown(rows){
+  const el = document.getElementById('fc-review-breakdown');
+  if(!el) return;
+  if(!rows || !rows.length){
+    el.innerHTML = '<div class="empty-msg">No forecast breakdown is available yet.</div>';
+    return;
+  }
+
+  const totalExpected = rows.length;
+  const bought = rows.filter(r => r.bought).length;
+  const missed = totalExpected - bought;
+  const accuracy = totalExpected ? ((bought / totalExpected) * 100).toFixed(1) : '0.0';
+
+  el.innerHTML = '<div style="padding:12px 0 0;">'+
+    '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px;">'+
+      '<div style="font-weight:700;color:var(--blue);">Expected vs actual customers</div>'+
+      '<div style="font-size:12px;color:var(--gray-text);">'+bought+' bought · '+missed+' missed · '+accuracy+'% hit rate</div>'+
+    '</div>'+
+    '<div style="overflow-x:auto;">'+
+      '<table class="tbl"><thead><tr><th>Customer</th><th>Expected</th><th>Expected litres</th><th>Actual</th><th>Actual litres</th><th>Outcome</th></tr></thead><tbody>'+
+      rows.map(r =>
+        '<tr>'+
+          '<td style="font-weight:700;">'+r.customer+'</td>'+
+          '<td class="mono">'+(r.expectedDate ? fmtDate(r.expectedDate) : '—')+'</td>'+
+          '<td class="mono">'+Math.round(r.expectedLitres||0).toLocaleString()+' L</td>'+
+          '<td class="mono">'+(r.actualDate ? fmtDate(r.actualDate) : '—')+'</td>'+
+          '<td class="mono">'+Math.round(r.actualLitres||0).toLocaleString()+' L</td>'+
+          '<td><span class="pill '+(r.bought ? 'p-green' : 'p-red')+'">'+(r.bought ? 'Bought' : 'Missed')+'</span></td>'+
+        '</tr>'
+      ).join('')+
+      '</tbody></table>'+
+    '</div>'+
+  '</div>';
+}
+
 async function loadForecastHistory(){
   const el = document.getElementById('fc-history-chart');
   const monthEl = document.getElementById('fc-month-body');
@@ -1916,10 +1975,21 @@ async function loadForecastHistory(){
       return;
     }
     const earliest = snaps[0].week_start;
-    const {data:actualSales} = await sb.from('sales')
-      .select('litres,delivery_date,status')
-      .gte('delivery_date', earliest)
-      .neq('status','cancelled');
+    const [{data:actualSales},{data:expectedRows}] = await Promise.all([
+      sb.from('sales')
+        .select('customer,litres,delivery_date,status')
+        .gte('delivery_date', earliest)
+        .neq('status','cancelled'),
+      sb.from('weekly_forecast_predictions')
+        .select('week_start,customer,expected_date,expected_litres')
+        .gte('week_start', earliest)
+        .order('week_start',{ascending:true})
+    ]);
+    const predictionMap = {};
+    (expectedRows||[]).forEach(r => {
+      if(!predictionMap[r.week_start]) predictionMap[r.week_start] = [];
+      predictionMap[r.week_start].push(r);
+    });
     const allRows = snaps.map(s=>{
       const wsD = s.week_start;
       const weD = fcISO(fcAddDays(new Date(wsD+'T00:00:00'), FORECAST_WORKING_DAYS - 1));
@@ -1927,7 +1997,36 @@ async function loadForecastHistory(){
         const dd=(x.delivery_date||'').split('T')[0];
         return (dd && dd>=wsD && dd<=weD) ? sum+(parseFloat(x.litres)||0) : sum;
       },0);
-      return { weekStart: wsD, weekEnd: weD, forecast:(s.scheduled_litres||0)+(s.predicted_litres||0), actual };
+      const expectedForWeek = predictionMap[wsD] || [];
+      const expectedByCustomer = {};
+      expectedForWeek.forEach(p => { expectedByCustomer[p.customer] = p; });
+      const boughtSet = new Set((actualSales||[])
+        .filter(x => {
+          const dd=(x.delivery_date||'').split('T')[0];
+          return dd && dd>=wsD && dd<=weD && expectedByCustomer[x.customer];
+        })
+        .map(x => x.customer));
+      const reviewRows = expectedForWeek.map(p => {
+        const actualSale = (actualSales||[]).find(x => x.customer === p.customer && ((x.delivery_date||'').split('T')[0] >= wsD && (x.delivery_date||'').split('T')[0] <= weD));
+        return {
+          customer: p.customer,
+          expectedDate: p.expected_date,
+          expectedLitres: Number(p.expected_litres || 0),
+          actualDate: actualSale ? (actualSale.delivery_date||'').split('T')[0] : null,
+          actualLitres: actualSale ? Number(actualSale.litres || 0) : 0,
+          bought: !!actualSale
+        };
+      });
+      if (wsD === fcISO(fcMonday())) renderForecastBreakdown(reviewRows.slice(0,25));
+      return {
+        weekStart: wsD,
+        weekEnd: weD,
+        forecast:(s.scheduled_litres||0)+(s.predicted_litres||0),
+        actual,
+        expectedCount: expectedForWeek.length,
+        boughtCount: boughtSet.size,
+        missedCount: Math.max(0, expectedForWeek.length - boughtSet.size)
+      };
     });
     renderForecastChart(allRows.slice(-26)); // ~6 months, plenty of headroom for a while
 
