@@ -3828,7 +3828,22 @@ const AccountsApp = (() => {
       retention.forEach(r=>{
         if(r.status==='gone_quiet') return; // churned, not a recurring customer — not a real prediction
         if(!r.avg_cycle_days || r.ripeness_pct==null) return;
-        const ratePerDay=100/r.avg_cycle_days;
+
+        const proxy=recentByCustomer[(r.customer||'').trim().toLowerCase()]||null;
+        const avgCycleDays = Number(r.avg_cycle_days || 0);
+        const lastOrderDate = r.last_order ? new Date(r.last_order+'T00:00:00') : null;
+        const daysSinceLastOrder = lastOrderDate ? Math.round((todayMid-lastOrderDate)/86400000) : Infinity;
+        const recentOrderLitres = proxy ? (parseFloat(proxy.litres)||0) : 0;
+        const avgLitres = Number(r.avg_litres || 0);
+        const recentOrderConsistent = !recentOrderLitres
+          ? avgLitres > 0
+          : (avgLitres > 0 ? (recentOrderLitres >= avgLitres*0.4 && recentOrderLitres <= avgLitres*1.8) : true);
+
+        const inRecencyBand = lastOrderDate && daysSinceLastOrder >= 7 && daysSinceLastOrder <= 84;
+        const inCycleBand = avgCycleDays >= 14 && avgCycleDays <= 90;
+        if(!inRecencyBand || !inCycleBand || !recentOrderConsistent) return;
+
+        const ratePerDay=100/avgCycleDays;
         let expected=null;
         for(let n=0;n<FORECAST_WORKING_DAYS;n++){
           const day=fcAddDays(weekStart,n);
@@ -3837,16 +3852,12 @@ const AccountsApp = (() => {
           if(projected>=85){ expected=day; break; }
         }
         if(!expected) return;
-        const proxy=recentByCustomer[(r.customer||'').trim().toLowerCase()]||null;
+
         potential.push({
           customer:r.customer,
           expectedDate:fcISO(expected),
           expectedDay:fcDayName(expected),
-          // Their last actual order size, not app_customer_retention's
-          // all-time running average — a long-standing customer's average
-          // can drift far from what they order today. Falls back to the
-          // average only if we somehow have no sale history to look up.
-          litres: proxy ? (parseFloat(proxy.litres)||0) : (r.avg_litres||0),
+          litres: recentOrderLitres || avgLitres,
           fuelType:(proxy&&proxy.fuel_type)||'Diesel',
           route:routeLabelFor(r.customer, proxy&&proxy.location),
           paymentTerm: proxy ? (proxy.payment_term||'') : '',
