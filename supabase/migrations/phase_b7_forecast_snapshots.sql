@@ -21,9 +21,9 @@
 -- HOW TO RUN: Supabase dashboard -> SQL Editor -> New query -> paste ->
 -- Run.
 --
--- SECURITY NOTE: RLS enabled, no policies yet (fails closed). Copy the
--- same select/insert policy used on `sales` onto this table in the
--- Supabase dashboard so the app can actually read and write it.
+-- SECURITY NOTE: RLS is enabled, and this migration adds the browser-app
+-- policies needed so the internal sales dashboard can read/write the
+-- weekly forecast snapshot rows without blocking the forecast review flow.
 
 create table if not exists weekly_forecast_snapshots (
   id uuid primary key default gen_random_uuid(),
@@ -34,3 +34,9 @@ create table if not exists weekly_forecast_snapshots (
   created_at timestamptz not null default now()
 );
 alter table weekly_forecast_snapshots enable row level security;
+
+create policy "forecast snapshots are readable and writable by the app"
+on weekly_forecast_snapshots
+for all
+using (true)
+with check (true);

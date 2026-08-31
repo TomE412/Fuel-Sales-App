@@ -4,9 +4,9 @@
 -- actually placed a sale in the same Monday-to-Friday window.
 --
 -- HOW TO RUN: Supabase dashboard -> SQL Editor -> New query -> paste -> Run.
--- SECURITY NOTE: RLS enabled, no policies yet (fails closed). Add the same
--- select/insert/update/delete policy used on `sales` if you want the app to
--- read and write this table from the browser.
+-- SECURITY NOTE: RLS is enabled, and this migration adds the app policy that
+-- lets the browser-based sales dashboard read/write the expected-customer
+-- forecast rows for the Monday-to-Friday review process.
 
 create table if not exists weekly_forecast_predictions (
   id uuid primary key default gen_random_uuid(),
@@ -23,3 +23,9 @@ create table if not exists weekly_forecast_predictions (
 );
 
 alter table weekly_forecast_predictions enable row level security;
+
+create policy "forecast predictions are readable and writable by the app"
+on weekly_forecast_predictions
+for all
+using (true)
+with check (true);

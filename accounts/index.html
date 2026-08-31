@@ -1016,131 +1016,167 @@ async function openCustEdit(customer){
   document.getElementById('ce-err').textContent = '';
   document.getElementById('custm').classList.add('on');
 
-  // Reps for the dropdown (reuse the same loader as back-entry).
-  await loadRepPicker();
-  const gap = GAPS.find(g=>g.customer===customer);
-  const sel = document.getElementById('ce-rep');
-  const calc = gap && gap.calculated_rep ? gap.calculated_rep : null;
-  sel.innerHTML =
-    '<option value="">Automatic'+(calc?' — currently '+calc:' — no sales yet')+'</option>' +
-    REPS.map(r=>'<option value="'+(r.full_name||'')+'">'+(r.full_name||'(unnamed)')+'</option>').join('');
+    await loadRepPicker();
+    const gap = GAPS.find(g=>g.customer===customer);
+    const sel = document.getElementById('ce-rep');
+    const calc = gap && gap.calculated_rep ? gap.calculated_rep : null;
+    sel.innerHTML =
+      '<option value="">Automatic'+(calc?' — currently '+calc:' — no sales yet')+'</option>' +
+      REPS.map(r=>'<option value="'+(r.full_name||'')+'">'+(r.full_name||'(unnamed)')+'</option>').join('');
 
-  // Places for the main-location dropdown.
-  if(!CE_PLACES.length){
+    if(!CE_PLACES.length){
+      try{
+        const {data} = await sb.from('place_coords').select('place').order('place');
+        CE_PLACES = (data||[]).map(p=>p.place);
+      }catch(_){ CE_PLACES = []; }
+    }
+
     try{
-      const {data} = await sb.from('place_coords').select('place').order('place');
-      CE_PLACES = (data||[]).map(p=>p.place);
-    }catch(_){ CE_PLACES = []; }
-  }
+      const {data, error} = await sb.from('app_customer_edit')
+        .select('id,invoice_name,assigned_rep,app_name,town,delivery_type,primary_place,site_count')
+        .ilike('invoice_name', customer).limit(1).maybeSingle();
+      if(error) throw error;
 
-  // Load this customer's current stored details.
-  try{
-    const {data, error} = await sb.from('app_customer_edit')
-      .select('id,invoice_name,assigned_rep,town,delivery_type,primary_place,site_count')
-      .ilike('invoice_name', customer).limit(1).maybeSingle();
-    if(error) throw error;
-
-    if(!data){
-      ceRow = null;
-      document.getElementById('ce-err').textContent =
-        'This customer is not in the canonical list, so details cannot be saved yet.';
-      document.getElementById('ce-town').value = '';
-      document.getElementById('ce-place').innerHTML = '<option value="">—</option>';
-      return;
-    }
-    ceRow = data;
-    sel.value = data.assigned_rep || '';
-    document.getElementById('ce-town').value = data.town || '';
-    document.getElementById('ce-delivery').value = data.delivery_type || 'delivery';
-
-    // Their existing sites first, then every other known place.
-    const {data:sites} = await sb.from('customer_sites')
-      .select('place').eq('customer_id', data.id).order('is_primary',{ascending:false});
-    const theirs = (sites||[]).map(s=>s.place);
-    const others = CE_PLACES.filter(p=>!theirs.includes(p));
-    document.getElementById('ce-place').innerHTML =
-      '<option value="">— none set —</option>' +
-      (theirs.length?'<optgroup label="Their sites">'+theirs.map(p=>'<option>'+p+'</option>').join('')+'</optgroup>':'') +
-      (others.length?'<optgroup label="All places">'+others.map(p=>'<option>'+p+'</option>').join('')+'</optgroup>':'');
-    document.getElementById('ce-place').value = data.primary_place || '';
-
-    document.getElementById('ce-rep-hint').textContent = data.assigned_rep
-      ? 'Manually assigned. Choose "Automatic" to go back to whoever sells to them most.'
-      : 'Automatic uses whoever has sold to them most often. Pick a rep to override that.';
-  }catch(e){
-    document.getElementById('ce-err').textContent = e.message||String(e);
-  }
-}
-
-function closeCustEdit(){
-  document.getElementById('custm').classList.remove('on');
-  ceCustomer = null; ceRow = null;
-}
-
-async function saveCustEdit(){
-  const err = document.getElementById('ce-err');
-  err.textContent = '';
-  if(!ceRow){ err.textContent = 'Nothing to save for this customer.'; return; }
-
-  const rep      = document.getElementById('ce-rep').value || null;
-  const town     = (document.getElementById('ce-town').value||'').trim() || null;
-  const delivery = document.getElementById('ce-delivery').value || 'delivery';
-  const place    = document.getElementById('ce-place').value || null;
-
-  try{
-    const {data:{user}} = await sb.auth.getUser();
-    let who = null;
-    if(user){
-      const {data:prof} = await sb.from('profiles').select('full_name').eq('id',user.id).maybeSingle();
-      who = prof?.full_name || user.email || null;
-    }
-    const repId = rep ? (REPS.find(r=>r.full_name===rep)?.id || null) : null;
-
-    const {error} = await sb.from('customer_locations').update({
-      assigned_rep:    rep,
-      assigned_rep_id: repId,
-      assigned_at:     rep ? new Date().toISOString() : null,
-      assigned_by:     rep ? who : null,
-      town:            town,
-      delivery_type:   delivery
-    }).eq('id', ceRow.id);
-    if(error) throw error;
-
-    // Main location: flag the chosen site as primary, clear the others.
-    if(place){
-      await sb.from('customer_sites').update({is_primary:false}).eq('customer_id', ceRow.id);
-      const {data:existing} = await sb.from('customer_sites')
-        .select('id').eq('customer_id', ceRow.id).eq('place', place).limit(1).maybeSingle();
-      if(existing){
-        await sb.from('customer_sites').update({is_primary:true}).eq('id', existing.id);
-      }else{
-        await sb.from('customer_sites').insert({customer_id:ceRow.id, place:place, is_primary:true});
+      if(!data){
+        ceRow = null;
+        document.getElementById('ce-err').textContent =
+          'This customer is not in the canonical list, so details cannot be saved yet.';
+        document.getElementById('ce-town').value = '';
+        document.getElementById('ce-alias').value = '';
+        document.getElementById('ce-place').innerHTML = '<option value="">—</option>';
+        return;
       }
+      ceRow = data;
+      sel.value = data.assigned_rep || '';
+      document.getElementById('ce-town').value = data.town || '';
+      document.getElementById('ce-alias').value = data.app_name || '';
+      document.getElementById('ce-delivery').value = data.delivery_type || 'delivery';
+
+      const {data:sites} = await sb.from('customer_sites')
+        .select('place').eq('customer_id', data.id).order('is_primary',{ascending:false});
+      const theirs = (sites||[]).map(s=>s.place);
+      const others = CE_PLACES.filter(p=>!theirs.includes(p));
+      document.getElementById('ce-place').innerHTML =
+        '<option value="">— none set —</option>' +
+        (theirs.length?'<optgroup label="Their sites">'+theirs.map(p=>'<option>'+p+'</option>').join('')+'</optgroup>':'') +
+        (others.length?'<optgroup label="All places">'+others.map(p=>'<option>'+p+'</option>').join('')+'</optgroup>':'');
+      document.getElementById('ce-place').value = data.primary_place || '';
+
+      document.getElementById('ce-rep-hint').textContent = data.assigned_rep
+        ? 'Manually assigned. Choose "Automatic" to go back to whoever sells to them most.'
+        : 'Automatic uses whoever has sold to them most often. Pick a rep to override that.';
+    }catch(e){
+      document.getElementById('ce-err').textContent = e.message||String(e);
     }
-
-    closeCustEdit();
-    await loadGaps();
-  }catch(e){ err.textContent = e.message||String(e); }
-}
-
-// ===== BY REP — WHO HASN'T BOUGHT THIS MONTH =====
-let GAPS = [];
-let gapsLoaded = false;
-let gapFilter = 'all';
-
-async function loadGaps(){
-  try{
-    const { data, error } = await sb.from('app_rep_gaps')
-      .select('customer,rep,rep_is_manual,calculated_rep,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,next_due_date,order_count,lost_last_round,bought_this_month,gap_status');
-    if(error) throw error;
-    GAPS = data||[];
-    gapsLoaded = true;
-    renderGaps();
-  }catch(e){
-    document.getElementById('gap-groups').innerHTML =
-      '<div class="empty-msg">Rep lists not available ('+(e.message||e)+')</div>';
   }
-}
+
+  function closeCustEdit(){
+    document.getElementById('custm').classList.remove('on');
+    ceCustomer = null; ceRow = null;
+  }
+
+  async function removeCustomerFromActiveList(customerName){
+    const target = customerName || ceCustomer;
+    if(!target){ return; }
+    if(!confirm('Remove "'+target+'" from the active customer list?\n\nThis keeps the sales history intact and just clears the current assignment/alias so it can be re-linked later.')) return;
+    try{
+      const {data:row} = await sb.from('customer_locations')
+        .select('id').ilike('invoice_name', target).limit(1).maybeSingle();
+      if(!row){ throw new Error('No customer record found for this name.'); }
+
+      const {data:{user}} = await sb.auth.getUser();
+      let who = null;
+      if(user){
+        const {data:prof} = await sb.from('profiles').select('full_name').eq('id',user.id).maybeSingle();
+        who = prof?.full_name || user.email || null;
+      }
+
+      const {error} = await sb.from('customer_locations').update({
+        app_name: null,
+        assigned_rep: 'Unassigned',
+        assigned_rep_id: null,
+        assigned_at: new Date().toISOString(),
+        assigned_by: who
+      }).eq('id', row.id);
+      if(error) throw error;
+
+      closeCustEdit();
+      await loadRetention();
+      if(typeof loadBook==='function') await loadBook();
+      if(typeof loadGaps==='function') await loadGaps();
+    }catch(e){
+      document.getElementById('ce-err').textContent = e.message||String(e);
+      alert('Could not remove the customer: '+(e.message||e));
+    }
+  }
+
+  async function saveCustEdit(){
+    const err = document.getElementById('ce-err');
+    err.textContent = '';
+    if(!ceRow){ err.textContent = 'Nothing to save for this customer.'; return; }
+
+    const rep      = document.getElementById('ce-rep').value || null;
+    const town     = (document.getElementById('ce-town').value||'').trim() || null;
+    const alias    = (document.getElementById('ce-alias').value||'').trim() || null;
+    const delivery = document.getElementById('ce-delivery').value || 'delivery';
+    const place    = document.getElementById('ce-place').value || null;
+
+    try{
+      const {data:{user}} = await sb.auth.getUser();
+      let who = null;
+      if(user){
+        const {data:prof} = await sb.from('profiles').select('full_name').eq('id',user.id).maybeSingle();
+        who = prof?.full_name || user.email || null;
+      }
+      const repId = rep ? (REPS.find(r=>r.full_name===rep)?.id || null) : null;
+
+      const {error} = await sb.from('customer_locations').update({
+        app_name:        alias,
+        assigned_rep:    rep,
+        assigned_rep_id: repId,
+        assigned_at:     rep ? new Date().toISOString() : null,
+        assigned_by:     rep ? who : null,
+        town:            town,
+        delivery_type:   delivery
+      }).eq('id', ceRow.id);
+      if(error) throw error;
+
+      if(place){
+        await sb.from('customer_sites').update({is_primary:false}).eq('customer_id', ceRow.id);
+        const {data:existing} = await sb.from('customer_sites')
+          .select('id').eq('customer_id', ceRow.id).eq('place', place).limit(1).maybeSingle();
+        if(existing){
+          await sb.from('customer_sites').update({is_primary:true}).eq('id', existing.id);
+        }else{
+          await sb.from('customer_sites').insert({customer_id:ceRow.id, place:place, is_primary:true});
+        }
+      }
+
+      closeCustEdit();
+      await loadRetention();
+      if(typeof loadBook==='function') await loadBook();
+      await loadGaps();
+    }catch(e){ err.textContent = e.message||String(e); }
+  }
+
+  // ===== BY REP — WHO HASN'T BOUGHT THIS MONTH =====
+  let GAPS = [];
+  let gapsLoaded = false;
+  let gapFilter = 'all';
+
+  async function loadGaps(){
+    try{
+      const { data, error } = await sb.from('app_rep_gaps')
+        .select('customer,rep,rep_is_manual,calculated_rep,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,next_due_date,order_count,lost_last_round,bought_this_month,gap_status');
+      if(error) throw error;
+      GAPS = data||[];
+      gapsLoaded = true;
+      renderGaps();
+    }catch(e){
+      document.getElementById('gap-groups').innerHTML =
+        '<div class="empty-msg">Rep lists not available ('+(e.message||e)+')</div>';
+    }
+  }
 
 function setGapFilter(g){
   gapFilter = g;
@@ -1303,6 +1339,10 @@ function renderRetention(){
     const flag = r.lost_last_round?'<span class="lostflag">lost last</span>':'';
     const lc = r.lost_count>0?'<div style="font-size:9px;font-weight:600;color:var(--red-dark);">'+r.lost_count+' lost</div>':'';
     const cust = (r.customer||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    const actions = '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
+      '<button class="upd-btn" onclick="openUpdate(\''+cust+'\')">Update</button>'+
+      (r.status==='gone_quiet' ? '<button class="upd-btn" style="background:var(--red-light);color:var(--red-dark);border-color:var(--red-light);" onclick="removeCustomerFromActiveList(\''+cust+'\')">Remove</button>' : '')+
+    '</div>';
     return '<tr>'+
       '<td style="font-weight:700;">'+r.customer+flag+lc+'</td>'+
       '<td class="mono">'+fmtD(r.last_order)+'</td>'+
@@ -1310,7 +1350,7 @@ function renderRetention(){
       '<td class="mono">'+(r.avg_cycle_days||'?')+'d</td>'+
       '<td class="mono" style="font-weight:700;color:'+pctCol+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</td>'+
       '<td class="mono">'+Math.round(r.total_litres||0).toLocaleString()+'</td>'+
-      '<td><button class="upd-btn" onclick="openUpdate(\''+cust+'\')">Update</button></td>'+
+      '<td>'+actions+'</td>'+
     '</tr>';
   }).join('');
 }
@@ -2221,6 +2261,12 @@ function renderForecastChart(rows){
     </div>
 
     <div class="lfld">
+      <label>Customer alias / other name used in app</label>
+      <input type="text" id="ce-alias" placeholder="e.g. Moyo Fuel or same customer under a different name">
+      <div style="font-size:10px;color:var(--gray-text);margin-top:4px;line-height:1.45;">This is the name reps or the app commonly use for this customer. It keeps historical sales linked to the right record.</div>
+    </div>
+
+    <div class="lfld">
       <label>Town</label>
       <input type="text" id="ce-town" placeholder="e.g. Mutare">
     </div>
@@ -2239,6 +2285,15 @@ function renderForecastChart(rows){
       <select id="ce-place" style="width:100%;padding:10px 11px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;font-family:var(--font);font-size:13px;outline:none;"></select>
       <div style="font-size:10px;color:var(--gray-text);margin-top:4px;line-height:1.45;">
         Sets which of their sites is the main one. To add a brand-new place, use the ➕ on the ops map.
+      </div>
+    </div>
+
+    <div class="lfld">
+      <label>Order status</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="go" style="background:var(--green-dark);" onclick="openLost(ceCustomer||'')">Mark lost</button>
+        <button type="button" class="go" style="background:var(--blue);" onclick="uGo ? uGo('sold') : openUpdate((ceCustomer||''))">Mark sold</button>
+        <button type="button" class="no" style="border-color:var(--red);color:var(--red);" onclick="removeCustomerFromActiveList(ceCustomer)">Remove from list</button>
       </div>
     </div>
 

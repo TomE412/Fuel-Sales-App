@@ -1158,6 +1158,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
           </div>
 
           <div class="lfld">
+            <label>Customer alias / other name used in app</label>
+            <input type="text" id="ce-alias" placeholder="e.g. Moyo Fuel or same customer under a different name">
+            <div style="font-size:10px;color:var(--gray-text);margin-top:4px;line-height:1.45;">This is the name reps or the app commonly use for this customer. It keeps historical sales linked to the right record.</div>
+          </div>
+
+          <div class="lfld">
             <label>Town</label>
             <input type="text" id="ce-town" placeholder="e.g. Mutare">
           </div>
@@ -1176,6 +1182,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
             <select id="ce-place" style="width:100%;padding:10px 11px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;font-family:var(--font);font-size:13px;outline:none;"></select>
             <div style="font-size:10px;color:var(--gray-text);margin-top:4px;line-height:1.45;">
               Sets which of their sites is the main one. To add a brand-new place, use the ➕ on the ops map.
+            </div>
+          </div>
+
+          <div class="lfld">
+            <label>Order status</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button type="button" class="go" style="background:var(--green-dark);" onclick="AccountsApp.openLost ? AccountsApp.openLost(AccountsApp.ceCustomer||'') : openLost(ceCustomer||'')">Mark lost</button>
+              <button type="button" class="go" style="background:var(--blue);" onclick="AccountsApp.uGo ? AccountsApp.uGo('sold') : uGo('sold')">Mark sold</button>
+              <button type="button" class="no" style="border-color:var(--red);color:var(--red);" onclick="AccountsApp.removeCustomerFromActiveList ? AccountsApp.removeCustomerFromActiveList(AccountsApp.ceCustomer) : removeCustomerFromActiveList(ceCustomer)">Remove from list</button>
             </div>
           </div>
 
@@ -3243,7 +3258,7 @@ const AccountsApp = (() => {
 
     try{
       const {data, error} = await sb.from('app_customer_edit')
-        .select('id,invoice_name,assigned_rep,town,delivery_type,primary_place,site_count')
+        .select('id,invoice_name,assigned_rep,app_name,town,delivery_type,primary_place,site_count')
         .ilike('invoice_name', customer).limit(1).maybeSingle();
       if(error) throw error;
 
@@ -3252,12 +3267,14 @@ const AccountsApp = (() => {
         document.getElementById('ce-err').textContent =
           'This customer is not in the canonical list, so details cannot be saved yet.';
         document.getElementById('ce-town').value = '';
+        document.getElementById('ce-alias').value = '';
         document.getElementById('ce-place').innerHTML = '<option value="">—</option>';
         return;
       }
       ceRow = data;
       sel.value = data.assigned_rep || '';
       document.getElementById('ce-town').value = data.town || '';
+      document.getElementById('ce-alias').value = data.app_name || '';
       document.getElementById('ce-delivery').value = data.delivery_type || 'delivery';
 
       const {data:sites} = await sb.from('customer_sites')
@@ -3283,6 +3300,41 @@ const AccountsApp = (() => {
     ceCustomer = null; ceRow = null;
   }
 
+  async function removeCustomerFromActiveList(customerName){
+    const target = customerName || ceCustomer;
+    if(!target){ return; }
+    if(!confirm('Remove "'+target+'" from the active customer list?\n\nThis keeps the sales history intact and just clears the current assignment/alias so it can be re-linked later.')) return;
+    try{
+      const {data:row} = await sb.from('customer_locations')
+        .select('id').ilike('invoice_name', target).limit(1).maybeSingle();
+      if(!row){ throw new Error('No customer record found for this name.'); }
+
+      const {data:{user}} = await sb.auth.getUser();
+      let who = null;
+      if(user){
+        const {data:prof} = await sb.from('profiles').select('full_name').eq('id',user.id).maybeSingle();
+        who = prof?.full_name || user.email || null;
+      }
+
+      const {error} = await sb.from('customer_locations').update({
+        app_name: null,
+        assigned_rep: 'Unassigned',
+        assigned_rep_id: null,
+        assigned_at: new Date().toISOString(),
+        assigned_by: who
+      }).eq('id', row.id);
+      if(error) throw error;
+
+      closeCustEdit();
+      await loadRetention();
+      if(typeof loadBook==='function') await loadBook();
+      if(typeof loadGaps==='function') await loadGaps();
+    }catch(e){
+      document.getElementById('ce-err').textContent = e.message||String(e);
+      alert('Could not remove the customer: '+(e.message||e));
+    }
+  }
+
   async function saveCustEdit(){
     const err = document.getElementById('ce-err');
     err.textContent = '';
@@ -3290,6 +3342,7 @@ const AccountsApp = (() => {
 
     const rep      = document.getElementById('ce-rep').value || null;
     const town     = (document.getElementById('ce-town').value||'').trim() || null;
+    const alias    = (document.getElementById('ce-alias').value||'').trim() || null;
     const delivery = document.getElementById('ce-delivery').value || 'delivery';
     const place    = document.getElementById('ce-place').value || null;
 
@@ -3303,6 +3356,7 @@ const AccountsApp = (() => {
       const repId = rep ? (REPS.find(r=>r.full_name===rep)?.id || null) : null;
 
       const {error} = await sb.from('customer_locations').update({
+        app_name:        alias,
         assigned_rep:    rep,
         assigned_rep_id: repId,
         assigned_at:     rep ? new Date().toISOString() : null,
@@ -3324,6 +3378,8 @@ const AccountsApp = (() => {
       }
 
       closeCustEdit();
+      await loadRetention();
+      if(typeof loadBook==='function') await loadBook();
       await loadGaps();
     }catch(e){ err.textContent = e.message||String(e); }
   }
@@ -3504,6 +3560,10 @@ const AccountsApp = (() => {
       const flag = r.lost_last_round?'<span class="lostflag">lost last</span>':'';
       const lc = r.lost_count>0?'<div style="font-size:9px;font-weight:600;color:var(--red-dark);">'+r.lost_count+' lost</div>':'';
       const cust = (r.customer||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      const actions = '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
+        '<button class="upd-btn" onclick="AccountsApp.openUpdate(\''+cust+'\')">Update</button>'+
+        (r.status==='gone_quiet' ? '<button class="upd-btn" style="background:var(--red-light);color:var(--red-dark);border-color:var(--red-light);" onclick="AccountsApp.removeCustomerFromActiveList(\''+cust+'\')">Remove</button>' : '')+
+      '</div>';
       return '<tr>'+
         '<td style="font-weight:700;">'+r.customer+flag+lc+'</td>'+
         '<td class="mono">'+fmtD(r.last_order)+'</td>'+
@@ -3511,7 +3571,7 @@ const AccountsApp = (() => {
         '<td class="mono">'+(r.avg_cycle_days||'?')+'d</td>'+
         '<td class="mono" style="font-weight:700;color:'+pctCol+'">'+(r.ripeness_pct!=null?r.ripeness_pct+'%':'—')+'</td>'+
         '<td class="mono">'+Math.round(r.total_litres||0).toLocaleString()+'</td>'+
-        '<td><button class="upd-btn" onclick="AccountsApp.openUpdate(\''+cust+'\')">Update</button></td>'+
+        '<td>'+actions+'</td>'+
       '</tr>';
     }).join('');
   }
