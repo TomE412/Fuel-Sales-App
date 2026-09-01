@@ -8043,18 +8043,6 @@ async function exportToCSV() {
   XLSX.utils.book_append_sheet(wb, ws, 'Sales');
   XLSX.writeFile(wb, `Monthly-Report-${reportData.month.replace(/\s+/g, '-')}.xlsx`);
 }
-
-// Existing session restore (reload without re-typing credentials) — only
-// runs when startupFromCache() didn't already handle a cached rep. Invoked
-// here, at the very end of the script, specifically because
-// startupFromCache() calls SalesApp.init(sb) synchronously for a cached
-// rep — SalesApp (and Overview/Accounts/LogisticsApp) must already exist
-// by the time this runs, which they now do.
-if (!startupFromCache()) {
-  sb.auth.getSession().then(async ({ data }) => {
-    if(data.session?.user) await enterWithProfile(data.session.user);
-  });
-}
 </script>
 </body>
 </html>
