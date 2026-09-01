@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light only">
+<title>Skelsee — Monthly Sales Report</title>
+<link rel="manifest" href="./manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --red:#D4180A;--red-dark:#A32D2D;--red-light:#FCEBEB;
+  --green:#1D9E75;--green-light:#EAF3DE;--green-dark:#3B6D11;
+  --amber:#BA7517;--amber-light:#FAEEDA;
+  --blue:#185FA5;--blue-light:#E6F1FB;--blue-dark:#0C447C;
+  --gray-light:#F4F4F2;--gray-border:#E0E0DE;--gray-text:#9a9a97;
+  --text:#1a1a18;--surface:#ffffff;--bg:#F0F0EE;
+  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;}
+body{overflow-y:auto;}
+.wrap{display:flex;flex-direction:column;min-height:100vh;}
+
+.header{background:#fff;border-bottom:1px solid var(--gray-border);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.logo-img{height:44px;width:auto;object-fit:contain;}
+.logo-text{display:flex;flex-direction:column;}
+.logo-text .title{font-size:14px;font-weight:700;color:var(--text);}
+.logo-text .sub{font-size:11px;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.05em;}
+.controls{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;}
+.ctrl-grp{display:flex;gap:8px;align-items:flex-end;}
+.field{display:flex;flex-direction:column;gap:4px;}
+.field label{font-size:11px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.05em;}
+.field input,.field select{padding:9px 11px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;font-family:var(--font);font-size:13px;outline:none;}
+.field input:focus,.field select:focus{border-color:var(--red);background:#fff;}
+.btn{padding:10px 16px;background:var(--red);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.btn:disabled{opacity:0.5;cursor:not-allowed;}
+.btn:hover:not(:disabled){filter:brightness(1.08);}
+.btn-secondary{background:var(--blue);display:flex;align-items:center;gap:6px;}
+.btn-secondary:hover:not(:disabled){filter:brightness(1.08);}
+.error{color:var(--red);font-size:11px;margin-top:3px;}
+
+.content{padding:16px 20px;flex:1;max-width:1600px;margin:0 auto;width:100%;}
+
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:24px;}
+.metric-card{background:#fff;border-radius:12px;border:1px solid var(--gray-border);padding:16px;display:flex;flex-direction:column;}
+.metric-label{font-size:11px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;}
+.metric-value{font-size:28px;font-weight:700;font-family:var(--mono);color:var(--text);margin-bottom:4px;}
+.metric-sub{font-size:12px;color:var(--gray-text);}
+.metric-card.accent-red .metric-value{color:var(--red);}
+.metric-card.accent-blue .metric-value{color:var(--blue);}
+.metric-card.accent-green .metric-value{color:var(--green-dark);}
+.metric-card.accent-amber .metric-value{color:var(--amber);}
+
+.panel{background:#fff;border-radius:12px;border:1px solid var(--gray-border);overflow:hidden;margin-bottom:16px;}
+.ph{padding:14px 16px;border-bottom:1px solid var(--gray-border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.ph-title{font-size:13px;font-weight:700;}
+.ph-count{font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;background:var(--gray-light);color:var(--gray-text);}
+
+.panel-body{padding:16px;}
+.panel-body.scroll{max-height:400px;overflow-y:auto;}
+
+.chart-container{position:relative;height:300px;margin-bottom:16px;}
+
+.list-group{display:flex;flex-direction:column;gap:0;}
+.list-item{padding:12px 16px;border-bottom:1px solid var(--gray-light);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.list-item:last-child{border-bottom:none;}
+.list-item:hover{background:var(--gray-light);}
+.item-main{display:flex;flex-direction:column;gap:2px;flex:1;}
+.item-name{font-size:13px;font-weight:700;color:var(--text);}
+.item-meta{font-size:11px;color:var(--gray-text);}
+.item-value{font-size:13px;font-weight:700;font-family:var(--mono);text-align:right;}
+.item-rank{width:32px;height:32px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;}
+.item-rank.silver{background:#C0C0C0;}
+.item-rank.bronze{background:#CD7F32;}
+
+.pill{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:4px;vertical-align:middle;}
+.p-diesel{background:var(--blue-light);color:var(--blue-dark);}
+.p-petrol{background:var(--red-light);color:var(--red-dark);}
+.p-paraffin{background:var(--amber-light);color:var(--amber);}
+
+.table{width:100%;border-collapse:collapse;font-size:12px;}
+.table th{text-align:left;padding:10px 12px;font-size:10px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid var(--gray-border);background:var(--gray-light);white-space:nowrap;}
+.table td{padding:10px 12px;border-bottom:1px solid var(--gray-light);}
+.table tr:last-child td{border-bottom:none;}
+.table tr:hover td{background:var(--gray-light);}
+
+.empty-state{padding:40px 20px;text-align:center;color:var(--gray-text);}
+.empty-icon{font-size:36px;margin-bottom:10px;opacity:0.4;}
+
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:900px){
+  .two-col{grid-template-columns:1fr;}
+  .metrics-grid{grid-template-columns:repeat(2,1fr);}
+  .controls{justify-content:center;}
+}
+@media(max-width:600px){
+  .metrics-grid{grid-template-columns:1fr;}
+  .header{flex-direction:column;align-items:flex-start;}
+  .controls{flex-direction:column;width:100%;}
+  .field input,.field select,.btn{width:100%;}
+  .chart-container{height:250px;}
+  .two-col{grid-template-columns:1fr;}
+}
+
+.loading{text-align:center;padding:40px;color:var(--gray-text);}
+.spinner{display:inline-block;width:20px;height:20px;border:3px solid var(--gray-light);border-top-color:var(--red);border-radius:50%;animation:spin 0.6s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="header">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/2wBDAQMDAwQDBAgEBAgQCwkLEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBD/wAARCAC2AZEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD9U6KK8c/al/aV8Kfsx/Debxhrare6teFrbRNKD7XvbnGee6xrkF27DAHJFAG78bf2gPhZ+z54Z/4Sf4m+JI7FJdy2dlEPMvL1x/BDEDlu2WOFXI3MM1+cXxe/4Kz/ABa8RXc9j8HvDOmeEtNyRFeXsa31+w7Nhv3KZ/u7Hx/eNfH3xW+LHjv40+Nb7x78Q9cl1LVL1uNxxFbxZJWGJOiRrnhR7k5JJPIUFqJ7bq37bH7VutTtcXnx08URsxyRaXAtV/BYQoH5Vs+F/wDgoB+1v4VnSW3+L9/qEan5odUtbe8Vx6EyIWH1VgfevnmigqyP0m+EH/BXi4M8Om/HL4cxeUxCtqvhxipQdMtbTMd3qSsg74U9K++vhZ8ZPhl8avD6+Jvhj4wsNdshtEogcia3Y9FmibDxNweGAzjIyK/nfrqPhx8TvHnwj8U2vjP4deJrzRNWtSNs1u/yyLnJSRD8siHHKsCD6UEuPY/orrzL4nftLfAz4M63b+HPid8Q7LQdSu7YXcNvPDM7PCWKh8ojDGVI654rgv2I/wBqXUP2pPhte65r3hn+yta8P3SafqMsBzaXchj3iSHJ3LxjchzjIwTnA+G/+Cun/JfvDH/Yqx/+lM1BKWtj7w/4b0/ZF/6LbpP/AIC3X/xqj/hvX9kX/otuk/8AgLdf/Gq/CqigrlR/RH8Mfi78OPjLoU/iX4ZeKbfXtMtrlrOW4gjkRVmVVYph1U5wynpjmuwr4d/4JG/8m8eIf+xsuf8A0mt6+hf2sPjFH8C/gH4s+IEc6pqMVobPSgTgtfT/ALuHH+6W3n2Q0Eta2MnV/wBt/wDZT0LVr3Q9V+M2kQ3un3ElrcxiC4cJLGxV13LGVOCCMgkVU/4b0/ZF/wCi26T/AOAt1/8AGq/CySSSaR5ppGkkkYu7sclmJySfcmm0FcqP3V/4b1/ZF/wCi26T/AOAt1/8ao/4b0/ZF/6LbpP/AIC3X/xqvwq [truncated]
+      <div class="logo-text">
+        <div class="title">⛽ Monthly Sales Report</div>
+        <div class="sub">Skelsee Fuel Sales</div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="ctrl-grp">
+        <div class="field">
+          <label>Month</label>
+          <input type="month" id="reportMonth" value="">
+        </div>
+        <button class="btn" onclick="generateReport()">📊 Generate Report</button>
+      </div>
+      <button class="btn btn-secondary" onclick="exportToCSV()">📥 Export CSV</button>
+    </div>
+  </div>
+
+  <div class="content" id="content">
+    <div class="loading">
+      <div class="spinner"></div>
+      <div style="margin-top:12px;">Loading report...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Initialize Supabase
+const SUPABASE_URL = 'https://lcwivtnupbrzxigmwyqf.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxjd2l2dG51cGJyenhpZ213eXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjEwMzcwMzAsImV4cCI6MjAzNjYxNzAzMH0.6rk9gCpxXjDFRsJYKNQCHwVLpRe8c5JsQXKL6Zy9jFE';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let reportData = {};
+const chartInstances = {};
+
+// Set default month to current
+document.getElementById('reportMonth').valueAsDate = new Date();
+
+async function generateReport() {
+  const monthValue = document.getElementById('reportMonth').value;
+  if (!monthValue) {
+    alert('Please select a month');
+    return;
+  }
+
+  showLoading();
+  try {
+    const [year, month] = monthValue.split('-').map(Number);
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 1);
+
+    // Fetch all sales data for the month
+    const { data: sales, error } = await supabase
+      .from('sales')
+      .select('*')
+      .gte('sale_date', startDate.toISOString().split('T')[0])
+      .lt('sale_date', endDate.toISOString().split('T')[0]);
+
+    if (error) throw error;
+
+    // Fetch all customers
+    const { data: allCustomers } = await supabase
+      .from('sales')
+      .select('customer')
+      .returns(true);
+
+    reportData = {
+      month: startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      monthStart: startDate,
+      sales: sales || [],
+      allCustomers: [...new Set(allCustomers?.map(s => s.customer) || [])]
+    };
+
+    renderReport();
+  } catch (err) {
+    console.error('Error generating report:', err);
+    document.getElementById('content').innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><div>Error loading report: ${err.message}</div></div>`;
+  }
+}
+
+function renderReport() {
+  const data = reportData.sales;
+  
+  // Calculate all metrics
+  const metrics = {
+    totalLitres: data.reduce((sum, s) => sum + (s.litres || 0), 0),
+    totalOrders: data.length,
+    averageOrderSize: data.length > 0 ? data.reduce((sum, s) => sum + (s.litres || 0), 0) / data.length : 0,
+    totalRevenue: data.reduce((sum, s) => sum + ((s.litres || 0) * (s.price_per_litre || 0)), 0),
+  };
+
+  // Fuel type breakdown
+  const fuelBreakdown = {};
+  data.forEach(s => {
+    const fuel = s.fuel_type || 'Unknown';
+    if (!fuelBreakdown[fuel]) fuelBreakdown[fuel] = { litres: 0, count: 0, revenue: 0 };
+    fuelBreakdown[fuel].litres += s.litres || 0;
+    fuelBreakdown[fuel].count += 1;
+    fuelBreakdown[fuel].revenue += (s.litres || 0) * (s.price_per_litre || 0);
+  });
+
+  // Top customers
+  const customerSales = {};
+  data.forEach(s => {
+    const cust = s.customer || 'Unknown';
+    if (!customerSales[cust]) customerSales[cust] = { litres: 0, orders: 0, revenue: 0 };
+    customerSales[cust].litres += s.litres || 0;
+    customerSales[cust].orders += 1;
+    customerSales[cust].revenue += (s.litres || 0) * (s.price_per_litre || 0);
+  });
+  const topCustomers = Object.entries(customerSales)
+    .map(([name, stats]) => ({ name, ...stats }))
+    .sort((a, b) => b.litres - a.litres)
+    .slice(0, 10);
+
+  // Sales by rep
+  const repSales = {};
+  data.forEach(s => {
+    const rep = s.rep_name || 'Unknown';
+    if (!repSales[rep]) repSales[rep] = { litres: 0, orders: 0, revenue: 0, customers: new Set() };
+    repSales[rep].litres += s.litres || 0;
+    repSales[rep].orders += 1;
+    repSales[rep].customers.add(s.customer);
+    repSales[rep].revenue += (s.litres || 0) * (s.price_per_litre || 0);
+  });
+  const repLeaderboard = Object.entries(repSales)
+    .map(([name, stats]) => ({ name, ...stats, customers: stats.customers.size }))
+    .sort((a, b) => b.litres - a.litres);
+
+  // Delivery lead times (delivered_at - sale_date)
+  const deliveredSales = data.filter(s => s.delivered_at && s.sale_date);
+  let leadTimes = deliveredSales.map(s => {
+    const saleDate = new Date(s.sale_date);
+    const deliveredDate = new Date(s.delivered_at);
+    return Math.floor((deliveredDate - saleDate) / (1000 * 60 * 60 * 24)); // days
+  }).filter(lt => lt >= 0);
+
+  const leadTimeStats = leadTimes.length > 0 ? {
+    fastest: Math.min(...leadTimes),
+    slowest: Math.max(...leadTimes),
+    average: (leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length).toFixed(1),
+    median: getMedian(leadTimes)
+  } : { fastest: '-', slowest: '-', average: '-', median: '-' };
+
+  // Highest price
+  const maxPriceSale = data.reduce((max, s) => 
+    (s.price_per_litre || 0) > (max.price_per_litre || 0) ? s : max, 
+    { price_per_litre: 0 }
+  );
+  const minPriceSale = data.reduce((min, s) => 
+    (s.price_per_litre || 0) > 0 && (s.price_per_litre || 0) < (min.price_per_litre || 999999) ? s : min, 
+    { price_per_litre: 999999 }
+  );
+  const avgPrice = data.length > 0 ? (data.reduce((sum, s) => sum + (s.price_per_litre || 0), 0) / data.length).toFixed(2) : 0;
+
+  // Customers not sold to (ripeness < 80%)
+  const customersNotSold = reportData.allCustomers.filter(cust => !customerSales[cust]);
+
+  // Payment health
+  const paymentStats = {
+    paid: data.filter(s => s.paid).length,
+    unpaid: data.filter(s => !s.paid).length,
+    invoiced: data.filter(s => s.invoiced).length,
+    uninvoiced: data.filter(s => !s.invoiced).length
+  };
+
+  // Build HTML
+  let html = `
+    <div class="metrics-grid">
+      <div class="metric-card accent-blue">
+        <div class="metric-label">Total Litres Sold</div>
+        <div class="metric-value">${formatNumber(metrics.totalLitres)}</div>
+        <div class="metric-sub">${metrics.totalOrders} orders</div>
+      </div>
+      <div class="metric-card accent-red">
+        <div class="metric-label">Total Revenue</div>
+        <div class="metric-value">$${formatNumber(metrics.totalRevenue)}</div>
+        <div class="metric-sub">Avg: $${(metrics.totalRevenue / metrics.totalOrders).toFixed(2)}</div>
+      </div>
+      <div class="metric-card accent-green">
+        <div class="metric-label">Fastest Delivery</div>
+        <div class="metric-value">${leadTimeStats.fastest}</div>
+        <div class="metric-sub">days from sale to delivery</div>
+      </div>
+      <div class="metric-card accent-amber">
+        <div class="metric-label">Slowest Delivery</div>
+        <div class="metric-value">${leadTimeStats.slowest}</div>
+        <div class="metric-sub">max lead time</div>
+      </div>
+      <div class="metric-card accent-blue">
+        <div class="metric-label">Avg Delivery Time</div>
+        <div class="metric-value">${leadTimeStats.average}</div>
+        <div class="metric-sub">days (median: ${leadTimeStats.median})</div>
+      </div>
+      <div class="metric-card accent-red">
+        <div class="metric-label">Highest Fuel Price</div>
+        <div class="metric-value">$${(maxPriceSale.price_per_litre || 0).toFixed(2)}</div>
+        <div class="metric-sub">${maxPriceSale.rep_name} - ${maxPriceSale.fuel_type}</div>
+      </div>
+      <div class="metric-card accent-green">
+        <div class="metric-label">Top Customers</div>
+        <div class="metric-value">${topCustomers.length}</div>
+        <div class="metric-sub">tracked below</div>
+      </div>
+      <div class="metric-card accent-amber">
+        <div class="metric-label">Not Sold To</div>
+        <div class="metric-value">${customersNotSold.length}</div>
+        <div class="metric-sub">inactive customers</div>
+      </div>
+    </div>
+
+    <!-- Fuel Type Breakdown -->
+    <div class="two-col">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title">📊 Fuel Type Breakdown</div>
+        </div>
+        <div class="panel-body">
+          <div class="chart-container">
+            <canvas id="fuelChart"></canvas>
+          </div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Fuel Type</th>
+                <th style="text-align:right;">Litres</th>
+                <th style="text-align:right;">Orders</th>
+                <th style="text-align:right;">Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${Object.entries(fuelBreakdown).map(([fuel, stats]) => `
+                <tr>
+                  <td>${fuel} <span class="pill p-${fuel.toLowerCase()}">${stats.count}</span></td>
+                  <td style="text-align:right;font-family:var(--mono);">${formatNumber(stats.litres)}</td>
+                  <td style="text-align:right;font-family:var(--mono);">${stats.count}</td>
+                  <td style="text-align:right;font-family:var(--mono);">$${formatNumber(stats.revenue)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Delivery Lead Time Distribution -->
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title">⏱️ Lead Time Distribution</div>
+        </div>
+        <div class="panel-body">
+          <div class="list-group">
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Fastest (Best Case)</div>
+                <div class="item-meta">shortest time to delivery</div>
+              </div>
+              <div class="item-value">${leadTimeStats.fastest} days</div>
+            </div>
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Slowest (Worst Case)</div>
+                <div class="item-meta">longest time to delivery</div>
+              </div>
+              <div class="item-value">${leadTimeStats.slowest} days</div>
+            </div>
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Average Lead Time</div>
+                <div class="item-meta">mean delivery time</div>
+              </div>
+              <div class="item-value">${leadTimeStats.average} days</div>
+            </div>
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Median Lead Time</div>
+                <div class="item-meta">50th percentile</div>
+              </div>
+              <div class="item-value">${leadTimeStats.median} days</div>
+            </div>
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Delivered Sales</div>
+                <div class="item-meta">orders with delivery timestamp</div>
+              </div>
+              <div class="item-value">${deliveredSales.length}/${metrics.totalOrders}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Customers -->
+    <div class="panel">
+      <div class="ph">
+        <div class="ph-title">🔝 Top 10 Customers</div>
+        <div class="ph-count">${topCustomers.length}</div>
+      </div>
+      <div class="panel-body scroll">
+        <div class="list-group">
+          ${topCustomers.map((cust, idx) => `
+            <div class="list-item">
+              <div class="item-rank ${idx === 0 ? '' : idx === 1 ? 'silver' : idx === 2 ? 'bronze' : ''}">${idx + 1}</div>
+              <div class="item-main" style="flex:1;">
+                <div class="item-name">${cust.name}</div>
+                <div class="item-meta">${cust.orders} orders • Avg: ${(cust.litres / cust.orders).toFixed(0)}L</div>
+              </div>
+              <div style="text-align:right;">
+                <div class="item-value">${formatNumber(cust.litres)}L</div>
+                <div class="item-meta" style="text-align:right;">$${formatNumber(cust.revenue)}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+
+    <!-- Sales by Rep -->
+    <div class="panel">
+      <div class="ph">
+        <div class="ph-title">👥 Sales by Rep</div>
+      </div>
+      <div class="panel-body scroll">
+        <div class="chart-container" style="height:250px;">
+          <canvas id="repChart"></canvas>
+        </div>
+        <table class="table" style="margin-top:16px;">
+          <thead>
+            <tr>
+              <th>Rep Name</th>
+              <th style="text-align:right;">Litres</th>
+              <th style="text-align:right;">Orders</th>
+              <th style="text-align:right;">Customers</th>
+              <th style="text-align:right;">Revenue</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${repLeaderboard.map((rep, idx) => `
+              <tr>
+                <td><strong>${rep.name}</strong> <span class="ph-count" style="margin-left:8px;">#${idx + 1}</span></td>
+                <td style="text-align:right;font-family:var(--mono);">${formatNumber(rep.litres)}</td>
+                <td style="text-align:right;font-family:var(--mono);">${rep.orders}</td>
+                <td style="text-align:right;font-family:var(--mono);">${rep.customers}</td>
+                <td style="text-align:right;font-family:var(--mono);">$${formatNumber(rep.revenue)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Payment Health -->
+    <div class="two-col">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title">💰 Payment Status</div>
+        </div>
+        <div class="panel-body">
+          <div class="list-group">
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Paid Orders</div>
+                <div class="item-meta">${paymentStats.paid}/${metrics.totalOrders}</div>
+              </div>
+              <div class="item-value" style="color:var(--green);">${((paymentStats.paid / metrics.totalOrders) * 100).toFixed(0)}%</div>
+            </div>
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Unpaid Orders</div>
+                <div class="item-meta">${paymentStats.unpaid}/${metrics.totalOrders}</div>
+              </div>
+              <div class="item-value" style="color:var(--red);">${((paymentStats.unpaid / metrics.totalOrders) * 100).toFixed(0)}%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title">📋 Invoice Status</div>
+        </div>
+        <div class="panel-body">
+          <div class="list-group">
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Invoiced Orders</div>
+                <div class="item-meta">${paymentStats.invoiced}/${metrics.totalOrders}</div>
+              </div>
+              <div class="item-value" style="color:var(--green);">${((paymentStats.invoiced / metrics.totalOrders) * 100).toFixed(0)}%</div>
+            </div>
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Uninvoiced Orders</div>
+                <div class="item-meta">${paymentStats.uninvoiced}/${metrics.totalOrders}</div>
+              </div>
+              <div class="item-value" style="color:var(--amber);">${((paymentStats.uninvoiced / metrics.totalOrders) * 100).toFixed(0)}%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Customers Not Sold To -->
+    <div class="panel">
+      <div class="ph">
+        <div class="ph-title">📍 Inactive Customers (Not Sold To This Month)</div>
+        <div class="ph-count">${customersNotSold.length}</div>
+      </div>
+      <div class="panel-body scroll">
+        ${customersNotSold.length > 0 ? `
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Customer Name</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${customersNotSold.slice(0, 50).map(cust => `
+                <tr><td>${cust}</td></tr>
+              `).join('')}
+              ${customersNotSold.length > 50 ? `<tr><td colspan="1" style="text-align:center;color:var(--gray-text);"><em>... and ${customersNotSold.length - 50} more</em></td></tr>` : ''}
+            </tbody>
+          </table>
+        ` : `
+          <div class="empty-state">
+            <div class="empty-icon">✅</div>
+            <div>All customers purchased this month!</div>
+          </div>
+        `}
+      </div>
+    </div>
+
+    <!-- Price Analysis -->
+    <div class="panel">
+      <div class="ph">
+        <div class="ph-title">💵 Fuel Price Analysis</div>
+      </div>
+      <div class="panel-body">
+        <div class="list-group">
+          <div class="list-item">
+            <div class="item-main">
+              <div class="item-name">Highest Price</div>
+              <div class="item-meta">${maxPriceSale.rep_name || 'N/A'} - ${maxPriceSale.fuel_type || 'Unknown'}</div>
+            </div>
+            <div class="item-value">$${(maxPriceSale.price_per_litre || 0).toFixed(2)}/L</div>
+          </div>
+          <div class="list-item">
+            <div class="item-main">
+              <div class="item-name">Lowest Price</div>
+              <div class="item-meta">${minPriceSale.rep_name || 'N/A'} - ${minPriceSale.fuel_type || 'Unknown'}</div>
+            </div>
+            <div class="item-value">$${(minPriceSale.price_per_litre || 0).toFixed(2)}/L</div>
+          </div>
+          <div class="list-item">
+            <div class="item-main">
+              <div class="item-name">Average Price</div>
+              <div class="item-meta">all sales combined</div>
+            </div>
+            <div class="item-value">$${avgPrice}/L</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('content').innerHTML = html;
+
+  // Initialize charts
+  setTimeout(() => {
+    initFuelChart(fuelBreakdown);
+    initRepChart(repLeaderboard);
+  }, 100);
+}
+
+function initFuelChart(fuelBreakdown) {
+  const ctx = document.getElementById('fuelChart');
+  if (!ctx) return;
+  
+  if (chartInstances.fuel) chartInstances.fuel.destroy();
+
+  const labels = Object.keys(fuelBreakdown);
+  const data = labels.map(f => fuelBreakdown[f].litres);
+  const colors = {
+    'Diesel': '#185FA5',
+    'Petrol': '#D4180A',
+    'Paraffin': '#BA7517'
+  };
+
+  chartInstances.fuel = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: labels.map(l => colors[l] || '#999'),
+        borderColor: '#fff',
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } }
+    }
+  });
+}
+
+function initRepChart(repLeaderboard) {
+  const ctx = document.getElementById('repChart');
+  if (!ctx) return;
+
+  if (chartInstances.rep) chartInstances.rep.destroy();
+
+  const labels = repLeaderboard.slice(0, 8).map(r => r.name);
+  const data = repLeaderboard.slice(0, 8).map(r => r.litres);
+
+  chartInstances.rep = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Litres Sold',
+        data,
+        backgroundColor: '#D4180A',
+        borderColor: '#A32D2D',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true } }
+    }
+  });
+}
+
+function showLoading() {
+  document.getElementById('content').innerHTML = `
+    <div class="loading">
+      <div class="spinner"></div>
+      <div style="margin-top:12px;">Generating report...</div>
+    </div>
+  `;
+}
+
+function formatNumber(num) {
+  return Math.round(num).toLocaleString();
+}
+
+function getMedian(arr) {
+  const sorted = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : ((sorted[mid - 1] + sorted[mid]) / 2).toFixed(1);
+}
+
+async function exportToCSV() {
+  if (!reportData.sales || reportData.sales.length === 0) {
+    alert('No data to export. Generate a report first.');
+    return;
+  }
+
+  const data = reportData.sales;
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sales');
+  XLSX.writeFile(wb, `Monthly-Report-${reportData.month.replace(/\s+/g, '-')}.xlsx`);
+}
+
+// Load initial report
+generateReport();
+</script>
+
+</body>
+</html>

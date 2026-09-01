@@ -12,6 +12,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -644,7 +645,55 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 #sec-sales .cust-new{display:none;align-items:center;gap:6px;margin-top:6px;padding:7px 10px;background:var(--blue-light);border-radius:6px;}
 #sec-sales .cust-new.show{display:flex;}
 #sec-sales .cust-new .txt{font-size:11px;color:var(--blue);font-weight:600;}
-</style>
+
+/* ================= REPORTS SECTION ================= */
+#sec-reports .metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:24px;}
+#sec-reports .metric-card{background:#fff;border-radius:12px;border:1px solid var(--gray-border);padding:16px;display:flex;flex-direction:column;}
+#sec-reports .metric-label{font-size:11px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;}
+#sec-reports .metric-value{font-size:28px;font-weight:700;font-family:var(--mono);color:var(--text);margin-bottom:4px;}
+#sec-reports .metric-sub{font-size:12px;color:var(--gray-text);}
+#sec-reports .metric-card.accent-red .metric-value{color:var(--red);}
+#sec-reports .metric-card.accent-blue .metric-value{color:var(--blue);}
+#sec-reports .metric-card.accent-green .metric-value{color:var(--green-dark);}
+#sec-reports .metric-card.accent-amber .metric-value{color:var(--amber);}
+#sec-reports .panel{background:#fff;border-radius:12px;border:1px solid var(--gray-border);overflow:hidden;margin-bottom:16px;}
+#sec-reports .ph{padding:14px 16px;border-bottom:1px solid var(--gray-border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+#sec-reports .ph-title{font-size:13px;font-weight:700;}
+#sec-reports .ph-count{font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;background:var(--gray-light);color:var(--gray-text);}
+#sec-reports .panel-body{padding:16px;}
+#sec-reports .panel-body.scroll{max-height:400px;overflow-y:auto;}
+#sec-reports .chart-container{position:relative;height:300px;margin-bottom:16px;}
+#sec-reports .list-group{display:flex;flex-direction:column;gap:0;}
+#sec-reports .list-item{padding:12px 16px;border-bottom:1px solid var(--gray-light);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+#sec-reports .list-item:last-child{border-bottom:none;}
+#sec-reports .list-item:hover{background:var(--gray-light);}
+#sec-reports .item-main{display:flex;flex-direction:column;gap:2px;flex:1;}
+#sec-reports .item-name{font-size:13px;font-weight:700;color:var(--text);}
+#sec-reports .item-meta{font-size:11px;color:var(--gray-text);}
+#sec-reports .item-value{font-size:13px;font-weight:700;font-family:var(--mono);text-align:right;}
+#sec-reports .item-rank{width:32px;height:32px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;}
+#sec-reports .item-rank.silver{background:#C0C0C0;}
+#sec-reports .item-rank.bronze{background:#CD7F32;}
+#sec-reports .pill{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:4px;vertical-align:middle;}
+#sec-reports .p-diesel{background:var(--blue-light);color:var(--blue-dark);}
+#sec-reports .p-petrol{background:var(--red-light);color:var(--red-dark);}
+#sec-reports .p-paraffin{background:var(--amber-light);color:var(--amber);}
+#sec-reports .table{width:100%;border-collapse:collapse;font-size:12px;}
+#sec-reports .table th{text-align:left;padding:10px 12px;font-size:10px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid var(--gray-border);background:var(--gray-light);white-space:nowrap;}
+#sec-reports .table td{padding:10px 12px;border-bottom:1px solid var(--gray-light);}
+#sec-reports .table tr:last-child td{border-bottom:none;}
+#sec-reports .table tr:hover td{background:var(--gray-light);}
+#sec-reports .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+#sec-reports .empty-state{padding:40px 20px;text-align:center;color:var(--gray-text);}
+#sec-reports .empty-icon{font-size:36px;margin-bottom:10px;opacity:0.4;}
+@media(max-width:900px){
+  #sec-reports .two-col{grid-template-columns:1fr;}
+  #sec-reports .metrics-grid{grid-template-columns:repeat(2,1fr);}
+}
+@media(max-width:600px){
+  #sec-reports .metrics-grid{grid-template-columns:1fr;}
+}
+
 </head>
 <body>
 
@@ -1984,10 +2033,36 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
   </div>
 </div>
 
+    <!-- REPORTS -->
+    <div class="admin-section" id="sec-reports">
+      <div style="display:flex;flex-direction:column;height:100%;overflow:hidden;">
+        <div style="background:#fff;border-bottom:1px solid var(--gray-border);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;flex-shrink:0;">
+          <div>
+            <div style="font-size:9px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.08em;">Management</div>
+            <div style="font-size:12px;font-weight:700;color:var(--text);">Monthly Sales Report</div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <label style="font-size:11px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.05em;">Month</label>
+              <input type="month" id="reportMonth" style="padding:9px 11px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;font-family:var(--font);font-size:13px;outline:none;" value="">
+            </div>
+            <button class="btn" onclick="generateReport()" style="padding:10px 16px;background:var(--red);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">📊 Generate Report</button>
+            <button class="btn" onclick="exportToCSV()" style="padding:10px 16px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px;">📥 Export CSV</button>
+          </div>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px 20px;" id="reportContent">
+          <div style="text-align:center;padding:40px;color:var(--gray-text);">
+            <div style="display:inline-block;width:20px;height:20px;border:3px solid var(--gray-light);border-top-color:var(--red);border-radius:50%;animation:spin 0.6s linear infinite;"></div>
+            <div style="margin-top:12px;">Loading report...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
 <script>
-const SUPABASE_URL = 'https://lkaotuavapyvqfuuyzft.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYW90dWF2YXB5dnFmdXV5emZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MzU4NzcsImV4cCI6MjA5NzQxMTg3N30.he7Ah-TVyzZZAMiCHglIzP-UbdnxDw-CW4V9mYYJBDU';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 
 // Which sections a role is allowed to see. Overview is available to every
 // allowed role since it's a pure read-only summary; Accounts/Logistics
@@ -1996,7 +2071,8 @@ const SECTIONS = [
   { key:'overview',   label:'📊 Overview',   roles:['admin','ops','accounts'] },
   { key:'accounts',   label:'💰 Accounts',   roles:['admin','accounts'] },
   { key:'logistics',  label:'🚛 Logistics',  roles:['admin','ops'] },
-  { key:'sales',      label:'⛽ Sales',       roles:['admin','rep'] }
+  { key:'sales',      label:'⛽ Sales',       roles:['admin','rep'] },
+  { key:'reports',    label:'📈 Reports',    roles:['admin'] }
 ];
 let myRole = null;
 let activeSection = 'overview';
@@ -2081,6 +2157,9 @@ async function enterWithProfile(user){
   if(SECTIONS.find(s=>s.key==='sales').roles.includes(myRole)){
     SalesApp.init(sb);
     await SalesApp.loadUser(user, false); // no PIN needed — we just authenticated live
+  }
+  if(SECTIONS.find(s=>s.key==='reports').roles.includes(myRole)){
+    document.getElementById('reportMonth').valueAsDate = new Date();
   }
   registerServiceWorker();
   return true;
@@ -7431,6 +7510,540 @@ if (!startupFromCache()) {
     if(data.session?.user) await enterWithProfile(data.session.user);
   });
 }
-</script>
-</body>
-</html>
+
+// ================= REPORTS APP (Monthly Sales Report) =================
+let reportData = {};
+const chartInstances = {};
+
+async function generateReport() {
+  const monthValue = document.getElementById('reportMonth').value;
+  if (!monthValue) {
+    alert('Please select a month');
+    return;
+  }
+
+  showReportLoading();
+  try {
+    const [year, month] = monthValue.split('-').map(Number);
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 1);
+
+    // Fetch all sales data for the month
+    const { data: sales, error } = await sb
+      .from('sales')
+      .select('*')
+      .gte('sale_date', startDate.toISOString().split('T')[0])
+      .lt('sale_date', endDate.toISOString().split('T')[0]);
+
+    if (error) throw error;
+
+    // Fetch all customers
+    const { data: allCustomers } = await sb
+      .from('sales')
+      .select('customer')
+      .returns(true);
+
+    reportData = {
+      month: startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      monthStart: startDate,
+      sales: sales || [],
+      allCustomers: [...new Set(allCustomers?.map(s => s.customer) || [])]
+    };
+
+    renderReport();
+  } catch (err) {
+    console.error('Error generating report:', err);
+    document.getElementById('reportContent').innerHTML = `<div style="text-align:center;padding:40px;color:var(--gray-text);"><div style="font-size:36px;margin-bottom:10px;opacity:0.4;">❌</div><div>Error loading report: ${err.message}</div></div>`;
+  }
+}
+
+function renderReport() {
+  const data = reportData.sales;
+  
+  // Calculate all metrics
+  const metrics = {
+    totalLitres: data.reduce((sum, s) => sum + (s.litres || 0), 0),
+    totalOrders: data.length,
+    averageOrderSize: data.length > 0 ? data.reduce((sum, s) => sum + (s.litres || 0), 0) / data.length : 0,
+    totalRevenue: data.reduce((sum, s) => sum + ((s.litres || 0) * (s.price_per_litre || 0)), 0),
+  };
+
+  // Fuel type breakdown
+  const fuelBreakdown = {};
+  data.forEach(s => {
+    const fuel = s.fuel_type || 'Unknown';
+    if (!fuelBreakdown[fuel]) fuelBreakdown[fuel] = { litres: 0, count: 0, revenue: 0 };
+    fuelBreakdown[fuel].litres += s.litres || 0;
+    fuelBreakdown[fuel].count += 1;
+    fuelBreakdown[fuel].revenue += (s.litres || 0) * (s.price_per_litre || 0);
+  });
+
+  // Top customers
+  const customerSales = {};
+  data.forEach(s => {
+    const cust = s.customer || 'Unknown';
+    if (!customerSales[cust]) customerSales[cust] = { litres: 0, orders: 0, revenue: 0 };
+    customerSales[cust].litres += s.litres || 0;
+    customerSales[cust].orders += 1;
+    customerSales[cust].revenue += (s.litres || 0) * (s.price_per_litre || 0);
+  });
+  const topCustomers = Object.entries(customerSales)
+    .map(([name, stats]) => ({ name, ...stats }))
+    .sort((a, b) => b.litres - a.litres)
+    .slice(0, 10);
+
+  // Sales by rep
+  const repSales = {};
+  data.forEach(s => {
+    const rep = s.rep_name || 'Unknown';
+    if (!repSales[rep]) repSales[rep] = { litres: 0, orders: 0, revenue: 0, customers: new Set() };
+    repSales[rep].litres += s.litres || 0;
+    repSales[rep].orders += 1;
+    repSales[rep].customers.add(s.customer);
+    repSales[rep].revenue += (s.litres || 0) * (s.price_per_litre || 0);
+  });
+  const repLeaderboard = Object.entries(repSales)
+    .map(([name, stats]) => ({ name, ...stats, customers: stats.customers.size }))
+    .sort((a, b) => b.litres - a.litres);
+
+  // Delivery lead times (delivered_at - sale_date)
+  const deliveredSales = data.filter(s => s.delivered_at && s.sale_date);
+  let leadTimes = deliveredSales.map(s => {
+    const saleDate = new Date(s.sale_date);
+    const deliveredDate = new Date(s.delivered_at);
+    return Math.floor((deliveredDate - saleDate) / (1000 * 60 * 60 * 24)); // days
+  }).filter(lt => lt >= 0);
+
+  const leadTimeStats = leadTimes.length > 0 ? {
+    fastest: Math.min(...leadTimes),
+    slowest: Math.max(...leadTimes),
+    average: (leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length).toFixed(1),
+    median: getMedian(leadTimes)
+  } : { fastest: '-', slowest: '-', average: '-', median: '-' };
+
+  // Highest price
+  const maxPriceSale = data.reduce((max, s) => 
+    (s.price_per_litre || 0) > (max.price_per_litre || 0) ? s : max, 
+    { price_per_litre: 0 }
+  );
+  const minPriceSale = data.reduce((min, s) => 
+    (s.price_per_litre || 0) > 0 && (s.price_per_litre || 0) < (min.price_per_litre || 999999) ? s : min, 
+    { price_per_litre: 999999 }
+  );
+  const avgPrice = data.length > 0 ? (data.reduce((sum, s) => sum + (s.price_per_litre || 0), 0) / data.length).toFixed(2) : 0;
+
+  // Customers not sold to
+  const customersNotSold = reportData.allCustomers.filter(cust => !customerSales[cust]);
+
+  // Payment health
+  const paymentStats = {
+    paid: data.filter(s => s.paid).length,
+    unpaid: data.filter(s => !s.paid).length,
+    invoiced: data.filter(s => s.invoiced).length,
+    uninvoiced: data.filter(s => !s.invoiced).length
+  };
+
+  // Build HTML
+  let html = `
+    <div class="metrics-grid">
+      <div class="metric-card accent-blue">
+        <div class="metric-label">Total Litres Sold</div>
+        <div class="metric-value">${formatNumber(metrics.totalLitres)}</div>
+        <div class="metric-sub">${metrics.totalOrders} orders</div>
+      </div>
+      <div class="metric-card accent-red">
+        <div class="metric-label">Total Revenue</div>
+        <div class="metric-value">$${formatNumber(metrics.totalRevenue)}</div>
+        <div class="metric-sub">Avg: $${(metrics.totalRevenue / metrics.totalOrders).toFixed(2)}</div>
+      </div>
+      <div class="metric-card accent-green">
+        <div class="metric-label">Fastest Delivery</div>
+        <div class="metric-value">${leadTimeStats.fastest}</div>
+        <div class="metric-sub">days from sale</div>
+      </div>
+      <div class="metric-card accent-amber">
+        <div class="metric-label">Slowest Delivery</div>
+        <div class="metric-value">${leadTimeStats.slowest}</div>
+        <div class="metric-sub">max lead time</div>
+      </div>
+      <div class="metric-card accent-blue">
+        <div class="metric-label">Avg Delivery Time</div>
+        <div class="metric-value">${leadTimeStats.average}</div>
+        <div class="metric-sub">days</div>
+      </div>
+      <div class="metric-card accent-red">
+        <div class="metric-label">Highest Fuel Price</div>
+        <div class="metric-value">$${(maxPriceSale.price_per_litre || 0).toFixed(2)}</div>
+        <div class="metric-sub">/L</div>
+      </div>
+      <div class="metric-card accent-green">
+        <div class="metric-label">Top Customers</div>
+        <div class="metric-value">${topCustomers.length}</div>
+        <div class="metric-sub">tracked below</div>
+      </div>
+      <div class="metric-card accent-amber">
+        <div class="metric-label">Inactive Customers</div>
+        <div class="metric-value">${customersNotSold.length}</div>
+        <div class="metric-sub">not sold this month</div>
+      </div>
+    </div>
+
+    <!-- Fuel Type Breakdown -->
+    <div class="two-col">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title">📊 Fuel Type Breakdown</div>
+        </div>
+        <div class="panel-body">
+          <div class="chart-container">
+            <canvas id="fuelChart"></canvas>
+          </div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Fuel Type</th>
+                <th style="text-align:right;">Litres</th>
+                <th style="text-align:right;">Orders</th>
+                <th style="text-align:right;">Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${Object.entries(fuelBreakdown).map(([fuel, stats]) => `
+                <tr>
+                  <td>${fuel}</td>
+                  <td style="text-align:right;font-family:var(--mono);">${formatNumber(stats.litres)}</td>
+                  <td style="text-align:right;font-family:var(--mono);">${stats.count}</td>
+                  <td style="text-align:right;font-family:var(--mono);">$${formatNumber(stats.revenue)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Delivery Lead Time Distribution -->
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title">⏱️ Lead Time Distribution</div>
+        </div>
+        <div class="panel-body">
+          <div class="list-group">
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Fastest (Best Case)</div>
+                <div class="item-meta">shortest time to delivery</div>
+              </div>
+              <div class="item-value">${leadTimeStats.fastest} days</div>
+            </div>
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Slowest (Worst Case)</div>
+                <div class="item-meta">longest time to delivery</div>
+              </div>
+              <div class="item-value">${leadTimeStats.slowest} days</div>
+            </div>
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Average Lead Time</div>
+                <div class="item-meta">mean delivery time</div>
+              </div>
+              <div class="item-value">${leadTimeStats.average} days</div>
+            </div>
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Median Lead Time</div>
+                <div class="item-meta">50th percentile</div>
+              </div>
+              <div class="item-value">${leadTimeStats.median} days</div>
+            </div>
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Delivered Sales</div>
+                <div class="item-meta">orders with delivery timestamp</div>
+              </div>
+              <div class="item-value">${deliveredSales.length}/${metrics.totalOrders}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Customers -->
+    <div class="panel">
+      <div class="ph">
+        <div class="ph-title">🔝 Top 10 Customers</div>
+        <div class="ph-count">${topCustomers.length}</div>
+      </div>
+      <div class="panel-body scroll">
+        <div class="list-group">
+          ${topCustomers.map((cust, idx) => `
+            <div class="list-item">
+              <div class="item-rank ${idx === 0 ? '' : idx === 1 ? 'silver' : idx === 2 ? 'bronze' : ''}">${idx + 1}</div>
+              <div class="item-main" style="flex:1;">
+                <div class="item-name">${cust.name}</div>
+                <div class="item-meta">${cust.orders} orders • Avg: ${(cust.litres / cust.orders).toFixed(0)}L</div>
+              </div>
+              <div style="text-align:right;">
+                <div class="item-value">${formatNumber(cust.litres)}L</div>
+                <div class="item-meta" style="text-align:right;">$${formatNumber(cust.revenue)}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+
+    <!-- Sales by Rep -->
+    <div class="panel">
+      <div class="ph">
+        <div class="ph-title">👥 Sales by Rep</div>
+      </div>
+      <div class="panel-body scroll">
+        <div class="chart-container" style="height:250px;">
+          <canvas id="repChart"></canvas>
+        </div>
+        <table class="table" style="margin-top:16px;">
+          <thead>
+            <tr>
+              <th>Rep Name</th>
+              <th style="text-align:right;">Litres</th>
+              <th style="text-align:right;">Orders</th>
+              <th style="text-align:right;">Customers</th>
+              <th style="text-align:right;">Revenue</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${repLeaderboard.map((rep, idx) => `
+              <tr>
+                <td><strong>${rep.name}</strong> <span class="ph-count" style="margin-left:8px;">#${idx + 1}</span></td>
+                <td style="text-align:right;font-family:var(--mono);">${formatNumber(rep.litres)}</td>
+                <td style="text-align:right;font-family:var(--mono);">${rep.orders}</td>
+                <td style="text-align:right;font-family:var(--mono);">${rep.customers}</td>
+                <td style="text-align:right;font-family:var(--mono);">$${formatNumber(rep.revenue)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Payment Health -->
+    <div class="two-col">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title">💰 Payment Status</div>
+        </div>
+        <div class="panel-body">
+          <div class="list-group">
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Paid Orders</div>
+                <div class="item-meta">${paymentStats.paid}/${metrics.totalOrders}</div>
+              </div>
+              <div class="item-value" style="color:var(--green);">${((paymentStats.paid / metrics.totalOrders) * 100).toFixed(0)}%</div>
+            </div>
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Unpaid Orders</div>
+                <div class="item-meta">${paymentStats.unpaid}/${metrics.totalOrders}</div>
+              </div>
+              <div class="item-value" style="color:var(--red);">${((paymentStats.unpaid / metrics.totalOrders) * 100).toFixed(0)}%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title">📋 Invoice Status</div>
+        </div>
+        <div class="panel-body">
+          <div class="list-group">
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Invoiced Orders</div>
+                <div class="item-meta">${paymentStats.invoiced}/${metrics.totalOrders}</div>
+              </div>
+              <div class="item-value" style="color:var(--green);">${((paymentStats.invoiced / metrics.totalOrders) * 100).toFixed(0)}%</div>
+            </div>
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Uninvoiced Orders</div>
+                <div class="item-meta">${paymentStats.uninvoiced}/${metrics.totalOrders}</div>
+              </div>
+              <div class="item-value" style="color:var(--amber);">${((paymentStats.uninvoiced / metrics.totalOrders) * 100).toFixed(0)}%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Customers Not Sold To -->
+    <div class="panel">
+      <div class="ph">
+        <div class="ph-title">📍 Inactive Customers</div>
+        <div class="ph-count">${customersNotSold.length}</div>
+      </div>
+      <div class="panel-body scroll">
+        ${customersNotSold.length > 0 ? `
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Customer Name</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${customersNotSold.slice(0, 50).map(cust => `
+                <tr><td>${cust}</td></tr>
+              `).join('')}
+              ${customersNotSold.length > 50 ? `<tr><td colspan="1" style="text-align:center;color:var(--gray-text);"><em>... and ${customersNotSold.length - 50} more</em></td></tr>` : ''}
+            </tbody>
+          </table>
+        ` : `
+          <div style="text-align:center;padding:40px;color:var(--gray-text);">
+            <div style="font-size:36px;margin-bottom:10px;opacity:0.4;">✅</div>
+            <div>All customers purchased this month!</div>
+          </div>
+        `}
+      </div>
+    </div>
+
+    <!-- Price Analysis -->
+    <div class="panel">
+      <div class="ph">
+        <div class="ph-title">💵 Fuel Price Analysis</div>
+      </div>
+      <div class="panel-body">
+        <div class="list-group">
+          <div class="list-item">
+            <div class="item-main">
+              <div class="item-name">Highest Price</div>
+              <div class="item-meta">${maxPriceSale.rep_name || 'N/A'} - ${maxPriceSale.fuel_type || 'Unknown'}</div>
+            </div>
+            <div class="item-value">$${(maxPriceSale.price_per_litre || 0).toFixed(2)}/L</div>
+          </div>
+          <div class="list-item">
+            <div class="item-main">
+              <div class="item-name">Lowest Price</div>
+              <div class="item-meta">${minPriceSale.rep_name || 'N/A'} - ${minPriceSale.fuel_type || 'Unknown'}</div>
+            </div>
+            <div class="item-value">$${(minPriceSale.price_per_litre || 0).toFixed(2)}/L</div>
+          </div>
+          <div class="list-item">
+            <div class="item-main">
+              <div class="item-name">Average Price</div>
+              <div class="item-meta">all sales combined</div>
+            </div>
+            <div class="item-value">$${avgPrice}/L</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('reportContent').innerHTML = html;
+
+  // Initialize charts
+  setTimeout(() => {
+    initFuelChart(fuelBreakdown);
+    initRepChart(repLeaderboard);
+  }, 100);
+}
+
+function initFuelChart(fuelBreakdown) {
+  const ctx = document.getElementById('fuelChart');
+  if (!ctx) return;
+  
+  if (chartInstances.fuel) chartInstances.fuel.destroy();
+
+  const labels = Object.keys(fuelBreakdown);
+  const data = labels.map(f => fuelBreakdown[f].litres);
+  const colors = {
+    'Diesel': '#185FA5',
+    'Petrol': '#D4180A',
+    'Paraffin': '#BA7517'
+  };
+
+  chartInstances.fuel = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: labels.map(l => colors[l] || '#999'),
+        borderColor: '#fff',
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } }
+    }
+  });
+}
+
+function initRepChart(repLeaderboard) {
+  const ctx = document.getElementById('repChart');
+  if (!ctx) return;
+
+  if (chartInstances.rep) chartInstances.rep.destroy();
+
+  const labels = repLeaderboard.slice(0, 8).map(r => r.name);
+  const data = repLeaderboard.slice(0, 8).map(r => r.litres);
+
+  chartInstances.rep = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Litres Sold',
+        data,
+        backgroundColor: '#D4180A',
+        borderColor: '#A32D2D',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true } }
+    }
+  });
+}
+
+function showReportLoading() {
+  document.getElementById('reportContent').innerHTML = `
+    <div style="text-align:center;padding:40px;color:var(--gray-text);">
+      <div style="display:inline-block;width:20px;height:20px;border:3px solid var(--gray-light);border-top-color:var(--red);border-radius:50%;animation:spin 0.6s linear infinite;"></div>
+      <div style="margin-top:12px;">Generating report...</div>
+    </div>
+  `;
+}
+
+function formatNumber(num) {
+  return Math.round(num).toLocaleString();
+}
+
+function getMedian(arr) {
+  const sorted = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : ((sorted[mid - 1] + sorted[mid]) / 2).toFixed(1);
+}
+
+async function exportToCSV() {
+  if (!reportData.sales || reportData.sales.length === 0) {
+    alert('No data to export. Generate a report first.');
+    return;
+  }
+
+  const data = reportData.sales;
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sales');
+  XLSX.writeFile(wb, `Monthly-Report-${reportData.month.replace(/\s+/g, '-')}.xlsx`);
+}
+
+
