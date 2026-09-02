@@ -19,13 +19,14 @@ test.describe('admin app — logged in as admin', () => {
     await expect(page.locator('#admin-shell')).toHaveClass(/active/, { timeout: 15000 });
   });
 
-  test('admin role sees all four nav tabs', async ({ page }) => {
+  test('admin role sees all five nav tabs', async ({ page }) => {
     const tabs = page.locator('.admin-tab');
-    await expect(tabs).toHaveCount(4);
+    await expect(tabs).toHaveCount(5);
     await expect(tabs.nth(0)).toContainText('Overview');
     await expect(tabs.nth(1)).toContainText('Accounts');
     await expect(tabs.nth(2)).toContainText('Logistics');
     await expect(tabs.nth(3)).toContainText('Sales');
+    await expect(tabs.nth(4)).toContainText('Reports');
   });
 
   test('Overview section loads real data with no console errors', async ({ page }) => {

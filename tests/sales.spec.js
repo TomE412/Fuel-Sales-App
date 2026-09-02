@@ -111,7 +111,7 @@ test.describe('admin app — Sales section (rep role)', () => {
 test.describe('admin app — Sales tab as admin', () => {
   test.skip(!ADMIN_EMAIL || !ADMIN_PASSWORD, 'TEST_ADMIN_EMAIL / TEST_ADMIN_PASSWORD not set — see tests/README.md');
 
-  test('admin sees Sales as a 4th tab alongside the other three', async ({ page }) => {
+  test('admin sees Sales as a 4th tab alongside the others', async ({ page }) => {
     const errors = [];
     page.on('pageerror', (err) => errors.push(err.message));
     page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
@@ -123,10 +123,10 @@ test.describe('admin app — Sales tab as admin', () => {
     await expect(page.locator('#admin-shell')).toHaveClass(/active/, { timeout: 15000 });
 
     const tabs = page.locator('.admin-tab');
-    await expect(tabs).toHaveCount(4);
-    await expect(tabs.last()).toContainText('Sales');
+    await expect(tabs).toHaveCount(5);
+    await expect(tabs.nth(3)).toContainText('Sales');
 
-    await tabs.last().click();
+    await tabs.nth(3).click();
     await expect(page.locator('#sec-sales')).toHaveClass(/active/);
     await expect(page.locator('#tab-record')).toHaveClass(/active/);
 

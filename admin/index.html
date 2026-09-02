@@ -693,7 +693,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 @media(max-width:600px){
   #sec-reports .metrics-grid{grid-template-columns:1fr;}
 }
-
+</style>
 </head>
 <body>
 
@@ -2061,6 +2061,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script>
 
+const SUPABASE_URL = 'https://lkaotuavapyvqfuuyzft.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYW90dWF2YXB5dnFmdXV5emZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MzU4NzcsImV4cCI6MjA5NzQxMTg3N30.he7Ah-TVyzZZAMiCHglIzP-UbdnxDw-CW4V9mYYJBDU';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Which sections a role is allowed to see. Overview is available to every
 // allowed role since it's a pure read-only summary; Accounts/Logistics
