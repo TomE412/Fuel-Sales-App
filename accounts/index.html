@@ -2098,7 +2098,12 @@ async function loadForecastHistory(){
 
     const todayISOStr = fcISO(new Date());
     const monthPrefix = todayISOStr.slice(0,7);
-    const monthRows = allRows.filter(r=>r.weekStart.slice(0,7)===monthPrefix);
+    // A Mon-Fri week whose Monday falls in the previous month (e.g. week
+    // starting Mon 31 Aug running into September) still belongs on this
+    // month's page once any of its days do — matching on weekStart alone
+    // made the current in-progress week vanish from "this month so far"
+    // for the first few days of every month whose 1st isn't a Monday.
+    const monthRows = allRows.filter(r=>r.weekStart.slice(0,7)===monthPrefix || r.weekEnd.slice(0,7)===monthPrefix);
     if(monthEl) renderMonthChart(monthRows);
   }catch(e){
     const msg = '<div class="empty-msg">Forecast history unavailable ('+(e.message||e)+')</div>';
