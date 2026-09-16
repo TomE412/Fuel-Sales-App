@@ -646,52 +646,55 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 #sec-sales .cust-new.show{display:flex;}
 #sec-sales .cust-new .txt{font-size:11px;color:var(--blue);font-weight:600;}
 
-/* ================= REPORTS SECTION ================= */
-#sec-reports .metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:24px;}
-#sec-reports .metric-card{background:#fff;border-radius:12px;border:1px solid var(--gray-border);padding:16px;display:flex;flex-direction:column;}
-#sec-reports .metric-label{font-size:11px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;}
-#sec-reports .metric-value{font-size:28px;font-weight:700;font-family:var(--mono);color:var(--text);margin-bottom:4px;}
-#sec-reports .metric-sub{font-size:12px;color:var(--gray-text);}
-#sec-reports .metric-card.accent-red .metric-value{color:var(--red);}
-#sec-reports .metric-card.accent-blue .metric-value{color:var(--blue);}
-#sec-reports .metric-card.accent-green .metric-value{color:var(--green-dark);}
-#sec-reports .metric-card.accent-amber .metric-value{color:var(--amber);}
-#sec-reports .panel{background:#fff;border-radius:12px;border:1px solid var(--gray-border);overflow:hidden;margin-bottom:16px;}
-#sec-reports .ph{padding:14px 16px;border-bottom:1px solid var(--gray-border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
-#sec-reports .ph-title{font-size:13px;font-weight:700;}
-#sec-reports .ph-count{font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;background:var(--gray-light);color:var(--gray-text);}
-#sec-reports .panel-body{padding:16px;}
-#sec-reports .panel-body.scroll{max-height:400px;overflow-y:auto;}
-#sec-reports .chart-container{position:relative;height:300px;margin-bottom:16px;}
-#sec-reports .list-group{display:flex;flex-direction:column;gap:0;}
-#sec-reports .list-item{padding:12px 16px;border-bottom:1px solid var(--gray-light);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
-#sec-reports .list-item:last-child{border-bottom:none;}
-#sec-reports .list-item:hover{background:var(--gray-light);}
-#sec-reports .item-main{display:flex;flex-direction:column;gap:2px;flex:1;}
-#sec-reports .item-name{font-size:13px;font-weight:700;color:var(--text);}
-#sec-reports .item-meta{font-size:11px;color:var(--gray-text);}
-#sec-reports .item-value{font-size:13px;font-weight:700;font-family:var(--mono);text-align:right;}
-#sec-reports .item-rank{width:32px;height:32px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;}
-#sec-reports .item-rank.silver{background:#C0C0C0;}
-#sec-reports .item-rank.bronze{background:#CD7F32;}
-#sec-reports .pill{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:4px;vertical-align:middle;}
-#sec-reports .p-diesel{background:var(--blue-light);color:var(--blue-dark);}
-#sec-reports .p-petrol{background:var(--red-light);color:var(--red-dark);}
-#sec-reports .p-paraffin{background:var(--amber-light);color:var(--amber);}
-#sec-reports .table{width:100%;border-collapse:collapse;font-size:12px;}
-#sec-reports .table th{text-align:left;padding:10px 12px;font-size:10px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid var(--gray-border);background:var(--gray-light);white-space:nowrap;}
-#sec-reports .table td{padding:10px 12px;border-bottom:1px solid var(--gray-light);}
-#sec-reports .table tr:last-child td{border-bottom:none;}
-#sec-reports .table tr:hover td{background:var(--gray-light);}
-#sec-reports .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-#sec-reports .empty-state{padding:40px 20px;text-align:center;color:var(--gray-text);}
-#sec-reports .empty-icon{font-size:36px;margin-bottom:10px;opacity:0.4;}
+/* ================= REPORTS (now a sub-view inside Accounts) ================= */
+/* Scoped to #view-reports rather than #sec-accounts directly: #sec-accounts
+   already defines .panel/.ph/.ph-title/.two-col with slightly different
+   values (e.g. .two-col is 2fr/1fr there, this report wants an even 1fr/1fr
+   split) - equal specificity, so whichever rule comes later in the file
+   wins. Keeping this block after line ~213's #sec-accounts rules and scoped
+   one level deeper avoids fighting over that instead of just overriding it
+   cleanly within this view only. */
+#view-reports .metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:24px;}
+#view-reports .metric-card{background:#fff;border-radius:12px;border:1px solid var(--gray-border);padding:16px;display:flex;flex-direction:column;}
+#view-reports .metric-label{font-size:11px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;}
+#view-reports .metric-value{font-size:28px;font-weight:700;font-family:var(--mono);color:var(--text);margin-bottom:4px;}
+#view-reports .metric-sub{font-size:12px;color:var(--gray-text);}
+#view-reports .metric-card.accent-red .metric-value{color:var(--red);}
+#view-reports .metric-card.accent-blue .metric-value{color:var(--blue);}
+#view-reports .metric-card.accent-green .metric-value{color:var(--green-dark);}
+#view-reports .metric-card.accent-amber .metric-value{color:var(--amber);}
+#view-reports .panel{background:#fff;border-radius:12px;border:1px solid var(--gray-border);overflow:hidden;margin-bottom:16px;}
+#view-reports .ph{padding:14px 16px;border-bottom:1px solid var(--gray-border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+#view-reports .ph-title{font-size:13px;font-weight:700;}
+#view-reports .ph-count{font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;background:var(--gray-light);color:var(--gray-text);}
+#view-reports .panel-body{padding:16px;}
+#view-reports .panel-body.scroll{max-height:400px;overflow-y:auto;}
+#view-reports .chart-container{position:relative;height:300px;margin-bottom:16px;}
+#view-reports .list-group{display:flex;flex-direction:column;gap:0;}
+#view-reports .list-item{padding:12px 16px;border-bottom:1px solid var(--gray-light);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+#view-reports .list-item:last-child{border-bottom:none;}
+#view-reports .list-item:hover{background:var(--gray-light);}
+#view-reports .item-main{display:flex;flex-direction:column;gap:2px;flex:1;}
+#view-reports .item-name{font-size:13px;font-weight:700;color:var(--text);}
+#view-reports .item-meta{font-size:11px;color:var(--gray-text);}
+#view-reports .item-value{font-size:13px;font-weight:700;font-family:var(--mono);text-align:right;}
+#view-reports .item-rank{width:32px;height:32px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;}
+#view-reports .item-rank.silver{background:#C0C0C0;}
+#view-reports .item-rank.bronze{background:#CD7F32;}
+#view-reports .table{width:100%;border-collapse:collapse;font-size:12px;}
+#view-reports .table th{text-align:left;padding:10px 12px;font-size:10px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid var(--gray-border);background:var(--gray-light);white-space:nowrap;}
+#view-reports .table td{padding:10px 12px;border-bottom:1px solid var(--gray-light);}
+#view-reports .table tr:last-child td{border-bottom:none;}
+#view-reports .table tr:hover td{background:var(--gray-light);}
+#view-reports .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+#view-reports .empty-state{padding:40px 20px;text-align:center;color:var(--gray-text);}
+#view-reports .empty-icon{font-size:36px;margin-bottom:10px;opacity:0.4;}
 @media(max-width:900px){
-  #sec-reports .two-col{grid-template-columns:1fr;}
-  #sec-reports .metrics-grid{grid-template-columns:repeat(2,1fr);}
+  #view-reports .two-col{grid-template-columns:1fr;}
+  #view-reports .metrics-grid{grid-template-columns:repeat(2,1fr);}
 }
 @media(max-width:600px){
-  #sec-reports .metrics-grid{grid-template-columns:1fr;}
+  #view-reports .metrics-grid{grid-template-columns:1fr;}
 }
 </style>
 </head>
@@ -831,6 +834,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
           <button class="view-tab" id="vt-retention" onclick="AccountsApp.switchView('retention')">📉 Customer retention</button>
           <button class="view-tab" id="vt-reps" onclick="AccountsApp.switchView('reps')">👥 By rep</button>
           <button class="view-tab" id="vt-forecast" onclick="AccountsApp.switchView('forecast')">📅 Weekly forecast</button>
+          <button class="view-tab" id="vt-reports" onclick="AccountsApp.switchView('reports')">📊 Reports</button>
         </div>
 
         <!-- ===== SALES TRACKER VIEW ===== -->
@@ -1192,6 +1196,25 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
             </div>
           </div>
         </div><!-- /view-forecast -->
+
+        <div id="view-reports" style="display:none;">
+          <div class="panel" style="margin-bottom:14px;">
+            <div class="ph">
+              <div class="ph-title">📊 Monthly Sales Report</div>
+              <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+                <input type="month" id="reportMonth" style="padding:8px 10px;background:var(--gray-light);border:1px solid var(--gray-border);border-radius:7px;font-family:var(--font);font-size:12px;outline:none;" value="">
+                <button class="gen-btn" onclick="generateReport()">📊 Generate Report</button>
+                <button class="gen-btn" onclick="exportToCSV()">📥 Export Excel</button>
+              </div>
+            </div>
+            <div style="padding:16px;" id="reportContent">
+              <div class="empty-state">
+                <div class="empty-icon">📅</div>
+                <div>Pick a month and click Generate Report.</div>
+              </div>
+            </div>
+          </div>
+        </div><!-- /view-reports -->
       </div>
 
       <!-- CUSTOMER EDIT MODAL -->
@@ -1934,32 +1957,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
       </div>
     </div>
 
-    <!-- REPORTS -->
-    <div class="admin-section" id="sec-reports">
-      <div style="display:flex;flex-direction:column;height:100%;overflow:hidden;">
-        <div style="background:#fff;border-bottom:1px solid var(--gray-border);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;flex-shrink:0;">
-          <div>
-            <div style="font-size:9px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.08em;">Management</div>
-            <div style="font-size:12px;font-weight:700;color:var(--text);">Monthly Sales Report</div>
-          </div>
-          <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
-            <div style="display:flex;flex-direction:column;gap:4px;">
-              <label style="font-size:11px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:0.05em;">Month</label>
-              <input type="month" id="reportMonth" style="padding:9px 11px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;font-family:var(--font);font-size:13px;outline:none;" value="">
-            </div>
-            <button class="btn" onclick="generateReport()" style="padding:10px 16px;background:var(--red);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">📊 Generate Report</button>
-            <button class="btn" onclick="exportToCSV()" style="padding:10px 16px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px;">📥 Export CSV</button>
-          </div>
-        </div>
-        <div style="flex:1;overflow-y:auto;padding:16px 20px;" id="reportContent">
-          <div style="text-align:center;padding:40px;color:var(--gray-text);">
-            <div style="display:inline-block;width:20px;height:20px;border:3px solid var(--gray-light);border-top-color:var(--red);border-radius:50%;animation:spin 0.6s linear infinite;"></div>
-            <div style="margin-top:12px;">Loading report...</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
   </div>
 </div>
 
@@ -2072,8 +2069,7 @@ const SECTIONS = [
   { key:'overview',   label:'📊 Overview',   roles:['admin','ops','accounts'] },
   { key:'accounts',   label:'💰 Accounts',   roles:['admin','accounts'] },
   { key:'logistics',  label:'🚛 Logistics',  roles:['admin','ops'] },
-  { key:'sales',      label:'⛽ Sales',       roles:['admin','rep'] },
-  { key:'reports',    label:'📈 Reports',    roles:['admin'] }
+  { key:'sales',      label:'⛽ Sales',       roles:['admin','rep'] }
 ];
 let myRole = null;
 let activeSection = 'overview';
@@ -2159,7 +2155,7 @@ async function enterWithProfile(user){
     SalesApp.init(sb);
     await SalesApp.loadUser(user, false); // no PIN needed — we just authenticated live
   }
-  if(SECTIONS.find(s=>s.key==='reports').roles.includes(myRole)){
+  if(myRole === 'admin'){
     document.getElementById('reportMonth').valueAsDate = new Date();
   }
   registerServiceWorker();
@@ -3303,10 +3299,12 @@ const AccountsApp = (() => {
     document.getElementById('view-retention').style.display  = v==='retention'?'block':'none';
     document.getElementById('view-reps').style.display       = v==='reps'?'block':'none';
     document.getElementById('view-forecast').style.display   = v==='forecast'?'block':'none';
+    document.getElementById('view-reports').style.display    = v==='reports'?'block':'none';
     document.getElementById('vt-tracker').classList.toggle('active', v==='tracker');
     document.getElementById('vt-retention').classList.toggle('active', v==='retention');
     document.getElementById('vt-reps').classList.toggle('active', v==='reps');
     document.getElementById('vt-forecast').classList.toggle('active', v==='forecast');
+    document.getElementById('vt-reports').classList.toggle('active', v==='reports');
     if(v==='retention' && !retentionLoaded){ loadRetention(); loadMonthly(); loadBook(); }
     if(v==='reps' && !gapsLoaded){ loadGaps(); }
     if(v==='forecast' && !forecastLoaded){ loadForecast(); }
@@ -3856,6 +3854,11 @@ const AccountsApp = (() => {
     updateClock();
     setInterval(updateClock, 1000);
     setupReportControls();
+    // Reports sub-tab: admin only, even though Accounts itself is shared
+    // with the 'accounts' role — matches the old standalone Reports tab's
+    // roles:['admin'] restriction.
+    const vtReports = document.getElementById('vt-reports');
+    if(vtReports) vtReports.style.display = (myRole === 'admin') ? '' : 'none';
     fetchData();
     setInterval(()=>{
       if(document.getElementById('sec-accounts').classList.contains('active')) fetchData();

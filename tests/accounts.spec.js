@@ -136,4 +136,22 @@ test.describe('admin app — Accounts section', () => {
     await expect(page.locator('#view-tracker')).toBeVisible();
     await expect(page.locator('#view-reps')).toBeHidden();
   });
+
+  test('Reports sub-tab (admin only) generates a report with no console errors', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+    // Moved here from its own top-level admin tab - visible only to
+    // role='admin' (test-admin qualifies), not to role='accounts'.
+    await expect(page.locator('#vt-reports')).toBeVisible();
+    await page.click('#vt-reports');
+    await expect(page.locator('#view-reports')).toBeVisible();
+
+    await page.locator('#reportMonth').fill('2026-08');
+    await page.click('#view-reports button:has-text("Generate Report")');
+    await expect(page.locator('#reportContent')).not.toContainText('Pick a month', { timeout: 15000 });
+
+    expect(errors, `console/page errors:\n${errors.join('\n')}`).toEqual([]);
+  });
 });

@@ -123,10 +123,10 @@ test.describe('admin app — Sales tab as admin', () => {
     await expect(page.locator('#admin-shell')).toHaveClass(/active/, { timeout: 15000 });
 
     const tabs = page.locator('.admin-tab');
-    await expect(tabs).toHaveCount(5);
-    await expect(tabs.nth(3)).toContainText('Sales');
+    await expect(tabs).toHaveCount(4);
+    await expect(tabs.last()).toContainText('Sales');
 
-    await tabs.nth(3).click();
+    await tabs.last().click();
     await expect(page.locator('#sec-sales')).toHaveClass(/active/);
     await expect(page.locator('#tab-record')).toHaveClass(/active/);
 

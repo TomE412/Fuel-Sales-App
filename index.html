@@ -12,6 +12,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -157,6 +158,49 @@ textarea:focus{border-color:var(--red);background:#fff;}
 .perf-top-period{font-size:12px;color:var(--text3);margin-top:2px;}
 .perf-close{width:34px;height:34px;border-radius:50%;background:var(--gray);border:none;font-size:16px;color:var(--text2);cursor:pointer;flex-shrink:0;}
 .perf-body{flex:1;overflow-y:auto;padding:16px;}
+
+/* MONTHLY SALES REPORT (admin only - ported from admin/index.html's
+   Reports view; --gray-border/--gray-text/--gray-light there are named
+   --border/--text3/--gray here, translated below) */
+#monthlyReportBody .metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:24px;}
+#monthlyReportBody .metric-card{background:#fff;border-radius:12px;border:1px solid var(--border);padding:16px;display:flex;flex-direction:column;}
+#monthlyReportBody .metric-label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;}
+#monthlyReportBody .metric-value{font-size:28px;font-weight:700;font-family:var(--mono);color:var(--text);margin-bottom:4px;}
+#monthlyReportBody .metric-sub{font-size:12px;color:var(--text3);}
+#monthlyReportBody .metric-card.accent-red .metric-value{color:var(--red);}
+#monthlyReportBody .metric-card.accent-blue .metric-value{color:var(--blue);}
+#monthlyReportBody .metric-card.accent-green .metric-value{color:var(--green-dark);}
+#monthlyReportBody .metric-card.accent-amber .metric-value{color:var(--amber);}
+#monthlyReportBody .panel{background:#fff;border-radius:12px;border:1px solid var(--border);overflow:hidden;margin-bottom:16px;}
+#monthlyReportBody .ph{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+#monthlyReportBody .ph-title{font-size:13px;font-weight:700;}
+#monthlyReportBody .ph-count{font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;background:var(--gray);color:var(--text3);}
+#monthlyReportBody .panel-body{padding:16px;}
+#monthlyReportBody .panel-body.scroll{max-height:400px;overflow-y:auto;}
+#monthlyReportBody .chart-container{position:relative;height:300px;margin-bottom:16px;}
+#monthlyReportBody .list-group{display:flex;flex-direction:column;gap:0;}
+#monthlyReportBody .list-item{padding:12px 16px;border-bottom:1px solid var(--gray);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+#monthlyReportBody .list-item:last-child{border-bottom:none;}
+#monthlyReportBody .list-item:hover{background:var(--gray);}
+#monthlyReportBody .item-main{display:flex;flex-direction:column;gap:2px;flex:1;}
+#monthlyReportBody .item-name{font-size:13px;font-weight:700;color:var(--text);}
+#monthlyReportBody .item-meta{font-size:11px;color:var(--text3);}
+#monthlyReportBody .item-value{font-size:13px;font-weight:700;font-family:var(--mono);text-align:right;}
+#monthlyReportBody .item-rank{width:32px;height:32px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;}
+#monthlyReportBody .item-rank.silver{background:#C0C0C0;}
+#monthlyReportBody .item-rank.bronze{background:#CD7F32;}
+#monthlyReportBody .table{width:100%;border-collapse:collapse;font-size:12px;}
+#monthlyReportBody .table th{text-align:left;padding:10px 12px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid var(--border);background:var(--gray);white-space:nowrap;}
+#monthlyReportBody .table td{padding:10px 12px;border-bottom:1px solid var(--gray);}
+#monthlyReportBody .table tr:last-child td{border-bottom:none;}
+#monthlyReportBody .table tr:hover td{background:var(--gray);}
+#monthlyReportBody .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+#monthlyReportBody .empty-state{padding:40px 20px;text-align:center;color:var(--text3);}
+#monthlyReportBody .empty-icon{font-size:36px;margin-bottom:10px;opacity:0.4;}
+@media(max-width:700px){
+  #monthlyReportBody .two-col{grid-template-columns:1fr;}
+  #monthlyReportBody .metrics-grid{grid-template-columns:1fr;}
+}
 .perf-hero{background:linear-gradient(135deg,var(--red) 0%,var(--red-dark) 100%);border-radius:var(--radius);padding:20px;color:#fff;margin-bottom:14px;text-align:center;}
 .perf-hero-value{font-size:34px;font-weight:800;font-family:var(--mono);letter-spacing:-0.01em;}
 .perf-hero-label{font-size:12px;opacity:0.85;margin-top:2px;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;}
@@ -240,6 +284,35 @@ textarea:focus{border-color:var(--red);background:#fff;}
     <button class="perf-close" onclick="closePerfReport()">✕</button>
   </div>
   <div class="perf-body" id="perf-body"></div>
+</div>
+
+<!-- MONTHLY SALES REPORT (admin only) -->
+<div class="perf-screen" id="monthly-screen">
+  <div class="perf-top">
+    <div>
+      <div class="perf-top-name">📊 Monthly Sales Report</div>
+      <div class="perf-top-period">Fuel breakdown, top customers, rep leaderboard, payment health</div>
+    </div>
+    <button class="perf-close" onclick="closeMonthlyReport()">✕</button>
+  </div>
+  <div class="perf-body" id="monthlyReportBody">
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="field" style="margin-bottom:0;flex:1;min-width:140px;">
+          <label>Month</label>
+          <input type="month" id="reportMonth">
+        </div>
+        <button class="term-btn" style="padding:13px 16px;" onclick="generateReport()">📊 Generate</button>
+        <button class="term-btn" style="padding:13px 16px;" onclick="exportToCSV()">📥 Export Excel</button>
+      </div>
+    </div>
+    <div id="reportContent">
+      <div class="empty-state">
+        <div class="empty-icon">📅</div>
+        <div>Pick a month and tap Generate.</div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- AUTH SCREEN -->
@@ -458,6 +531,7 @@ textarea:focus{border-color:var(--red);background:#fff;}
         <select id="report-type">
           <option value="performance">📈 Performance</option>
           <option value="commission">💰 Commission</option>
+          <option value="monthly">📊 Monthly Sales Report</option>
         </select>
       </div>
       <div class="field" id="rep-select-field">
@@ -2280,6 +2354,7 @@ function updateLastSyncedLine() {
   const col = n => { let s=""; while(n>0){ s=String.fromCharCode(65+(n-1)%26)+s; n=Math.floor((n-1)/26);} return s; };
   const addr = (r,c) => col(c)+r;
   const isReportAdmin = () => !!(currentProfile && currentProfile.role !== REP_ROLE);
+  let monthlyOptionRemoved = false; // guards setupReportCard() re-running the option.remove() on every tab switch
 
   function buildAndDownload(sales, { repName, monthLabel, fileTag }) {
     const ws = {};
@@ -2415,6 +2490,17 @@ function updateLastSyncedLine() {
     repField.style.display = admin ? "block" : "none";
     if (!admin) typeSel.value = "performance";
 
+    // Monthly Sales Report is stricter than the other two — role must be
+    // exactly 'admin' (Niel/Tom/Mack), not just "any non-rep" the way
+    // Commission/Performance are. isReportAdmin() alone isn't tight enough
+    // (it would also let 'ops'/'accounts' through), so remove the option
+    // outright for anyone who isn't a true admin.
+    if (!monthlyOptionRemoved && !(currentProfile && currentProfile.role === "admin")) {
+      const monthlyOpt = typeSel.querySelector('option[value="monthly"]');
+      if (monthlyOpt) monthlyOpt.remove();
+      monthlyOptionRemoved = true;
+    }
+
     const rep = document.getElementById("rep-select");
     if (rep && !rep.dataset.filled) {
       if (admin) {
@@ -2465,6 +2551,11 @@ function updateLastSyncedLine() {
     const typeSel = document.getElementById("report-type");
     const btn = document.getElementById("report-btn");
     const hint = document.getElementById("report-hint");
+    if (typeSel.value === "monthly") {
+      btn.textContent = "Open Monthly Sales Report";
+      hint.textContent = "Full sales breakdown — fuel types, top customers, rep leaderboard, payment health.";
+      return;
+    }
     const isPerf = !isReportAdmin() || typeSel.value === "performance";
     btn.textContent = isPerf ? "View Performance Report" : "Generate Excel for Niel";
     hint.textContent = isPerf
@@ -2474,8 +2565,537 @@ function updateLastSyncedLine() {
 
   function runReport() {
     const typeSel = document.getElementById("report-type");
+    if (typeSel.value === "monthly") { openMonthlyReport(); return; }
     const isPerf = !isReportAdmin() || typeSel.value === "performance";
     if (isPerf) runPerformanceReport(); else runCommissionReport();
+  }
+
+  function openMonthlyReport() {
+    if (!document.getElementById("reportMonth").value) {
+      document.getElementById("reportMonth").valueAsDate = new Date();
+    }
+    document.getElementById("monthly-screen").classList.add("active");
+  }
+
+  function closeMonthlyReport() {
+    document.getElementById("monthly-screen").classList.remove("active");
+  }
+
+  // ---- MONTHLY SALES REPORT (admin only) — ported from admin/index.html's
+  // Reports view; #reportMonth/#reportContent/#fuelChart/#repChart are the
+  // exact same element IDs that view uses, just inside #monthly-screen here.
+  let reportData = {};
+  const chartInstances = {};
+
+  async function generateReport() {
+    const monthValue = document.getElementById('reportMonth').value;
+    if (!monthValue) {
+      alert('Please select a month');
+      return;
+    }
+
+    showReportLoading();
+    try {
+      const [year, month] = monthValue.split('-').map(Number);
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 1);
+
+      const { data: sales, error } = await sb
+        .from('sales')
+        .select('*')
+        .gte('sale_date', startDate.toISOString().split('T')[0])
+        .lt('sale_date', endDate.toISOString().split('T')[0]);
+
+      if (error) throw error;
+
+      const { data: allCustomers } = await sb
+        .from('sales')
+        .select('customer');
+
+      reportData = {
+        month: startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        monthStart: startDate,
+        sales: sales || [],
+        allCustomers: [...new Set(allCustomers?.map(s => s.customer) || [])]
+      };
+
+      renderReport();
+    } catch (err) {
+      console.error('Error generating report:', err);
+      document.getElementById('reportContent').innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:36px;margin-bottom:10px;opacity:0.4;">❌</div><div>Error loading report: ${err.message}</div></div>`;
+    }
+  }
+
+  function renderReport() {
+    const data = reportData.sales;
+
+    const metrics = {
+      totalLitres: data.reduce((sum, s) => sum + (s.litres || 0), 0),
+      totalOrders: data.length,
+      averageOrderSize: data.length > 0 ? data.reduce((sum, s) => sum + (s.litres || 0), 0) / data.length : 0,
+      totalRevenue: data.reduce((sum, s) => sum + ((s.litres || 0) * (s.price_per_litre || 0)), 0),
+    };
+
+    const fuelBreakdown = {};
+    data.forEach(s => {
+      const fuel = s.fuel_type || 'Unknown';
+      if (!fuelBreakdown[fuel]) fuelBreakdown[fuel] = { litres: 0, count: 0, revenue: 0 };
+      fuelBreakdown[fuel].litres += s.litres || 0;
+      fuelBreakdown[fuel].count += 1;
+      fuelBreakdown[fuel].revenue += (s.litres || 0) * (s.price_per_litre || 0);
+    });
+
+    const customerSales = {};
+    data.forEach(s => {
+      const cust = s.customer || 'Unknown';
+      if (!customerSales[cust]) customerSales[cust] = { litres: 0, orders: 0, revenue: 0 };
+      customerSales[cust].litres += s.litres || 0;
+      customerSales[cust].orders += 1;
+      customerSales[cust].revenue += (s.litres || 0) * (s.price_per_litre || 0);
+    });
+    const topCustomers = Object.entries(customerSales)
+      .map(([name, stats]) => ({ name, ...stats }))
+      .sort((a, b) => b.litres - a.litres)
+      .slice(0, 10);
+
+    const repSales = {};
+    data.forEach(s => {
+      const rep = s.rep_name || 'Unknown';
+      if (!repSales[rep]) repSales[rep] = { litres: 0, orders: 0, revenue: 0, customers: new Set() };
+      repSales[rep].litres += s.litres || 0;
+      repSales[rep].orders += 1;
+      repSales[rep].customers.add(s.customer);
+      repSales[rep].revenue += (s.litres || 0) * (s.price_per_litre || 0);
+    });
+    const repLeaderboard = Object.entries(repSales)
+      .map(([name, stats]) => ({ name, ...stats, customers: stats.customers.size }))
+      .sort((a, b) => b.litres - a.litres);
+
+    const deliveredSales = data.filter(s => s.delivered_at && s.sale_date);
+    let leadTimes = deliveredSales.map(s => {
+      const saleDate = new Date(s.sale_date);
+      const deliveredDate = new Date(s.delivered_at);
+      return Math.floor((deliveredDate - saleDate) / (1000 * 60 * 60 * 24));
+    }).filter(lt => lt >= 0);
+
+    const leadTimeStats = leadTimes.length > 0 ? {
+      fastest: Math.min(...leadTimes),
+      slowest: Math.max(...leadTimes),
+      average: (leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length).toFixed(1),
+      median: getMedian(leadTimes)
+    } : { fastest: '-', slowest: '-', average: '-', median: '-' };
+
+    const maxPriceSale = data.reduce((max, s) =>
+      (s.price_per_litre || 0) > (max.price_per_litre || 0) ? s : max,
+      { price_per_litre: 0 }
+    );
+    const minPriceSale = data.reduce((min, s) =>
+      (s.price_per_litre || 0) > 0 && (s.price_per_litre || 0) < (min.price_per_litre || 999999) ? s : min,
+      { price_per_litre: 999999 }
+    );
+    const avgPrice = data.length > 0 ? (data.reduce((sum, s) => sum + (s.price_per_litre || 0), 0) / data.length).toFixed(2) : 0;
+
+    const customersNotSold = reportData.allCustomers.filter(cust => !customerSales[cust]);
+
+    const paymentStats = {
+      paid: data.filter(s => s.paid).length,
+      unpaid: data.filter(s => !s.paid).length,
+      invoiced: data.filter(s => s.invoiced).length,
+      uninvoiced: data.filter(s => !s.invoiced).length
+    };
+
+    let html = `
+      <div class="metrics-grid">
+        <div class="metric-card accent-blue">
+          <div class="metric-label">Total Litres Sold</div>
+          <div class="metric-value">${formatNumber(metrics.totalLitres)}</div>
+          <div class="metric-sub">${metrics.totalOrders} orders</div>
+        </div>
+        <div class="metric-card accent-red">
+          <div class="metric-label">Total Revenue</div>
+          <div class="metric-value">$${formatNumber(metrics.totalRevenue)}</div>
+          <div class="metric-sub">Avg: $${(metrics.totalRevenue / metrics.totalOrders).toFixed(2)}</div>
+        </div>
+        <div class="metric-card accent-green">
+          <div class="metric-label">Fastest Delivery</div>
+          <div class="metric-value">${leadTimeStats.fastest}</div>
+          <div class="metric-sub">days from sale</div>
+        </div>
+        <div class="metric-card accent-amber">
+          <div class="metric-label">Slowest Delivery</div>
+          <div class="metric-value">${leadTimeStats.slowest}</div>
+          <div class="metric-sub">max lead time</div>
+        </div>
+        <div class="metric-card accent-blue">
+          <div class="metric-label">Avg Delivery Time</div>
+          <div class="metric-value">${leadTimeStats.average}</div>
+          <div class="metric-sub">days</div>
+        </div>
+        <div class="metric-card accent-red">
+          <div class="metric-label">Highest Fuel Price</div>
+          <div class="metric-value">$${(maxPriceSale.price_per_litre || 0).toFixed(2)}</div>
+          <div class="metric-sub">/L</div>
+        </div>
+        <div class="metric-card accent-green">
+          <div class="metric-label">Top Customers</div>
+          <div class="metric-value">${topCustomers.length}</div>
+          <div class="metric-sub">tracked below</div>
+        </div>
+        <div class="metric-card accent-amber">
+          <div class="metric-label">Inactive Customers</div>
+          <div class="metric-value">${customersNotSold.length}</div>
+          <div class="metric-sub">not sold this month</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="ph">
+            <div class="ph-title">📊 Fuel Type Breakdown</div>
+          </div>
+          <div class="panel-body">
+            <div class="chart-container">
+              <canvas id="fuelChart"></canvas>
+            </div>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Fuel Type</th>
+                  <th style="text-align:right;">Litres</th>
+                  <th style="text-align:right;">Orders</th>
+                  <th style="text-align:right;">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${Object.entries(fuelBreakdown).map(([fuel, stats]) => `
+                  <tr>
+                    <td>${fuel}</td>
+                    <td style="text-align:right;font-family:var(--mono);">${formatNumber(stats.litres)}</td>
+                    <td style="text-align:right;font-family:var(--mono);">${stats.count}</td>
+                    <td style="text-align:right;font-family:var(--mono);">$${formatNumber(stats.revenue)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="ph">
+            <div class="ph-title">⏱️ Lead Time Distribution</div>
+          </div>
+          <div class="panel-body">
+            <div class="list-group">
+              <div class="list-item">
+                <div class="item-main">
+                  <div class="item-name">Fastest (Best Case)</div>
+                  <div class="item-meta">shortest time to delivery</div>
+                </div>
+                <div class="item-value">${leadTimeStats.fastest} days</div>
+              </div>
+              <div class="list-item">
+                <div class="item-main">
+                  <div class="item-name">Slowest (Worst Case)</div>
+                  <div class="item-meta">longest time to delivery</div>
+                </div>
+                <div class="item-value">${leadTimeStats.slowest} days</div>
+              </div>
+              <div class="list-item">
+                <div class="item-main">
+                  <div class="item-name">Average Lead Time</div>
+                  <div class="item-meta">mean delivery time</div>
+                </div>
+                <div class="item-value">${leadTimeStats.average} days</div>
+              </div>
+              <div class="list-item">
+                <div class="item-main">
+                  <div class="item-name">Median Lead Time</div>
+                  <div class="item-meta">50th percentile</div>
+                </div>
+                <div class="item-value">${leadTimeStats.median} days</div>
+              </div>
+              <div class="list-item">
+                <div class="item-main">
+                  <div class="item-name">Delivered Sales</div>
+                  <div class="item-meta">orders with delivery timestamp</div>
+                </div>
+                <div class="item-value">${deliveredSales.length}/${metrics.totalOrders}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title">🔝 Top 10 Customers</div>
+          <div class="ph-count">${topCustomers.length}</div>
+        </div>
+        <div class="panel-body scroll">
+          <div class="list-group">
+            ${topCustomers.map((cust, idx) => `
+              <div class="list-item">
+                <div class="item-rank ${idx === 0 ? '' : idx === 1 ? 'silver' : idx === 2 ? 'bronze' : ''}">${idx + 1}</div>
+                <div class="item-main" style="flex:1;">
+                  <div class="item-name">${cust.name}</div>
+                  <div class="item-meta">${cust.orders} orders • Avg: ${(cust.litres / cust.orders).toFixed(0)}L</div>
+                </div>
+                <div style="text-align:right;">
+                  <div class="item-value">${formatNumber(cust.litres)}L</div>
+                  <div class="item-meta" style="text-align:right;">$${formatNumber(cust.revenue)}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title">👥 Sales by Rep</div>
+        </div>
+        <div class="panel-body scroll">
+          <div class="chart-container" style="height:250px;">
+            <canvas id="repChart"></canvas>
+          </div>
+          <table class="table" style="margin-top:16px;">
+            <thead>
+              <tr>
+                <th>Rep Name</th>
+                <th style="text-align:right;">Litres</th>
+                <th style="text-align:right;">Orders</th>
+                <th style="text-align:right;">Customers</th>
+                <th style="text-align:right;">Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${repLeaderboard.map((rep, idx) => `
+                <tr>
+                  <td><strong>${rep.name}</strong> <span class="ph-count" style="margin-left:8px;">#${idx + 1}</span></td>
+                  <td style="text-align:right;font-family:var(--mono);">${formatNumber(rep.litres)}</td>
+                  <td style="text-align:right;font-family:var(--mono);">${rep.orders}</td>
+                  <td style="text-align:right;font-family:var(--mono);">${rep.customers}</td>
+                  <td style="text-align:right;font-family:var(--mono);">$${formatNumber(rep.revenue)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="ph">
+            <div class="ph-title">💰 Payment Status</div>
+          </div>
+          <div class="panel-body">
+            <div class="list-group">
+              <div class="list-item">
+                <div class="item-main">
+                  <div class="item-name">Paid Orders</div>
+                  <div class="item-meta">${paymentStats.paid}/${metrics.totalOrders}</div>
+                </div>
+                <div class="item-value" style="color:var(--green);">${((paymentStats.paid / metrics.totalOrders) * 100).toFixed(0)}%</div>
+              </div>
+              <div class="list-item">
+                <div class="item-main">
+                  <div class="item-name">Unpaid Orders</div>
+                  <div class="item-meta">${paymentStats.unpaid}/${metrics.totalOrders}</div>
+                </div>
+                <div class="item-value" style="color:var(--red);">${((paymentStats.unpaid / metrics.totalOrders) * 100).toFixed(0)}%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="ph">
+            <div class="ph-title">📋 Invoice Status</div>
+          </div>
+          <div class="panel-body">
+            <div class="list-group">
+              <div class="list-item">
+                <div class="item-main">
+                  <div class="item-name">Invoiced Orders</div>
+                  <div class="item-meta">${paymentStats.invoiced}/${metrics.totalOrders}</div>
+                </div>
+                <div class="item-value" style="color:var(--green);">${((paymentStats.invoiced / metrics.totalOrders) * 100).toFixed(0)}%</div>
+              </div>
+              <div class="list-item">
+                <div class="item-main">
+                  <div class="item-name">Uninvoiced Orders</div>
+                  <div class="item-meta">${paymentStats.uninvoiced}/${metrics.totalOrders}</div>
+                </div>
+                <div class="item-value" style="color:var(--amber);">${((paymentStats.uninvoiced / metrics.totalOrders) * 100).toFixed(0)}%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title">📍 Inactive Customers</div>
+          <div class="ph-count">${customersNotSold.length}</div>
+        </div>
+        <div class="panel-body scroll">
+          ${customersNotSold.length > 0 ? `
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Customer Name</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${customersNotSold.slice(0, 50).map(cust => `
+                  <tr><td>${cust}</td></tr>
+                `).join('')}
+                ${customersNotSold.length > 50 ? `<tr><td colspan="1" style="text-align:center;color:var(--text3);"><em>... and ${customersNotSold.length - 50} more</em></td></tr>` : ''}
+              </tbody>
+            </table>
+          ` : `
+            <div style="text-align:center;padding:40px;color:var(--text3);">
+              <div style="font-size:36px;margin-bottom:10px;opacity:0.4;">✅</div>
+              <div>All customers purchased this month!</div>
+            </div>
+          `}
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title">💵 Fuel Price Analysis</div>
+        </div>
+        <div class="panel-body">
+          <div class="list-group">
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Highest Price</div>
+                <div class="item-meta">${maxPriceSale.rep_name || 'N/A'} - ${maxPriceSale.fuel_type || 'Unknown'}</div>
+              </div>
+              <div class="item-value">$${(maxPriceSale.price_per_litre || 0).toFixed(2)}/L</div>
+            </div>
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Lowest Price</div>
+                <div class="item-meta">${minPriceSale.rep_name || 'N/A'} - ${minPriceSale.fuel_type || 'Unknown'}</div>
+              </div>
+              <div class="item-value">$${(minPriceSale.price_per_litre || 0).toFixed(2)}/L</div>
+            </div>
+            <div class="list-item">
+              <div class="item-main">
+                <div class="item-name">Average Price</div>
+                <div class="item-meta">all sales combined</div>
+              </div>
+              <div class="item-value">$${avgPrice}/L</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('reportContent').innerHTML = html;
+
+    setTimeout(() => {
+      initFuelChart(fuelBreakdown);
+      initRepChart(repLeaderboard);
+    }, 100);
+  }
+
+  function initFuelChart(fuelBreakdown) {
+    const ctx = document.getElementById('fuelChart');
+    if (!ctx) return;
+
+    if (chartInstances.fuel) chartInstances.fuel.destroy();
+
+    const labels = Object.keys(fuelBreakdown);
+    const data = labels.map(f => fuelBreakdown[f].litres);
+    const colors = {
+      'Diesel': '#185FA5',
+      'Petrol': '#D4180A',
+      'Paraffin': '#BA7517'
+    };
+
+    chartInstances.fuel = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: labels.map(l => colors[l] || '#999'),
+          borderColor: '#fff',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  }
+
+  function initRepChart(repLeaderboard) {
+    const ctx = document.getElementById('repChart');
+    if (!ctx) return;
+
+    if (chartInstances.rep) chartInstances.rep.destroy();
+
+    const labels = repLeaderboard.slice(0, 8).map(r => r.name);
+    const data = repLeaderboard.slice(0, 8).map(r => r.litres);
+
+    chartInstances.rep = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Litres Sold',
+          data,
+          backgroundColor: '#D4180A',
+          borderColor: '#A32D2D',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true } }
+      }
+    });
+  }
+
+  function showReportLoading() {
+    document.getElementById('reportContent').innerHTML = `
+      <div style="text-align:center;padding:40px;color:var(--text3);">
+        <div style="display:inline-block;width:20px;height:20px;border:3px solid var(--gray);border-top-color:var(--red);border-radius:50%;animation:spin 0.6s linear infinite;"></div>
+        <div style="margin-top:12px;">Generating report...</div>
+      </div>
+    `;
+  }
+
+  function formatNumber(num) {
+    return Math.round(num).toLocaleString();
+  }
+
+  function getMedian(arr) {
+    const sorted = [...arr].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : ((sorted[mid - 1] + sorted[mid]) / 2).toFixed(1);
+  }
+
+  async function exportToCSV() {
+    if (!reportData.sales || reportData.sales.length === 0) {
+      alert('No data to export. Generate a report first.');
+      return;
+    }
+
+    const data = reportData.sales;
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sales');
+    XLSX.writeFile(wb, `Monthly-Report-${reportData.month.replace(/\s+/g, '-')}.xlsx`);
   }
 
   // ---- PERFORMANCE REPORT (every rep sees their own; admins can pick anyone) ----
@@ -2707,6 +3327,9 @@ function updateLastSyncedLine() {
   window.setupReportCard = setupReportCard;
   window.runReport = runReport;
   window.runPerformanceReport = runPerformanceReport;
+  window.closeMonthlyReport = closeMonthlyReport;
+  window.generateReport = generateReport;
+  window.exportToCSV = exportToCSV;
   window.closePerfReport = closePerfReport;
 })();
 
