@@ -2491,11 +2491,10 @@ function updateLastSyncedLine() {
     if (!admin) typeSel.value = "performance";
 
     // Monthly Sales Report is stricter than the other two — role must be
-    // exactly 'admin' (Niel/Tom/Mack), not just "any non-rep" the way
-    // Commission/Performance are. isReportAdmin() alone isn't tight enough
-    // (it would also let 'ops'/'accounts' through), so remove the option
-    // outright for anyone who isn't a true admin.
-    if (!monthlyOptionRemoved && !(currentProfile && currentProfile.role === "admin")) {
+    // 'admin' or 'accounts' specifically, not just "any non-rep" the way
+    // Commission/Performance are (that would also let 'ops' through).
+    const canSeeMonthly = currentProfile && (currentProfile.role === "admin" || currentProfile.role === "accounts");
+    if (!monthlyOptionRemoved && !canSeeMonthly) {
       const monthlyOpt = typeSel.querySelector('option[value="monthly"]');
       if (monthlyOpt) monthlyOpt.remove();
       monthlyOptionRemoved = true;

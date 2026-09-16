@@ -2155,7 +2155,7 @@ async function enterWithProfile(user){
     SalesApp.init(sb);
     await SalesApp.loadUser(user, false); // no PIN needed — we just authenticated live
   }
-  if(myRole === 'admin'){
+  if(myRole === 'admin' || myRole === 'accounts'){
     document.getElementById('reportMonth').valueAsDate = new Date();
   }
   registerServiceWorker();
@@ -3854,11 +3854,10 @@ const AccountsApp = (() => {
     updateClock();
     setInterval(updateClock, 1000);
     setupReportControls();
-    // Reports sub-tab: admin only, even though Accounts itself is shared
-    // with the 'accounts' role — matches the old standalone Reports tab's
-    // roles:['admin'] restriction.
+    // Reports sub-tab: admin and accounts (Adnan) — matches the Monthly
+    // Sales Report's access check in index.html/accounts/index.html.
     const vtReports = document.getElementById('vt-reports');
-    if(vtReports) vtReports.style.display = (myRole === 'admin') ? '' : 'none';
+    if(vtReports) vtReports.style.display = (myRole === 'admin' || myRole === 'accounts') ? '' : 'none';
     fetchData();
     setInterval(()=>{
       if(document.getElementById('sec-accounts').classList.contains('active')) fetchData();
