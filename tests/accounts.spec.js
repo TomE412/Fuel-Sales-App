@@ -142,13 +142,16 @@ test.describe('admin app — Accounts section', () => {
     page.on('pageerror', (err) => errors.push(err.message));
     page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
 
-    // Moved here from its own top-level admin tab - visible only to
-    // role='admin' (test-admin qualifies), not to role='accounts'.
+    // Moved here from its own top-level admin tab - visible to role='admin'
+    // and role='accounts' (test-admin qualifies as the former).
     await expect(page.locator('#vt-reports')).toBeVisible();
     await page.click('#vt-reports');
     await expect(page.locator('#view-reports')).toBeVisible();
 
-    await page.locator('#reportMonth').fill('2026-08');
+    // Plain <select> dropdowns rather than <input type="month"> - the native
+    // picker didn't render its UI at all in some browsers (confirmed in
+    // WebKit), so this switched to two selects pre-filled at login.
+    await expect(page.locator('#reportMonthSel')).not.toHaveValue('');
     await page.click('#view-reports button:has-text("Generate Report")');
     await expect(page.locator('#reportContent')).not.toContainText('Pick a month', { timeout: 15000 });
 

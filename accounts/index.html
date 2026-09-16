@@ -605,7 +605,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
         <div class="ph">
           <div class="ph-title">📊 Monthly Sales Report</div>
           <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
-            <input type="month" id="reportMonth" style="padding:8px 10px;background:var(--gray-light);border:1px solid var(--gray-border);border-radius:7px;font-family:var(--font);font-size:12px;outline:none;" value="">
+            <select id="reportMonthSel" style="padding:8px 10px;background:var(--gray-light);border:1px solid var(--gray-border);border-radius:7px;font-family:var(--font);font-size:12px;outline:none;"></select>
+            <select id="reportYearSel" style="padding:8px 10px;background:var(--gray-light);border:1px solid var(--gray-border);border-radius:7px;font-family:var(--font);font-size:12px;outline:none;"></select>
             <button class="gen-btn" onclick="generateReport()">📊 Generate Report</button>
             <button class="gen-btn" onclick="exportToCSV()">📥 Export Excel</button>
           </div>
@@ -658,7 +659,15 @@ async function accSignIn(){
   }
   document.getElementById('auth-wrap').classList.add('hidden');
   document.getElementById('acc-wrap').classList.add('active');
-  document.getElementById('reportMonth').valueAsDate = new Date();
+  // Plain <select> dropdowns rather than <input type="month"> - that native
+  // picker doesn't render its UI at all in some browsers (Safari especially),
+  // so the field looked "empty with no options" and typing into it did
+  // nothing either. Same fix as the Commission/Performance report's
+  // #tf-month/#tf-year picker in index.html.
+  const nowForReport = new Date();
+  document.getElementById('reportMonthSel').innerHTML = MONTHS.map((m,i)=>'<option value="'+i+'"'+(i===nowForReport.getMonth()?' selected':'')+'>'+m+'</option>').join('');
+  const reportYear = nowForReport.getFullYear();
+  document.getElementById('reportYearSel').innerHTML = [reportYear,reportYear-1,reportYear+1].map(v=>'<option>'+v+'</option>').join('');
   setupReportControls();
   await fetchData();
 }
@@ -1081,17 +1090,17 @@ let reportData = {};
 const chartInstances = {};
 
 async function generateReport() {
-  const monthValue = document.getElementById('reportMonth').value;
-  if (!monthValue) {
+  const month = parseInt(document.getElementById('reportMonthSel').value, 10);
+  const year = parseInt(document.getElementById('reportYearSel').value, 10);
+  if (isNaN(month) || isNaN(year)) {
     alert('Please select a month');
     return;
   }
 
   showReportLoading();
   try {
-    const [year, month] = monthValue.split('-').map(Number);
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 1);
+    const startDate = new Date(year, month, 1);
+    const endDate = new Date(year, month + 1, 1);
 
     const { data: sales, error } = await sb
       .from('sales')
