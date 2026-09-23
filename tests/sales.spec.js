@@ -103,6 +103,17 @@ test.describe('admin app — Sales section (rep role)', () => {
       // doesn't fail instantly, so this can take close to the full 10s.
       await expect(page.locator('#sync-badge')).toContainText('to upload', { timeout: 15000 });
     } finally {
+      // Drop the queued sale BEFORE going back online. Without this the
+      // app own online listener fires syncQueue() and pushes this fake sale
+      // into the real Supabase sales table - it did, repeatedly, until a
+      // "Playwright Test Customer ..." turned up in the live customer list.
+      // The test still proves everything it did before; it just no longer
+      // leaves a real row behind.
+      await page.evaluate(() => {
+        for (const k of Object.keys(localStorage)) {
+          if (k.startsWith("admin_sales_queue_")) localStorage.removeItem(k);
+        }
+      });
       await context.setOffline(false);
     }
   });
