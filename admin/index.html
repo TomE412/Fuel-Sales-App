@@ -87,6 +87,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
   #sec-overview .header{padding:8px 12px!important;height:auto!important;flex-wrap:wrap;gap:6px;justify-content:center!important;}
   #sec-overview .logo-img{height:32px!important;}
   #sec-overview .clock{font-size:18px!important;}
+  #sec-overview .undel{padding:4px 10px!important;gap:7px!important;}
+  #sec-overview .undel-fig{font-size:15px!important;}
   #sec-overview .date-txt{font-size:9px!important;}
   #sec-overview .col-left > div[style*="grid-template-columns:1fr 1fr"]{
     display:flex!important;flex-direction:column!important;
@@ -104,6 +106,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 #sec-overview .logo-img{height:48px;width:auto;object-fit:contain;}
 #sec-overview .clock{font-size:24px;font-weight:700;font-family:var(--mono);letter-spacing:2px;text-align:center;}
 #sec-overview .date-txt{font-size:10px;color:var(--gray-text);text-align:center;margin-top:2px;text-transform:uppercase;letter-spacing:0.05em;}
+#sec-overview .undel{display:flex;align-items:center;gap:10px;background:var(--amber-light);border:1px solid var(--amber);border-radius:8px;padding:6px 14px;}
+#sec-overview .undel-fig{font-size:20px;font-weight:800;font-family:var(--mono);color:var(--amber);line-height:1.1;letter-spacing:-0.5px;}
+#sec-overview .undel-lbl{font-size:9px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:0.08em;}
+#sec-overview .undel-sub{font-size:10px;color:var(--gray-text);margin-top:1px;}
 #sec-overview .live-pill{display:inline-flex;align-items:center;gap:5px;background:var(--green-light);border:1px solid var(--green);border-radius:99px;padding:5px 12px;font-size:11px;font-weight:700;color:var(--green-dark);}
 #sec-overview .live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
@@ -734,6 +740,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
             <div style="font-size:12px;font-weight:700;color:var(--text);">Overview</div>
           </div>
         </div>
+        <div class="undel" id="undel-tile" title="Litres sold but not yet marked delivered — what we are committed to supplying">
+          <div>
+            <div class="undel-lbl">Undelivered litres</div>
+            <div class="undel-sub" id="undel-sub">—</div>
+          </div>
+          <div class="undel-fig" id="undel-litres">—</div>
+        </div>
+
         <div>
           <div class="clock" id="clock">00:00:00</div>
           <div class="date-txt" id="date-display"></div>
@@ -2720,6 +2734,18 @@ const OverviewApp = (() => {
     // Exclude cancelled sales from all views
     const activeSales = allSales.filter(s => s.status !== 'cancelled');
     const today = todayStr();
+
+    // UNDELIVERED LITRES — everything sold and not yet marked delivered.
+    // This is the volume we've committed to supplying, for comparing against
+    // stock on hand. Note it only covers the last 90 days, because that's the
+    // window loadData() fetches; an old sale nobody ever ticked off won't show
+    // here, which is deliberate — those are stale records, not real commitments.
+    const undelivered = activeSales.filter(s => !s.delivered);
+    const undelLitres = undelivered.reduce((t, s) => t + (s.litres || 0), 0);
+    document.getElementById('undel-litres').textContent = undelLitres.toLocaleString() + ' L';
+    document.getElementById('undel-sub').textContent =
+      undelivered.length + (undelivered.length === 1 ? ' order' : ' orders') + ' outstanding';
+
     const now = new Date(); now.setHours(0,0,0,0);
     const weekAgo = new Date(now.getTime()-7*86400000).toISOString().split('T')[0];
     const y = now.getFullYear();
