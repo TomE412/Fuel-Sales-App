@@ -2793,20 +2793,32 @@ const OverviewApp = (() => {
     // is not on screen, and a months-old untouched order is a record-keeping
     // gap, not fuel we still owe someone. The tooltip reports those separately
     // so they are visible without polluting the headline number.
-    const onBoard = new Map();
-    todayDeliveries.forEach(s => onBoard.set(s.id, s));
-    upcomingSales.forEach(s => onBoard.set(s.id, s));
-    const undelLitres = [...onBoard.values()].reduce((t, s) => t + (s.litres || 0), 0);
-    const staleCount = activeSales.filter(s => !s.delivered && !onBoard.has(s.id)).length;
+    // UNDELIVERED LITRES — the Upcoming panel's total, and only that.
+    // "Deliveries going out today" is a notification view over the same
+    // orders, not a separate set, so adding the two double-counted.
+    const undelLitres = upcomingSales.reduce((t, s) => t + (s.litres || 0), 0);
+    const fmtL = n => n.toLocaleString() + ' L';
+    const NEWLINE = String.fromCharCode(10);
 
-    document.getElementById('undel-litres').textContent = undelLitres.toLocaleString() + ' L';
+    document.getElementById('undel-litres').textContent = fmtL(undelLitres);
     document.getElementById('undel-sub').textContent =
-      onBoard.size + (onBoard.size === 1 ? ' order' : ' orders') + ' on the board';
-    document.getElementById('undel-tile').title =
-      'Litres on the board today and upcoming, not yet marked delivered.'
-      + (staleCount ? "\n\n" + staleCount
-          + ' older order' + (staleCount === 1 ? '' : 's')
-          + ' outside the 7-day window are also unmarked and are NOT counted here.' : '');
+      upcomingSales.length + (upcomingSales.length === 1 ? ' order' : ' orders') + ' upcoming';
+
+    // Anything undelivered that the Upcoming panel does not show is reported
+    // in the tooltip rather than folded into the headline — it keeps the tile
+    // reconcilable against the panel by eye, while still making stragglers
+    // visible instead of silently dropping them.
+    const offPanel = activeSales.filter(s =>
+      !s.delivered && !upcomingSales.some(u => u.id === s.id));
+    const tip = ['Total litres in Upcoming deliveries, not yet marked delivered.'];
+    if (offPanel.length) {
+      const offL = offPanel.reduce((t, s) => t + (s.litres || 0), 0);
+      tip.push('');
+      tip.push('NOT counted: ' + offPanel.length + ' older order'
+        + (offPanel.length === 1 ? '' : 's') + ' (' + fmtL(offL) + ') still');
+      tip.push('unmarked but older than the 7-day panel window.');
+    }
+    document.getElementById('undel-tile').title = tip.join(NEWLINE);
 
     const weekEl = document.getElementById('week-list');
     if (upcomingSales.length) {
