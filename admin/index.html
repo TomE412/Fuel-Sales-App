@@ -740,7 +740,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
             <div style="font-size:12px;font-weight:700;color:var(--text);">Overview</div>
           </div>
         </div>
-        <div class="undel" id="undel-tile" title="Litres sold but not yet marked delivered — what we are committed to supplying">
+        <div class="undel" id="undel-tile" title="Litres on the board today and upcoming, not yet marked delivered">
           <div>
             <div class="undel-lbl">Undelivered litres</div>
             <div class="undel-sub" id="undel-sub">—</div>
@@ -2735,17 +2735,6 @@ const OverviewApp = (() => {
     const activeSales = allSales.filter(s => s.status !== 'cancelled');
     const today = todayStr();
 
-    // UNDELIVERED LITRES — everything sold and not yet marked delivered.
-    // This is the volume we've committed to supplying, for comparing against
-    // stock on hand. Note it only covers the last 90 days, because that's the
-    // window loadData() fetches; an old sale nobody ever ticked off won't show
-    // here, which is deliberate — those are stale records, not real commitments.
-    const undelivered = activeSales.filter(s => !s.delivered);
-    const undelLitres = undelivered.reduce((t, s) => t + (s.litres || 0), 0);
-    document.getElementById('undel-litres').textContent = undelLitres.toLocaleString() + ' L';
-    document.getElementById('undel-sub').textContent =
-      undelivered.length + (undelivered.length === 1 ? ' order' : ' orders') + ' outstanding';
-
     const now = new Date(); now.setHours(0,0,0,0);
     const weekAgo = new Date(now.getTime()-7*86400000).toISOString().split('T')[0];
     const y = now.getFullYear();
@@ -2794,6 +2783,30 @@ const OverviewApp = (() => {
 
     document.getElementById('week-count').textContent = upcomingSales.length;
     document.getElementById('delivered-count').textContent = deliveredSales.length;
+
+    // UNDELIVERED LITRES — must match what is actually on the board, or the
+    // figure invites exactly the "these numbers don't add up" doubt it is
+    // supposed to remove. So it totals the two undelivered panels above:
+    // today's runs plus upcoming. They overlap (a sale going out today whose
+    // order came in this week appears in both), hence the de-dupe by id.
+    // Anything older that was never ticked off is deliberately left out — it
+    // is not on screen, and a months-old untouched order is a record-keeping
+    // gap, not fuel we still owe someone. The tooltip reports those separately
+    // so they are visible without polluting the headline number.
+    const onBoard = new Map();
+    todayDeliveries.forEach(s => onBoard.set(s.id, s));
+    upcomingSales.forEach(s => onBoard.set(s.id, s));
+    const undelLitres = [...onBoard.values()].reduce((t, s) => t + (s.litres || 0), 0);
+    const staleCount = activeSales.filter(s => !s.delivered && !onBoard.has(s.id)).length;
+
+    document.getElementById('undel-litres').textContent = undelLitres.toLocaleString() + ' L';
+    document.getElementById('undel-sub').textContent =
+      onBoard.size + (onBoard.size === 1 ? ' order' : ' orders') + ' on the board';
+    document.getElementById('undel-tile').title =
+      'Litres on the board today and upcoming, not yet marked delivered.'
+      + (staleCount ? "\n\n" + staleCount
+          + ' older order' + (staleCount === 1 ? '' : 's')
+          + ' outside the 7-day window are also unmarked and are NOT counted here.' : '');
 
     const weekEl = document.getElementById('week-list');
     if (upcomingSales.length) {
