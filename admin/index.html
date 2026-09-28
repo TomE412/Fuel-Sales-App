@@ -369,6 +369,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 #sec-logistics .rcard .rh h3{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;display:flex;align-items:center;gap:7px;}
 #sec-logistics .rcard .rh .sub{font-size:10px;color:var(--muted);margin-top:3px;}
 #sec-logistics .rcard .rb{overflow-y:auto;max-height:480px;}
+#sec-logistics .twnhdr{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:5px 13px;background:#f4f4f2;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:1;}
+#sec-logistics .twnhdr b{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;}
+#sec-logistics .twnhdr span{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap;}
+#sec-logistics .fliprt{margin-left:auto;font-family:var(--font);font-size:9px;font-weight:700;padding:3px 8px;border:1px solid var(--line);border-radius:99px;background:#fff;color:var(--muted);cursor:pointer;white-space:nowrap;text-transform:none;letter-spacing:0;}
+#sec-logistics .fliprt:hover{border-color:var(--blue);color:var(--blue);}
 #sec-logistics .rtot{padding:8px 13px;background:#fafaf9;border-top:1px solid var(--line);font-size:11px;font-weight:700;display:flex;justify-content:space-between;gap:8px;}
 
 #sec-logistics .mapwrap{flex:1;display:grid;grid-template-columns:1fr 340px;min-height:0;}
@@ -1428,7 +1433,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
           <div class="rgrid">
             <div class="rcard">
               <div class="rh">
-                <h3><span class="dot" style="background:#185FA5;"></span> Already going</h3>
+                <h3><span class="dot" style="background:#185FA5;"></span> Already going<button class="fliprt" id="flip-going" onclick="LogisticsApp.flipRoute()" title="Reverse the running order - for a truck coming back up the road">⇄ Harare → out</button></h3>
                 <div class="sub">Confirmed deliveries on this road</div>
               </div>
               <div class="rb" id="rb-going"><div class="empty">Pick a route</div></div>
@@ -4594,6 +4599,13 @@ const LogisticsApp = (() => {
   let PROSPECTS=[];
   let tab='due_now', pat='all', bkSort={k:'ripeness_pct',d:-1};
   let curRoute=null, page='today';
+  // Running order for the "Already going" list. 'out' = away from Harare
+  // (rising km), 'in' = back towards it, for a truck running the road the
+  // other way. Deliberately NOT remembered between visits: it is a
+  // per-glance planning aid, and a direction silently left flipped would
+  // misread as the real sequence to whoever opens the page next.
+  let routeDir = 'out';
+  function flipRoute(){ routeDir = (routeDir === 'out' ? 'in' : 'out'); renderRoute(); }
   let map=null, pinLayer=null, dragLayer=null, prospectLayer=null, markers={}, mapReady=false;
   let RUN=[], truckKey=null, dragMode=false, addMode=false, pendingLatLng=null, runLine=null;
 
@@ -5021,15 +5033,59 @@ const LogisticsApp = (() => {
                       return (b.total_litres||0)-(a.total_litres||0);
                    });
 
-    const g=document.getElementById('rb-going');
-    g.innerHTML=going.length
-      ? going.map(s=>'<div class="ro"><div class="i"><b>'+esc(s.customer)+'</b>'+
-          '<span>📍 '+esc(s.location||'—')+' · '+fmt(s.delivery_date)+(s.rep_name?' · '+esc(s.rep_name):'')+'</span></div>'+
-          '<div class="amt" style="color:var(--green-dark);font-weight:700;">'+(s.litres||0).toLocaleString()+' L</div></div>').join('')
-      : '<div class="empty">Nothing booked this way</div>';
-    document.getElementById('rt-going-n').textContent=going.length+' stop'+(going.length===1?'':'s');
-    document.getElementById('rt-going-l').textContent=going.reduce((t,s)=>t+(s.litres||0),0).toLocaleString()+' L';
+    // Distance of each place along THIS road, taken straight from
+    // app_route_board (place_routes.km_from_hre) — real road positions, not a
+    // guess from the town name. leg_order is the fallback where km is absent.
+    const placeKm = new Map();
+    rows.forEach(r => {
+      const p = (r.place || '').trim().toLowerCase();
+      if (!p) return;
+      const km = r.km_from_hre != null ? Number(r.km_from_hre)
+               : r.leg_order  != null ? Number(r.leg_order) : null;
+      if (km != null && !isNaN(km) && !placeKm.has(p)) placeKm.set(p, km);
+    });
+    // A place with no distance sorts to the end rather than to the front, so a
+    // gap in the data can never quietly present itself as the first stop.
+    const kmOf = place => {
+      const v = placeKm.get((place || '').trim().toLowerCase());
+      return (v == null) ? Number.MAX_SAFE_INTEGER : v;
+    };
 
+    const byPlace = new Map();
+    going.forEach(s => {
+      const key = (s.location || '').trim().toLowerCase() || '(no place)';
+      if (!byPlace.has(key)) byPlace.set(key, { label: s.location || '—', km: kmOf(s.location), stops: [] });
+      byPlace.get(key).stops.push(s);
+    });
+    const towns = [...byPlace.values()].sort((a, b) =>
+      routeDir === 'in' ? b.km - a.km : a.km - b.km);
+    towns.forEach(t => t.stops.sort((a, b) =>
+      (a.delivery_date || '').localeCompare(b.delivery_date || '')));
+
+    const g = document.getElementById('rb-going');
+    g.innerHTML = towns.length
+      ? towns.map(t => {
+          const kmTxt = t.km === Number.MAX_SAFE_INTEGER ? 'distance unknown'
+                      : Math.round(t.km).toLocaleString() + ' km';
+          const tl = t.stops.reduce((x, s) => x + (s.litres || 0), 0);
+          return '<div class="twnhdr"><b>' + esc(t.label) + '</b>' +
+                 '<span>' + kmTxt + ' · ' + tl.toLocaleString() + ' L</span></div>' +
+                 t.stops.map(s =>
+                   '<div class="ro"><div class="i"><b>' + esc(s.customer) + '</b>' +
+                   '<span>' + fmt(s.delivery_date) + (s.rep_name ? ' · ' + esc(s.rep_name) : '') +
+                   '</span></div><div class="amt" style="color:var(--green-dark);font-weight:700;">' +
+                   (s.litres || 0).toLocaleString() + ' L</div></div>').join('');
+        }).join('')
+      : '<div class="empty">Nothing booked this way</div>';
+
+    const flipBtn = document.getElementById('flip-going');
+    if (flipBtn) flipBtn.textContent = routeDir === 'in' ? '⇄ Coming back' : '⇄ Harare → out';
+
+    document.getElementById('rt-going-n').textContent =
+      going.length + ' stop' + (going.length === 1 ? '' : 's') +
+      (towns.length ? ' · ' + towns.length + ' town' + (towns.length === 1 ? '' : 's') : '');
+    document.getElementById('rt-going-l').textContent =
+      going.reduce((t, s) => t + (s.litres || 0), 0).toLocaleString() + ' L';
     const rp=document.getElementById('rb-ripe');
     rp.innerHTML=ripe.length
       ? ripe.map(r=>{
@@ -5826,7 +5882,7 @@ const LogisticsApp = (() => {
   return {
     init, onShow, onLostSaleSaved,
     go, markDelivered,
-    pickRoute,
+    pickRoute, flipRoute,
     drawPins, mapSearch, toggleDrag, startAdd, toggleLayer,
     openDirections, clearRun,
     setPat, sortBook, renderBook,
