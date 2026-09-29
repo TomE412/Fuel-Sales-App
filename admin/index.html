@@ -743,6 +743,30 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 #view-reports .table tr:last-child td{border-bottom:none;}
 #view-reports .table tr:hover td{background:var(--gray-light);}
 #view-reports .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+#view-reports .rsw-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+#view-reports .rsw{padding:8px 16px;background:#fff;border:1.5px solid var(--gray-border);border-radius:99px;font-family:var(--font);font-size:12.5px;font-weight:700;color:var(--gray-text);cursor:pointer;white-space:nowrap;}
+#view-reports .rsw.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+#view-reports .psel{padding:8px 10px;background:var(--gray-light);border:1px solid var(--gray-border);border-radius:7px;font-family:var(--font);font-size:12px;outline:none;}
+#view-reports .psep{font-size:11px;color:var(--gray-text);font-weight:700;align-self:center;}
+#view-reports .perf-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid var(--text);}
+#view-reports .perf-head h3{font-size:20px;font-weight:800;margin:0;}
+#view-reports .perf-head span{font-family:var(--mono);font-size:11.5px;color:var(--gray-text);}
+#view-reports .perf-sec{margin-top:26px;}
+#view-reports .perf-sec h4{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;color:var(--text);margin:0 0 10px;}
+#view-reports .perf-chart{position:relative;height:250px;background:#fff;border:1px solid var(--gray-border);border-radius:12px;padding:12px;}
+#view-reports .perf-note{font-size:11.5px;color:var(--gray-text);line-height:1.55;margin-top:8px;}
+#view-reports .perf-note b{color:var(--amber);}
+#view-reports .perf-empty{padding:18px;background:var(--gray-light);border:1px solid var(--gray-border);border-radius:12px;font-size:13px;color:var(--gray-text);}
+#view-reports .perf-tablewrap{overflow-x:auto;border:1px solid var(--gray-border);border-radius:12px;background:#fff;}
+#view-reports .perf-table{border-collapse:collapse;width:100%;min-width:420px;font-size:13px;}
+#view-reports .perf-table th,#view-reports .perf-table td{padding:9px 13px;border-bottom:1px solid var(--gray-border);text-align:left;}
+#view-reports .perf-table thead th{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--gray-text);background:var(--gray-light);font-weight:700;white-space:nowrap;}
+#view-reports .perf-table td.r,#view-reports .perf-table th.r{text-align:right;font-family:var(--mono);white-space:nowrap;}
+#view-reports .perf-table tbody tr:last-child td{border-bottom:none;}
+#view-reports .perf-table tr.tot td{background:var(--gray-light);font-weight:800;border-top:2px solid var(--text);}
+#view-reports .perf-banner{padding:10px 14px;border-radius:8px;font-size:12px;line-height:1.55;margin-bottom:16px;background:var(--amber-light);color:var(--text);border:1px solid var(--amber);}
+#view-reports .perf-banner.app{background:var(--blue-light);border-color:var(--blue);}
+#view-reports .perf-banner b{font-weight:800;}
 #view-reports .empty-state{padding:40px 20px;text-align:center;color:var(--gray-text);}
 #view-reports .empty-icon{font-size:36px;margin-bottom:10px;opacity:0.4;}
 @media(max-width:900px){
@@ -1262,6 +1286,39 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
         </div><!-- /view-forecast -->
 
         <div id="view-reports" style="display:none;">
+          <div class="rsw-bar">
+            <button class="rsw active" data-r="monthly" onclick="switchReport('monthly')">📊 Monthly Sales</button>
+            <button class="rsw" data-r="perf" onclick="switchReport('perf')">👤 Rep Performance</button>
+          </div>
+
+          <div id="rpt-perf" style="display:none;">
+            <div class="panel" style="margin-bottom:14px;">
+              <div class="ph">
+                <div class="ph-title">👤 Rep Performance</div>
+                <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+                  <select id="perfRep" class="psel" style="min-width:150px;"></select>
+                  <select id="perfMode" class="psel" title="Which record to read">
+                    <option value="app">Sales they logged</option>
+                    <option value="book">Their customers&rsquo; volume</option>
+                  </select>
+                  <select id="perfFromM" class="psel"></select>
+                  <select id="perfFromY" class="psel"></select>
+                  <span class="psep">to</span>
+                  <select id="perfToM" class="psel"></select>
+                  <select id="perfToY" class="psel"></select>
+                  <button class="gen-btn" onclick="generatePerf()">Generate</button>
+                </div>
+              </div>
+              <div style="padding:16px;" id="perfContent">
+                <div class="empty-state">
+                  <div class="empty-icon">👤</div>
+                  <div>Pick a rep and a date range, then Generate.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="rpt-monthly">
           <div class="panel" style="margin-bottom:14px;">
             <div class="ph">
               <div class="ph-title">📊 Monthly Sales Report</div>
@@ -1279,6 +1336,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
               </div>
             </div>
           </div>
+        </div>
         </div><!-- /view-reports -->
       </div>
 
@@ -3422,6 +3480,9 @@ const AccountsApp = (() => {
     document.getElementById('view-reps').style.display       = v==='reps'?'block':'none';
     document.getElementById('view-forecast').style.display   = v==='forecast'?'block':'none';
     document.getElementById('view-reports').style.display    = v==='reports'?'block':'none';
+    // Fill the rep and date pickers the first time Reports is opened, rather
+    // than at boot - it costs two queries most sessions never need.
+    if(v==='reports') perfInit();
     document.getElementById('vt-tracker').classList.toggle('active', v==='tracker');
     document.getElementById('vt-retention').classList.toggle('active', v==='retention');
     document.getElementById('vt-reps').classList.toggle('active', v==='reps');
@@ -7867,6 +7928,330 @@ if (!startupFromCache()) {
 // ================= REPORTS APP (Monthly Sales Report) =================
 let reportData = {};
 const chartInstances = {};
+
+/* ================= REP PERFORMANCE REPORT =================
+   Per-rep volume, customers, retention and margin over a chosen range.
+
+   Two things this report deliberately refuses to do, because both would
+   produce a confident-looking number that is wrong:
+
+   1. It never charts margin BETWEEN reps. Margin needs cost_price, and as of
+      Sep 2026 only one rep fills that in (55-65% of their orders; everyone
+      else is at 0-3%). A comparison chart would read as "one rep is the only
+      profitable one" when it actually says "one rep is the only one
+      completing the field". Margin is shown per rep against their OWN costed
+      orders, with the coverage percentage stated beside it.
+
+   2. It never presents in-period retention as the headline. A customer who
+      orders every 60 days looks like a total loss inside a 30-day window.
+      Repeat rate is computed over the customer's whole history with that rep
+      and labelled as such; the in-period figure sits beside it as context. */
+
+let perfChart1 = null, perfChart2 = null;
+
+function perfDestroyCharts(){
+  if (perfChart1) { perfChart1.destroy(); perfChart1 = null; }
+  if (perfChart2) { perfChart2.destroy(); perfChart2 = null; }
+}
+
+function switchReport(which){
+  const m = document.getElementById('rpt-monthly');
+  const p = document.getElementById('rpt-perf');
+  if (m) m.style.display = which === 'monthly' ? '' : 'none';
+  if (p) p.style.display = which === 'perf' ? '' : 'none';
+  document.querySelectorAll('.rsw').forEach(b =>
+    b.classList.toggle('active', b.getAttribute('data-r') === which));
+}
+
+async function perfInit(){
+  const sel = document.getElementById('perfRep');
+  if (!sel || sel.dataset.filled) return;
+  // Admins sell too — never filter the rep list by role='rep' alone.
+  let names = [];
+  try {
+    const { data: profs } = await sb.from('profiles').select('full_name')
+      .in('role', ['rep','admin']).order('full_name');
+    names = (profs || []).map(p => p.full_name).filter(Boolean);
+  } catch(e) {}
+  try {
+    // Catch any name that appears on a sale but not in profiles.
+    const { data: srn } = await sb.from('sales').select('rep_name');
+    (srn || []).forEach(r => {
+      const n = (r.rep_name || '').trim();
+      if (n && !names.includes(n)) names.push(n);
+    });
+  } catch(e) {}
+  names.sort((a,b) => a.localeCompare(b));
+  sel.innerHTML = names.map(n => '<option>' + n.replace(/</g,'&lt;') + '</option>').join('');
+  sel.dataset.filled = '1';
+
+  const now = new Date();
+  const years = [];
+  for (let y = 2026; y <= now.getFullYear() + 1; y++) years.push(y);
+  const mOpts = (sIdx) => MONTHS.map((m,i) =>
+    '<option value="' + i + '"' + (i === sIdx ? ' selected' : '') + '>' + m + '</option>').join('');
+  const yOpts = (sY) => years.map(y =>
+    '<option value="' + y + '"' + (y === sY ? ' selected' : '') + '>' + y + '</option>').join('');
+
+  document.getElementById('perfFromM').innerHTML = mOpts(0);
+  document.getElementById('perfFromY').innerHTML = yOpts(now.getFullYear());
+  document.getElementById('perfToM').innerHTML   = mOpts(now.getMonth());
+  document.getElementById('perfToY').innerHTML   = yOpts(now.getFullYear());
+}
+
+async function generatePerf(){
+  const rep = document.getElementById('perfRep').value;
+  const fM = parseInt(document.getElementById('perfFromM').value, 10);
+  const fY = parseInt(document.getElementById('perfFromY').value, 10);
+  const tM = parseInt(document.getElementById('perfToM').value, 10);
+  const tY = parseInt(document.getElementById('perfToY').value, 10);
+  const box = document.getElementById('perfContent');
+  if (!rep) { alert('Pick a rep first.'); return; }
+
+  const start = new Date(fY, fM, 1);
+  const end   = new Date(tY, tM + 1, 1);          // exclusive
+  if (end <= start) { alert('The "to" month must be the same as or after the "from" month.'); return; }
+
+  const mode = (document.getElementById('perfMode') || {}).value || 'app';
+
+  perfDestroyCharts();
+  box.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div>Working…</div></div>';
+
+  const iso = d => d.toISOString().split('T')[0];
+  try {
+    if (mode === 'book') {
+      // The longer view. all_customer_orders unions the invoice history with
+      // app sales, so it reaches back to 1 Jan 2026 - but nothing in the
+      // invoice era carries a rep name, so volume is attributed through the
+      // customer’s CURRENT assigned rep instead. That is a different claim
+      // ("volume through their book") and the report labels it as one.
+      const [{ data: ords, error: oe }, { data: locs }] = await Promise.all([
+        sb.from('all_customer_orders').select('customer_canon,order_date,litres')
+          .gte('order_date', iso(start)).lt('order_date', iso(end)),
+        sb.from('customer_locations').select('invoice_name,assigned_rep')
+      ]);
+      if (oe) throw oe;
+      const repOf = {};
+      (locs || []).forEach(l => {
+        const k = (l.invoice_name || '').trim().toLowerCase();
+        const r = (l.assigned_rep || '').trim();
+        if (k && r) repOf[k] = r;
+      });
+      // Shaped to match the app-sales rows so perfRender needs no second path.
+      const shaped = (ords || []).map(o => ({
+        rep_name: repOf[(o.customer_canon || '').trim().toLowerCase()] || '(unassigned)',
+        sale_date: o.order_date, customer: o.customer_canon,
+        litres: o.litres, price_per_litre: 0, price_tba: false, cost_price: null
+      })).filter(r => r.rep_name !== '(unassigned)');
+      const mineAll = shaped.filter(r => r.rep_name === rep)
+        .map(r => ({ customer: r.customer, sale_date: r.sale_date }));
+      perfRender(rep, start, end, shaped, mineAll, 'book');
+      return;
+    }
+    // Everyone's sales in the range — needed for the standings comparison.
+    const { data: rows, error } = await sb.from('sales')
+      .select('rep_name,sale_date,customer,litres,price_per_litre,price_tba,cost_price,status')
+      .gte('sale_date', iso(start)).lt('sale_date', iso(end)).neq('status','cancelled');
+    if (error) throw error;
+
+    // The same rep's whole history, for a retention figure that is not an
+    // artefact of the window the user happened to pick.
+    const { data: allMine } = await sb.from('sales')
+      .select('customer,sale_date').eq('rep_name', rep).neq('status','cancelled');
+
+    perfRender(rep, start, end, rows || [], allMine || [], 'app');
+  } catch(e) {
+    box.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div>Could not load: '
+      + String((e && e.message) || e).replace(/</g,'&lt;') + '</div></div>';
+  }
+}
+
+function perfRender(rep, start, end, rows, allMine, mode){
+  const isBook = mode === 'book';
+  const box = document.getElementById('perfContent');
+  const N = n => Math.round(n).toLocaleString();
+  const mine = rows.filter(r => (r.rep_name || '').trim() === rep);
+
+  if (!mine.length){
+    box.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><div>No sales recorded for '
+      + rep.replace(/</g,'&lt;') + ' in that period.</div></div>';
+    return;
+  }
+
+  const litres  = mine.reduce((t,r) => t + (Number(r.litres) || 0), 0);
+  const revenue = mine.reduce((t,r) => t + (r.price_tba ? 0 : (Number(r.litres)||0) * (Number(r.price_per_litre)||0)), 0);
+  const custs   = new Set(mine.map(r => (r.customer||'').trim().toLowerCase()));
+  const tba     = mine.filter(r => r.price_tba).length;
+
+  // Margin: only orders that actually carry a cost price, and say how many.
+  const costed  = mine.filter(r => r.cost_price != null && !r.price_tba);
+  const margin  = costed.reduce((t,r) =>
+    t + ((Number(r.price_per_litre)||0) - (Number(r.cost_price)||0)) * (Number(r.litres)||0), 0);
+  const costPct = Math.round(costed.length / mine.length * 100);
+
+  // Retention over the rep's whole history, not just this window.
+  const perCust = {};
+  allMine.forEach(r => {
+    const k = (r.customer||'').trim().toLowerCase();
+    if (k) perCust[k] = (perCust[k] || 0) + 1;
+  });
+  const allCustN = Object.keys(perCust).length;
+  const repeatN  = Object.values(perCust).filter(n => n > 1).length;
+  const repeatPct = allCustN ? Math.round(repeatN / allCustN * 100) : 0;
+
+  // First-ever order per customer, to find who was new inside the window.
+  const firstSeen = {};
+  allMine.forEach(r => {
+    const k = (r.customer||'').trim().toLowerCase(); if (!k) return;
+    const d = (r.sale_date||'').split('T')[0];
+    if (!firstSeen[k] || d < firstSeen[k]) firstSeen[k] = d;
+  });
+  const sIso = start.toISOString().split('T')[0], eIso = end.toISOString().split('T')[0];
+  const newInPeriod = [...custs].filter(k => firstSeen[k] >= sIso && firstSeen[k] < eIso).length;
+
+  // Monthly buckets across the range
+  const buckets = [];
+  for (let d = new Date(start); d < end; d.setMonth(d.getMonth()+1)){
+    buckets.push({ key: d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'),
+                   label: MONTHS[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2),
+                   litres: 0, orders: 0 });
+  }
+  const bIdx = {}; buckets.forEach((b,i) => bIdx[b.key] = i);
+  mine.forEach(r => {
+    const k = (r.sale_date||'').slice(0,7);
+    const i = bIdx[k]; if (i == null) return;
+    buckets[i].litres += Number(r.litres) || 0;
+    buckets[i].orders += 1;
+  });
+
+  // Standings — litres only. Margin is NEVER compared across reps (see header).
+  const byRep = {};
+  rows.forEach(r => {
+    const k = (r.rep_name||'').trim() || '(none)';
+    byRep[k] = (byRep[k] || 0) + (Number(r.litres) || 0);
+  });
+  const standings = Object.entries(byRep).sort((a,b) => b[1]-a[1]);
+  const totalAll  = standings.reduce((t,s) => t + s[1], 0);
+  const rank      = standings.findIndex(s => s[0] === rep) + 1;
+  const sharePct  = totalAll ? (litres / totalAll * 100) : 0;
+
+  const period = MONTHS[start.getMonth()] + ' ' + start.getFullYear() + ' – ' +
+                 buckets[buckets.length-1].label.replace(/(\d\d)$/, '20$1');
+
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  box.innerHTML =
+    '<div class="perf-head"><h3>' + esc(rep) + '</h3><span>' + esc(period) +
+      ' · ' + buckets.length + ' month' + (buckets.length===1?'':'s') + '</span></div>' +
+
+    (isBook
+      ? '<div class="perf-banner">Showing <b>volume through this rep’s customers</b>, from invoices and ' +
+        'app sales together. Before July nothing carries a rep name, so this is attributed by who the ' +
+        'customer is assigned to <b>today</b> — not proof of who closed the sale. No revenue or margin ' +
+        'on this view.</div>'
+      : '<div class="perf-banner app">Showing <b>sales this rep logged personally</b>, with their name on ' +
+        'each one. App records only, so nothing before 22 June 2026 appears here.</div>') +
+
+    '<div class="metrics-grid">' +
+      '<div class="metric-card accent-blue"><div class="metric-label">Litres sold</div>' +
+        '<div class="metric-value">' + N(litres) + '</div>' +
+        '<div class="metric-sub">' + mine.length + ' orders · avg ' + N(litres/mine.length) + ' L</div></div>' +
+      (isBook
+        ? '<div class="metric-card"><div class="metric-label">Orders</div>' +
+          '<div class="metric-value">' + mine.length + '</div>' +
+          '<div class="metric-sub">invoices and app sales combined</div></div>'
+        : '<div class="metric-card accent-green"><div class="metric-label">Revenue</div>' +
+          '<div class="metric-value">$' + N(revenue) + '</div>' +
+          '<div class="metric-sub">' + (tba ? tba + ' order' + (tba===1?'':'s') + ' at price TBA, counted as $0' : 'all orders priced') + '</div></div>') +
+      '<div class="metric-card"><div class="metric-label">Customers served</div>' +
+        '<div class="metric-value">' + custs.size + '</div>' +
+        '<div class="metric-sub">' + newInPeriod + ' new to this rep in the period</div></div>' +
+      '<div class="metric-card accent-amber"><div class="metric-label">Share of period</div>' +
+        '<div class="metric-value">' + sharePct.toFixed(1) + '%</div>' +
+        '<div class="metric-sub">rank ' + rank + ' of ' + standings.length + ' by litres</div></div>' +
+    '</div>' +
+
+    '<div class="perf-sec"><h4>Volume by month</h4>' +
+      '<div class="perf-chart"><canvas id="perfCanvas1"></canvas></div></div>' +
+
+    '<div class="perf-sec"><h4>Against the other reps, same period</h4>' +
+      '<div class="perf-chart"><canvas id="perfCanvas2"></canvas></div>' +
+      '<p class="perf-note">Litres only. Margin is not compared between reps — see below for why.</p></div>' +
+
+    '<div class="perf-sec"><h4>Repeat business</h4>' +
+      '<div class="metrics-grid">' +
+        '<div class="metric-card"><div class="metric-label">Customers who reorder</div>' +
+          '<div class="metric-value">' + repeatPct + '%</div>' +
+          '<div class="metric-sub">' + repeatN + ' of ' + allCustN + ' customers, whole history</div></div>' +
+        '<div class="metric-card"><div class="metric-label">Orders per customer</div>' +
+          '<div class="metric-value">' + (mine.length / custs.size).toFixed(1) + '</div>' +
+          '<div class="metric-sub">within this period only</div></div>' +
+      '</div>' +
+      '<p class="perf-note">Repeat rate is measured across this rep’s whole history, not the period above. ' +
+        'A customer who orders every 60 days would look like a total loss inside a 30-day window.</p></div>' +
+
+    '<div class="perf-sec"><h4>Margin</h4>' +
+      (isBook
+        ? '<div class="perf-empty">Margin is not available on the longer record — invoice history ' +
+          'carries litres and dates only, no prices. Switch to <b>Sales they logged</b> for margin.</div>'
+        : costed.length
+        ? '<div class="metrics-grid">' +
+            '<div class="metric-card' + (costPct >= 40 ? ' accent-green' : ' accent-amber') + '">' +
+              '<div class="metric-label">Gross margin</div><div class="metric-value">$' + N(margin) + '</div>' +
+              '<div class="metric-sub">on ' + costed.length + ' of ' + mine.length + ' orders</div></div>' +
+            '<div class="metric-card' + (costPct >= 40 ? '' : ' accent-red') + '">' +
+              '<div class="metric-label">Cost price captured</div><div class="metric-value">' + costPct + '%</div>' +
+              '<div class="metric-sub">of this rep’s orders in the period</div></div>' +
+          '</div>'
+        : '<div class="perf-empty">No cost prices recorded, so margin cannot be calculated for this rep.</div>') +
+      '<p class="perf-note"><b>Read this carefully.</b> Margin covers only orders where a cost price was entered. ' +
+        'It is a figure for those orders, not for the rep’s whole book, and it is not comparable between reps ' +
+        'unless their capture rates are similar. A low percentage here is a data-entry gap, not a performance result.</p></div>' +
+
+    '<div class="perf-sec"><h4>Month by month</h4>' +
+      '<div class="perf-tablewrap"><table class="perf-table"><thead><tr>' +
+        '<th>Month</th><th class="r">Orders</th><th class="r">Litres</th><th class="r">Avg order</th>' +
+      '</tr></thead><tbody>' +
+      buckets.map(b => '<tr><td>' + esc(b.label) + '</td><td class="r">' + b.orders + '</td><td class="r">' +
+        N(b.litres) + '</td><td class="r">' + (b.orders ? N(b.litres/b.orders) : '—') + '</td></tr>').join('') +
+      '<tr class="tot"><td>Total</td><td class="r">' + mine.length + '</td><td class="r">' + N(litres) +
+        '</td><td class="r">' + N(litres/mine.length) + '</td></tr>' +
+      '</tbody></table></div></div>';
+
+  const cv = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const ink = cv('--gray-text') || '#847F76';
+  const grid = cv('--gray-border') || '#E0E0DE';
+
+  perfChart1 = new Chart(document.getElementById('perfCanvas1'), {
+    type: 'bar',
+    data: { labels: buckets.map(b => b.label),
+      datasets: [{ label: 'Litres', data: buckets.map(b => b.litres),
+        backgroundColor: cv('--blue') || '#185FA5', borderRadius: 4, maxBarThickness: 46 }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: c => c.parsed.y.toLocaleString() + ' L' } } },
+      scales: { y: { beginAtZero: true, ticks: { color: ink, callback: v => (v/1000) + 'k' },
+                     grid: { color: grid } },
+                x: { ticks: { color: ink }, grid: { display: false } } } }
+  });
+
+  perfChart2 = new Chart(document.getElementById('perfCanvas2'), {
+    type: 'bar',
+    data: { labels: standings.map(s => s[0]),
+      datasets: [{ label: 'Litres', data: standings.map(s => s[1]),
+        // The selected rep is the subject of the report, so it carries the
+        // accent — that is identity, not rank.
+        backgroundColor: standings.map(s => s[0] === rep ? (cv('--red') || '#D4180A') : (cv('--blue') || '#185FA5')),
+        borderRadius: 4, maxBarThickness: 26 }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: c => c.parsed.x.toLocaleString() + ' L' } } },
+      scales: { x: { beginAtZero: true, ticks: { color: ink, callback: v => (v/1000) + 'k' },
+                     grid: { color: grid } },
+                y: { ticks: { color: ink }, grid: { display: false } } } }
+  });
+}
 
 async function generateReport() {
   const month = parseInt(document.getElementById('reportMonthSel').value, 10);
