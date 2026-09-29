@@ -2600,7 +2600,19 @@ function updateLastSyncedLine() {
   let reportData = {};
   const chartInstances = {};
 
-  async function generateReport() {
+  /* Dates for the database must be built from LOCAL calendar parts, never via
+   toISOString(). Harare is UTC+2, so new Date(2026,8,1).toISOString() is
+   "2026-08-31T22:00:00Z" and the date string comes out a day early - a
+   September report then queries 31 Aug to 29 Sep, quietly picking up a day of
+   August and dropping the last day of September. Invisible in a UTC test
+   runner, guaranteed to be wrong here. (Hit for real, 29 Sep 2026.) */
+function localISO(d){
+  return d.getFullYear() + "-" +
+         String(d.getMonth() + 1).padStart(2, "0") + "-" +
+         String(d.getDate()).padStart(2, "0");
+}
+
+async function generateReport() {
     const month = parseInt(document.getElementById('reportMonthSel').value, 10);
     const year = parseInt(document.getElementById('reportYearSel').value, 10);
     if (isNaN(month) || isNaN(year)) {
@@ -2616,8 +2628,8 @@ function updateLastSyncedLine() {
       const { data: sales, error } = await sb
         .from('sales')
         .select('*')
-        .gte('sale_date', startDate.toISOString().split('T')[0])
-        .lt('sale_date', endDate.toISOString().split('T')[0]);
+        .gte('sale_date', localISO(startDate))
+        .lt('sale_date', localISO(endDate));
 
       if (error) throw error;
 

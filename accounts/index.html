@@ -1150,6 +1150,18 @@ function switchView(v){
 let reportData = {};
 const chartInstances = {};
 
+/* Dates for the database must be built from LOCAL calendar parts, never via
+   toISOString(). Harare is UTC+2, so new Date(2026,8,1).toISOString() is
+   "2026-08-31T22:00:00Z" and the date string comes out a day early - a
+   September report then queries 31 Aug to 29 Sep, quietly picking up a day of
+   August and dropping the last day of September. Invisible in a UTC test
+   runner, guaranteed to be wrong here. (Hit for real, 29 Sep 2026.) */
+function localISO(d){
+  return d.getFullYear() + "-" +
+         String(d.getMonth() + 1).padStart(2, "0") + "-" +
+         String(d.getDate()).padStart(2, "0");
+}
+
 /* ================= REP PERFORMANCE REPORT =================
    Per-rep volume, customers, retention and margin over a chosen range.
 
@@ -1254,7 +1266,7 @@ async function generatePerf(){
   perfDestroyCharts();
   box.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div>Working…</div></div>';
 
-  const iso = d => d.toISOString().split('T')[0];
+  const iso = localISO;
   try {
     if (mode === 'book') {
       // The longer view. all_customer_orders unions the invoice history with
@@ -1342,7 +1354,7 @@ function perfRender(rep, start, end, rows, allMine, mode){
     const d = (r.sale_date||'').split('T')[0];
     if (!firstSeen[k] || d < firstSeen[k]) firstSeen[k] = d;
   });
-  const sIso = start.toISOString().split('T')[0], eIso = end.toISOString().split('T')[0];
+  const sIso = localISO(start), eIso = localISO(end);
   const newInPeriod = [...custs].filter(k => firstSeen[k] >= sIso && firstSeen[k] < eIso).length;
 
   // Monthly buckets across the range
@@ -1509,8 +1521,8 @@ async function generateReport() {
     const { data: sales, error } = await sb
       .from('sales')
       .select('*')
-      .gte('sale_date', startDate.toISOString().split('T')[0])
-      .lt('sale_date', endDate.toISOString().split('T')[0]);
+      .gte('sale_date', localISO(startDate))
+      .lt('sale_date', localISO(endDate));
 
     if (error) throw error;
 
