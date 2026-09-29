@@ -7947,6 +7947,22 @@ const chartInstances = {};
       Repeat rate is computed over the customer's whole history with that rep
       and labelled as such; the in-period figure sits beside it as context. */
 
+/* PostgREST returns at most 1000 rows per request and does NOT signal that it
+   truncated - a short read looks identical to a complete one. Everything here
+   can exceed that (all_customer_orders alone is ~2,450 rows over nine months),
+   so every fetch pages explicitly until a page comes back short. */
+const PERF_PAGE = 1000;
+async function perfFetchAll(build){
+  const out = [];
+  for (let from = 0; ; from += PERF_PAGE){
+    const { data, error } = await build().range(from, from + PERF_PAGE - 1);
+    if (error) throw error;
+    const batch = data || [];
+    out.push(...batch);
+    if (batch.length < PERF_PAGE) return out;
+  }
+}
+
 let perfChart1 = null, perfChart2 = null;
 
 function perfDestroyCharts(){
@@ -8025,12 +8041,11 @@ async function generatePerf(){
       // invoice era carries a rep name, so volume is attributed through the
       // customer’s CURRENT assigned rep instead. That is a different claim
       // ("volume through their book") and the report labels it as one.
-      const [{ data: ords, error: oe }, { data: locs }] = await Promise.all([
-        sb.from('all_customer_orders').select('customer_canon,order_date,litres')
-          .gte('order_date', iso(start)).lt('order_date', iso(end)),
-        sb.from('customer_locations').select('invoice_name,assigned_rep')
+      const [ords, locs] = await Promise.all([
+        perfFetchAll(() => sb.from('all_customer_orders').select('customer_canon,order_date,litres')
+          .gte('order_date', iso(start)).lt('order_date', iso(end)).order('order_date')),
+        perfFetchAll(() => sb.from('customer_locations').select('invoice_name,assigned_rep').order('id'))
       ]);
-      if (oe) throw oe;
       const repOf = {};
       (locs || []).forEach(l => {
         const k = (l.invoice_name || '').trim().toLowerCase();
@@ -8049,17 +8064,17 @@ async function generatePerf(){
       return;
     }
     // Everyone's sales in the range — needed for the standings comparison.
-    const { data: rows, error } = await sb.from('sales')
+    const rows = await perfFetchAll(() => sb.from('sales')
       .select('rep_name,sale_date,customer,litres,price_per_litre,price_tba,cost_price,status')
-      .gte('sale_date', iso(start)).lt('sale_date', iso(end)).neq('status','cancelled');
-    if (error) throw error;
+      .gte('sale_date', iso(start)).lt('sale_date', iso(end)).neq('status','cancelled')
+      .order('sale_date'));
 
     // The same rep's whole history, for a retention figure that is not an
     // artefact of the window the user happened to pick.
-    const { data: allMine } = await sb.from('sales')
-      .select('customer,sale_date').eq('rep_name', rep).neq('status','cancelled');
+    const allMine = await perfFetchAll(() => sb.from('sales')
+      .select('customer,sale_date').eq('rep_name', rep).neq('status','cancelled').order('sale_date'));
 
-    perfRender(rep, start, end, rows || [], allMine || [], 'app');
+    perfRender(rep, start, end, rows, allMine, 'app');
   } catch(e) {
     box.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div>Could not load: '
       + String((e && e.message) || e).replace(/</g,'&lt;') + '</div></div>';
@@ -8166,7 +8181,9 @@ function perfRender(rep, start, end, rows, allMine, mode){
           '<div class="metric-sub">' + (tba ? tba + ' order' + (tba===1?'':'s') + ' at price TBA, counted as $0' : 'all orders priced') + '</div></div>') +
       '<div class="metric-card"><div class="metric-label">Customers served</div>' +
         '<div class="metric-value">' + custs.size + '</div>' +
-        '<div class="metric-sub">' + newInPeriod + ' new to this rep in the period</div></div>' +
+        '<div class="metric-sub">' + (isBook
+          ? 'with volume in this period'
+          : newInPeriod + ' new to this rep in the period') + '</div></div>' +
       '<div class="metric-card accent-amber"><div class="metric-label">Share of period</div>' +
         '<div class="metric-value">' + sharePct.toFixed(1) + '%</div>' +
         '<div class="metric-sub">rank ' + rank + ' of ' + standings.length + ' by litres</div></div>' +
@@ -8188,8 +8205,11 @@ function perfRender(rep, start, end, rows, allMine, mode){
           '<div class="metric-value">' + (mine.length / custs.size).toFixed(1) + '</div>' +
           '<div class="metric-sub">within this period only</div></div>' +
       '</div>' +
-      '<p class="perf-note">Repeat rate is measured across this rep’s whole history, not the period above. ' +
-        'A customer who orders every 60 days would look like a total loss inside a 30-day window.</p></div>' +
+      '<p class="perf-note">' + (isBook
+        ? 'On this view repeat rate covers the selected period only, because the longer record is read a ' +
+          'range at a time. Switch to <b>Sales they logged</b> for a whole-history figure.'
+        : 'Repeat rate is measured across this rep’s whole history, not the period above. ' +
+          'A customer who orders every 60 days would look like a total loss inside a 30-day window.') + '</p></div>' +
 
     '<div class="perf-sec"><h4>Margin</h4>' +
       (isBook
@@ -8252,7 +8272,6 @@ function perfRender(rep, start, end, rows, allMine, mode){
                 y: { ticks: { color: ink }, grid: { display: false } } } }
   });
 }
-
 async function generateReport() {
   const month = parseInt(document.getElementById('reportMonthSel').value, 10);
   const year = parseInt(document.getElementById('reportYearSel').value, 10);
