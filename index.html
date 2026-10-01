@@ -2629,7 +2629,11 @@ async function generateReport() {
         .from('sales')
         .select('*')
         .gte('sale_date', localISO(startDate))
-        .lt('sale_date', localISO(endDate));
+        .lt('sale_date', localISO(endDate))
+        // A cancelled order is not a sale. Without this the report counted them,
+        // which is why it read 177,000 L above the Sales tracker for Sep 2026:
+        // the tracker has always filtered them out and the report never did.
+        .neq('status', 'cancelled');
 
       if (error) throw error;
 
