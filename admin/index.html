@@ -7552,7 +7552,9 @@ const SalesApp = (() => {
       const endInput = document.getElementById("tf-end").value;
       if (!start || !endInput) { alert("Pick both start and end dates."); return; }
       const e = new Date(endInput+"T00:00:00"); e.setDate(e.getDate()+1);
-      endEx = e.toISOString().slice(0,10);
+      // Local date, not UTC. toISOString() here pulled the end date back two
+      // hours into the previous day, so a range ending 30 Sep excluded 30 Sep.
+      endEx = localISO(e);
       monthLabel = start+" to "+endInput;
       fileTag = repName+"_Commission_"+start+"_to_"+endInput;
     } else {
