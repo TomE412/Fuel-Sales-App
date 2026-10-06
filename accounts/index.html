@@ -712,12 +712,13 @@ async function accSignIn(){
   errEl.textContent='';
   const {data,error}=await sb.auth.signInWithPassword({email,password});
   if(error){errEl.textContent=error.message;return;}
-  const {data:profile}=await sb.from('profiles').select('role').eq('id',data.user.id).single();
+  const {data:profile}=await sb.from('profiles').select('role,full_name').eq('id',data.user.id).single();
   if(!profile||!['accounts','admin'].includes(profile.role)){
     await sb.auth.signOut();
     errEl.textContent='Access denied. Accounts or admin role required.';
     return;
   }
+  ACC_ME = (profile && profile.full_name) || null;
   document.getElementById('auth-wrap').classList.add('hidden');
   document.getElementById('acc-wrap').classList.add('active');
   // Plain <select> dropdowns rather than <input type="month"> - that native
@@ -749,7 +750,7 @@ async function fetchData(){
     const fromDate=new Date();
     fromDate.setDate(fromDate.getDate()-daysBack);
     const {data,error}=await sb.from('sales')
-      .select('id,sale_date,delivery_date,payment_due,payment_term,customer,location,litres,price_per_litre,cost_price,price_tba,fuel_type,rep_name,status,paid,invoiced,notes,delivered_at')
+      .select('id,sale_date,delivery_date,payment_due,payment_term,customer,location,litres,price_per_litre,cost_price,price_tba,fuel_type,rep_name,status,paid,invoiced,notes,delivered_at,cost_check_at,cost_check_by')
       .gte('sale_date',fromDate.toISOString().split('T')[0])
       .order('payment_due',{ascending:true});
     if(error)throw error;
@@ -766,6 +767,8 @@ async function fetchData(){
       // null when the rep left it blank, which is NOT zero - comparing against
       // a missing cost would mark every uncosted sale as a loss.
       cost:(s.cost_price===null||s.cost_price===undefined||s.cost_price==='')?null:parseFloat(s.cost_price),
+      costCheckAt:s.cost_check_at||null,
+      costCheckBy:s.cost_check_by||null,
       value:(parseFloat(s.litres)||0)*(parseFloat(s.price_per_litre)||0),
       fuelType:s.fuel_type||'',
       rep:s.rep_name||'',
@@ -804,6 +807,8 @@ function renderAll(){
 }
 
 // ===== SALES TRACKER =====
+// Who is signed in, for stamping a cost check. Captured at login.
+let ACC_ME = null;
 let trackFilter = 'all';
 let trackSort = { key:'date', dir:-1 };
 
@@ -820,6 +825,42 @@ function sortTrack(key){
 
 // One definition of "below cost", shared by the row highlight, the filter
 // chip and the banner - three places that must never disagree.
+// Below cost AND nobody has recorded checking it yet. The alarm counts
+// these; isBelowCost() alone stays true forever, because marking a sale
+// checked records that someone looked — it does not change the price.
+function needsCostCheck(s){ return isBelowCost(s) && !s.costCheckAt; }
+
+async function markCostChecked(id, btn){
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+  const row = allSales.find(x => String(x.id) === String(id));
+  const stamp = new Date().toISOString();
+  const who = ACC_ME || 'accounts';
+  const hadAt = row ? row.costCheckAt : null;
+  const hadBy = row ? row.costCheckBy : null;
+  if (row) { row.costCheckAt = stamp; row.costCheckBy = who; }   // optimistic
+  renderTracker();
+  try {
+    const { error } = await sb.from('sales')
+      .update({ cost_check_at: stamp, cost_check_by: who }).eq('id', id);
+    if (error) throw error;
+  } catch (e) {
+    if (row) { row.costCheckAt = hadAt; row.costCheckBy = hadBy; }  // put it back
+    renderTracker();
+    alert('Could not save that check:' + String.fromCharCode(10,10) + ((e && e.message) || e));
+  }
+}
+
+async function markAllCostChecked(){
+  const pending = allSales.filter(needsCostCheck);
+  if (!pending.length) return;
+  // More than one is worth a pause: clearing several at once is exactly how
+  // a real loss gets waved through behind one that was genuinely fine.
+  if (pending.length > 1 && !confirm('Mark all ' + pending.length +
+      ' below-cost sales as checked?' + String.fromCharCode(10,10) +
+      'Do this only if you have looked at each one.')) return;
+  for (const p of pending) await markCostChecked(p.id, null);
+}
+
 function isBelowCost(s){
   const c = s.cost;
   if (c === null || c === undefined || isNaN(c) || c <= 0) return false;
@@ -860,7 +901,7 @@ function renderTracker(){
     return av<bv?-dir:av>bv?dir:0;
   });
 
-  const flagged = allSales.filter(isBelowCost);
+  const flagged = allSales.filter(needsCostCheck);
   const alarm = document.getElementById('cost-alarm');
   if (alarm) {
     alarm.style.display = flagged.length ? 'block' : 'none';
@@ -868,7 +909,10 @@ function renderTracker(){
       const lost = flagged.reduce((t,x) => t + ((x.cost - x.price) * (x.litres||0)), 0);
       alarm.innerHTML = '⚠ ' + flagged.length + ' sale' + (flagged.length===1?'':'s') +
         ' priced BELOW cost — about ' + money(lost) + ' of margin at risk. ' +
-        'Check these before invoicing.';
+        'Check these before invoicing. ' +
+        '<button onclick="markAllCostChecked()" style="margin-left:8px;padding:4px 12px;' +
+        'background:var(--red);color:#fff;border:none;border-radius:6px;font-family:inherit;' +
+        'font-size:11.5px;font-weight:700;cursor:pointer;">&#10003; Mark as checked</button>';
     }
   }
 
@@ -894,15 +938,25 @@ function renderTracker(){
     // catches: it happened once, and the invoice went out before anyone saw it.
     const costKnown = s.cost !== null && s.cost !== undefined && !isNaN(s.cost) && s.cost > 0;
     const belowCost = isBelowCost(s);
+    const needsCheck = needsCostCheck(s);
     const costCell = !costKnown
       ? '<span style="color:var(--gray-text);" title="No cost price recorded">&mdash;</span>'
-      : (belowCost
+      : (needsCheck
           ? '<span style="color:var(--red);font-weight:800;">' + money2(s.cost) + '</span>'
           : money2(s.cost));
-    const lossPill = belowCost
+    const lossPill = needsCheck
       ? '<span class="tpill" style="background:var(--red);color:#fff;font-weight:800;" ' +
-        'title="Sale price is below cost price - check before invoicing">&#9888; BELOW COST</span>'
-      : '';
+        'title="Sale price is below cost price">&#9888; BELOW COST</span>' +
+        '<button onclick="markCostChecked(&#39;' + s.id + '&#39;, this)" ' +
+        'style="margin-left:6px;padding:2px 8px;background:#fff;border:1px solid var(--red);' +
+        'color:var(--red);border-radius:5px;font-family:inherit;font-size:10px;font-weight:700;' +
+        'cursor:pointer;">&#10003; Mark checked</button>'
+      : (belowCost
+          ? '<span class="tpill" style="background:var(--gray-light);color:var(--gray-text);" ' +
+            'title="Below cost, but someone has reviewed it">&#10003; cost checked' +
+            (s.costCheckBy ? ' by ' + s.costCheckBy : '') +
+            (s.costCheckAt ? ' &middot; ' + fmtDate((s.costCheckAt || '').split('T')[0]) : '') + '</span>'
+          : '');
 
     const valueCell = s.priceTba
       ? '<span style="color:var(--amber);">&mdash;</span>'
@@ -914,7 +968,7 @@ function renderTracker(){
     const due = s.paymentDue
       ? '<div style="font-size:10px;color:var(--gray-text);">due '+fmtDate(s.paymentDue)+'</div>'
       : '';
-    return '<tr'+(belowCost?' style="background:var(--red-light);"':'')+'>'+
+    return '<tr'+(needsCheck?' style="background:var(--red-light);"':'')+'>'+
       '<td class="mono" style="white-space:nowrap;">'+fmtDate(s.date)+'</td>'+
       '<td class="mono" style="white-space:nowrap;">'+(s.deliveryDate?fmtDate(s.deliveryDate):'<span style="color:var(--gray-text);">&mdash;</span>')+'</td>'+
       '<td><div style="font-weight:700;">'+s.customer+'</div>'+
