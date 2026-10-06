@@ -296,10 +296,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
             <span class="bk-chip" data-t="pending" onclick="setTrackFilter('pending')">Pending</span>
             <span class="bk-chip" data-t="delivered" onclick="setTrackFilter('delivered')">Delivered</span>
             <span class="bk-chip" data-t="tba" onclick="setTrackFilter('tba')">Price TBA</span>
+            <span class="bk-chip" data-t="belowcost" onclick="setTrackFilter('belowcost')" style="border-color:var(--red);color:var(--red);">&#9888; Below cost</span>
             <input type="text" id="track-search" placeholder="Search customer..." oninput="renderTracker()"
               style="padding:6px 10px;border:1px solid var(--gray-light);border-radius:7px;font-family:inherit;font-size:12px;width:180px;outline:none;">
           </div>
         </div>
+        <div id="cost-alarm" style="display:none;margin:0 0 10px;padding:10px 14px;background:var(--red-light);border:1px solid var(--red);border-left-width:4px;border-radius:8px;font-size:12.5px;color:var(--red-dark);font-weight:700;"></div>
         <div class="scroll-x">
           <table class="tbl">
             <thead>
@@ -311,13 +313,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
                 <th onclick="sortTrack('fuelType')">Product</th>
                 <th onclick="sortTrack('litres')" style="text-align:right;">Litres</th>
                 <th onclick="sortTrack('price')" style="text-align:right;">Price/L</th>
+                <th onclick="sortTrack('cost')" style="text-align:right;">Cost/L</th>
                 <th onclick="sortTrack('value')" style="text-align:right;">Value</th>
                 <th onclick="sortTrack('paymentTerm')">Terms</th>
                 <th onclick="sortTrack('invoiced')" style="text-align:center;">Invoiced</th>
               </tr>
             </thead>
             <tbody id="track-body">
-              <tr><td colspan="10" class="empty-msg">Loading...</td></tr>
+              <tr><td colspan="11" class="empty-msg">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -746,7 +749,7 @@ async function fetchData(){
     const fromDate=new Date();
     fromDate.setDate(fromDate.getDate()-daysBack);
     const {data,error}=await sb.from('sales')
-      .select('id,sale_date,delivery_date,payment_due,payment_term,customer,location,litres,price_per_litre,price_tba,fuel_type,rep_name,status,paid,invoiced,notes,delivered_at')
+      .select('id,sale_date,delivery_date,payment_due,payment_term,customer,location,litres,price_per_litre,cost_price,price_tba,fuel_type,rep_name,status,paid,invoiced,notes,delivered_at')
       .gte('sale_date',fromDate.toISOString().split('T')[0])
       .order('payment_due',{ascending:true});
     if(error)throw error;
@@ -760,6 +763,9 @@ async function fetchData(){
       location:s.location||'',
       litres:parseFloat(s.litres)||0,
       price:parseFloat(s.price_per_litre)||0,
+      // null when the rep left it blank, which is NOT zero - comparing against
+      // a missing cost would mark every uncosted sale as a loss.
+      cost:(s.cost_price===null||s.cost_price===undefined||s.cost_price==='')?null:parseFloat(s.cost_price),
       value:(parseFloat(s.litres)||0)*(parseFloat(s.price_per_litre)||0),
       fuelType:s.fuel_type||'',
       rep:s.rep_name||'',
@@ -812,6 +818,17 @@ function sortTrack(key){
   renderTracker();
 }
 
+// One definition of "below cost", shared by the row highlight, the filter
+// chip and the banner - three places that must never disagree.
+function isBelowCost(s){
+  const c = s.cost;
+  if (c === null || c === undefined || isNaN(c) || c <= 0) return false;
+  if (s.priceTba) return false;
+  return (s.price || 0) > 0 && s.price < c;
+}
+
+function money2(v){ return '$' + Number(v).toFixed(3); }
+
 function renderTracker(){
   const q = (document.getElementById('track-search')?.value||'').toLowerCase().trim();
 
@@ -820,6 +837,7 @@ function renderTracker(){
     if(trackFilter==='pending')   return s.status !== 'delivered';
     if(trackFilter==='delivered') return s.status === 'delivered';
     if(trackFilter==='tba')       return !!s.priceTba;
+    if(trackFilter==='belowcost') return isBelowCost(s);
     return true;
   });
 
@@ -842,9 +860,21 @@ function renderTracker(){
     return av<bv?-dir:av>bv?dir:0;
   });
 
+  const flagged = allSales.filter(isBelowCost);
+  const alarm = document.getElementById('cost-alarm');
+  if (alarm) {
+    alarm.style.display = flagged.length ? 'block' : 'none';
+    if (flagged.length) {
+      const lost = flagged.reduce((t,x) => t + ((x.cost - x.price) * (x.litres||0)), 0);
+      alarm.innerHTML = '⚠ ' + flagged.length + ' sale' + (flagged.length===1?'':'s') +
+        ' priced BELOW cost — about ' + money(lost) + ' of margin at risk. ' +
+        'Check these before invoicing.';
+    }
+  }
+
   const body = document.getElementById('track-body');
   if(!rows.length){
-    body.innerHTML = '<tr><td colspan="10" class="empty-msg">'+
+    body.innerHTML = '<tr><td colspan="11" class="empty-msg">'+
       (q?'No sale matches that search.':'No sales to show.')+'</td></tr>';
     return;
   }
@@ -860,6 +890,20 @@ function renderTracker(){
     const priceCell = s.priceTba
       ? '<span style="color:var(--amber);font-weight:700;">TBA</span>'
       : '$'+(s.price||0).toFixed(3);
+    // BELOW COST. A rep swapping the sell and cost prices is the error this
+    // catches: it happened once, and the invoice went out before anyone saw it.
+    const costKnown = s.cost !== null && s.cost !== undefined && !isNaN(s.cost) && s.cost > 0;
+    const belowCost = isBelowCost(s);
+    const costCell = !costKnown
+      ? '<span style="color:var(--gray-text);" title="No cost price recorded">&mdash;</span>'
+      : (belowCost
+          ? '<span style="color:var(--red);font-weight:800;">' + money2(s.cost) + '</span>'
+          : money2(s.cost));
+    const lossPill = belowCost
+      ? '<span class="tpill" style="background:var(--red);color:#fff;font-weight:800;" ' +
+        'title="Sale price is below cost price - check before invoicing">&#9888; BELOW COST</span>'
+      : '';
+
     const valueCell = s.priceTba
       ? '<span style="color:var(--amber);">&mdash;</span>'
       : money(s.value||0);
@@ -870,16 +914,18 @@ function renderTracker(){
     const due = s.paymentDue
       ? '<div style="font-size:10px;color:var(--gray-text);">due '+fmtDate(s.paymentDue)+'</div>'
       : '';
-    return '<tr>'+
+    return '<tr'+(belowCost?' style="background:var(--red-light);"':'')+'>'+
       '<td class="mono" style="white-space:nowrap;">'+fmtDate(s.date)+'</td>'+
       '<td class="mono" style="white-space:nowrap;">'+(s.deliveryDate?fmtDate(s.deliveryDate):'<span style="color:var(--gray-text);">&mdash;</span>')+'</td>'+
       '<td><div style="font-weight:700;">'+s.customer+'</div>'+
         '<div style="font-size:10px;color:var(--gray-text);">'+(s.location||'&mdash;')+' &middot; '+(s.rep||'&mdash;')+'</div>'+
+        lossPill+
         notes+'</td>'+
       '<td>'+statusPill+'</td>'+
       '<td>'+fuelPill+'</td>'+
       '<td class="mono" style="text-align:right;">'+(s.litres||0).toLocaleString()+'</td>'+
       '<td class="mono" style="text-align:right;">'+priceCell+'</td>'+
+      '<td class="mono" style="text-align:right;">'+costCell+'</td>'+
       '<td class="mono" style="text-align:right;font-weight:700;">'+valueCell+'</td>'+
       '<td style="white-space:nowrap;">'+(s.paymentTerm||'&mdash;')+due+'</td>'+
       '<td style="text-align:center;"><input type="checkbox" style="width:16px;height:16px;cursor:pointer;"'+

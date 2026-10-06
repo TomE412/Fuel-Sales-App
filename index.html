@@ -581,7 +581,7 @@ textarea:focus{border-color:var(--red);background:#fff;}
       </div>
       <div class="field">
         <label>Cost per km ($) <span style="font-weight:400;color:var(--text3);">— adjustable</span></label>
-        <input type="number" id="calc-cpkm" placeholder="e.g. 2.20" inputmode="decimal" step="0.01" value="2.20">
+        <input type="number" id="calc-cpkm" placeholder="e.g. 2.40" inputmode="decimal" step="0.01" value="2.40">
       </div>
       <button class="submit-btn" onclick="calcDelivery()" style="margin-top:8px;">Calculate</button>
       <div id="calc-result" style="margin-top:12px;display:none;">
@@ -1037,7 +1037,7 @@ function calcDelivery() {
   const litres = parseFloat(document.getElementById('calc-litres').value) || 0;
   const depot = parseFloat(document.getElementById('calc-depot').value) || 0;
   const markup = parseFloat(document.getElementById('calc-markup').value) || 0;
-  const cpkm = parseFloat(document.getElementById('calc-cpkm').value) || 2.20;
+  const cpkm = parseFloat(document.getElementById('calc-cpkm').value) || 2.40;
 
   if (!dist || !litres || !depot) { alert('Please fill in distance, litres and depot price.'); return; }
 
@@ -2269,7 +2269,15 @@ function showTab(id, btn) {
   if (id === 'more') {
     // Restore saved cost per km
     const saved = localStorage.getItem('calc_cpkm');
-    if (saved) document.getElementById('calc-cpkm').value = saved;
+    // The rate rose from $2.20 to $2.40/km on 6 Oct 2026. Anyone who had used
+    // the calculator before that has 2.20 saved and would keep calculating on
+    // the old rate forever. Drop the saved value ONLY when it is exactly the
+    // old default - a number someone deliberately typed is theirs to keep.
+    if (saved === '2.20' || saved === '2.2') {
+      try { localStorage.removeItem('calc_cpkm'); } catch (e) {}
+    } else if (saved) {
+      document.getElementById('calc-cpkm').value = saved;
+    }
     setupReportCard();
   }
 }
@@ -2343,7 +2351,7 @@ function updateLastSyncedLine() {
 (function(){
   // ---- editable settings ----
   let REPS = []; // populated dynamically from profiles table;              // add more rep_name values here as you take them on
-  const PRICE_PER_KM = 2.2;             // haulage $/km (round trip auto-applied)
+  const PRICE_PER_KM = 2.4;             // haulage $/km (round trip auto-applied). Raised from 2.20 on 6 Oct 2026.
   const LOSS_FLOOR   = 0.005;           // $/L paid on loss deals (confirm with Niel)
   const RETAINER     = 1200;            // monthly retainer $
   const REP_ROLE     = "rep";           // anyone whose role isn't this sees the report card
