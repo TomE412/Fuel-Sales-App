@@ -1832,7 +1832,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
               </div>
               <div class="field">
                 <label>Price / litre ($)</label>
-                <input type="number" id="s-price" placeholder="e.g. 1.94" inputmode="decimal" step="0.001">
+                <input type="number" id="s-price" placeholder="e.g. 1.94" inputmode="decimal" step="0.001" oninput="SalesApp.checkCostVsPrice()">
                 <label class="tba-row" onclick="SalesApp.toggleTBA(event)">
                   <span class="tba-box" id="tba-box"></span>
                   <span class="tba-txt">Price TBA — send now, agree price later</span>
@@ -1841,7 +1841,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
             </div>
             <div class="field">
               <label>Cost price / litre ($) <span style="font-weight:400;color:var(--gray-text);">— optional, office use</span></label>
-              <input type="number" id="s-cost" placeholder="Leave blank if not known" inputmode="decimal" step="0.001">
+              <input type="number" id="s-cost" placeholder="Leave blank if not known" inputmode="decimal" step="0.001" oninput="SalesApp.checkCostVsPrice()">
+          <div id="cost-warn" style="display:none;margin-top:7px;padding:9px 12px;background:var(--red-light);border:1px solid var(--red);border-left-width:4px;border-radius:8px;font-size:12.5px;font-weight:700;color:var(--red);line-height:1.45;">&#9888; Mike Alarm, your cost price is higher than your sell price!</div>
             </div>
             <div class="field">
               <label>Fuel type</label>
@@ -6711,6 +6712,7 @@ const SalesApp = (() => {
     document.getElementById('s-litres').value = '';
     document.getElementById('s-price').value = '';
     document.getElementById('s-cost').value = '';
+    checkCostVsPrice();
     if (priceTBA) toggleTBA();
     document.getElementById('s-delivery').value = '';
     document.getElementById('s-notes').value = '';
@@ -6772,6 +6774,7 @@ const SalesApp = (() => {
       priceField.value = sale.price_per_litre || '';
     }
     document.getElementById('s-cost').value = sale.cost_price != null ? sale.cost_price : '';
+    checkCostVsPrice();
     document.getElementById('s-delivery').value = sale.delivery_date || '';
     setPaymentTerm(sale.payment_term || 'COD');
     document.getElementById('s-notes').value = sale.notes || '';
@@ -6863,6 +6866,22 @@ const SalesApp = (() => {
 
     if (litres <= 0 || litres > 40000) { alert('Litres must be between 1 and 40,000.'); return; }
     if (!priceTBA && (price < 1.00 || price > 3.00)) { alert('Price per litre must be between $1.00 and $3.00.'); return; }
+
+    // A sale below cost is allowed — sometimes it is a deliberate call — but it
+    // has to be a decision, not a slip. This is the swapped-prices mistake that
+    // reached invoicing once already.
+    if (costOverPrice()) {
+      const c = parseFloat(document.getElementById('s-cost').value);
+      const NL = String.fromCharCode(10);
+      if (!confirm('\u26A0 Mike Alarm, your cost price is higher than your sell price!' + NL + NL +
+          'Cost: $' + c.toFixed(3) + ' / litre' + NL +
+          'Sell: $' + price.toFixed(3) + ' / litre' + NL + NL +
+          'That is a loss of $' + ((c - price) * litres).toFixed(2) + ' on this load.' + NL + NL +
+          'Did you mix the two up? Press Cancel to go back and fix it,' + NL +
+          'or OK if this really is below cost.')) {
+        return;
+      }
+    }
     if (customer.length < 3) { alert('Customer name must be at least 3 characters.'); return; }
 
     btn.disabled = true;
@@ -7493,6 +7512,28 @@ const SalesApp = (() => {
     }
   }
 
+  // Cost price is OPTIONAL and must never block a sale. This only has an
+  // opinion when the rep has actually typed one, and when a real sell price
+  // exists to compare against — a Price TBA sale has no price yet, so there
+  // is nothing to be wrong about.
+  function costOverPrice(){
+    if (priceTBA) return false;
+    const costEl = document.getElementById('s-cost');
+    const priceEl = document.getElementById('s-price');
+    if (!costEl || !priceEl) return false;
+    const costRaw = (costEl.value || '').trim();
+    if (costRaw === '') return false;              // left blank, as most are
+    const cost = parseFloat(costRaw);
+    const price = parseFloat(priceEl.value);
+    if (isNaN(cost) || isNaN(price) || cost <= 0 || price <= 0) return false;
+    return cost > price;
+  }
+
+  function checkCostVsPrice(){
+    const box = document.getElementById('cost-warn');
+    if (box) box.style.display = costOverPrice() ? 'block' : 'none';
+  }
+
   function selectFuel(val, btn) {
     curFuel = val;
     document.querySelectorAll('#fuel-diesel,#fuel-petrol,#fuel-paraffin').forEach(b => b.classList.remove('selected'));
@@ -8013,7 +8054,7 @@ const SalesApp = (() => {
     renderSales, renderDash, loadSales,
     toggleTBA, clearCustomerMatch, clearLocationMatch,
     acPick, acPickNew, locAcPick, locAcPickNew,
-    selectFuel, selTerm, recordSale, cancelEdit, openSaleForEdit, markDelivered, cancelSale,
+    selectFuel, checkCostVsPrice, selTerm, recordSale, cancelEdit, openSaleForEdit, markDelivered, cancelSale,
     showTab, calNav, showCalDay,
     calcDelivery, changePin, changePassword,
     removeGoneQuietCustomer,
