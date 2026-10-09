@@ -631,6 +631,26 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
           <div class="rsw-bar">
             <button class="rsw active" data-r="monthly" onclick="switchReport('monthly')">📊 Monthly Sales</button>
             <button class="rsw" data-r="perf" onclick="switchReport('perf')">👤 Rep Performance</button>
+            <button class="rsw" data-r="daily" onclick="switchReport('daily')">📱 Daily summary</button>
+          </div>
+
+          <div id="rpt-daily" style="display:none;">
+            <div class="panel" style="margin-bottom:14px;">
+              <div class="ph">
+                <div class="ph-title">&#128241; Daily summary for WhatsApp</div>
+                <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+                  <input type="date" id="dailyDate" class="psel">
+                  <button class="gen-btn" onclick="generateDaily()">Generate</button>
+                  <button class="gen-btn" id="dailyCopyBtn" onclick="copyDaily()" style="background:var(--green-dark);display:none;">&#128203; Copy for WhatsApp</button>
+                </div>
+              </div>
+              <div style="padding:16px;" id="dailyContent">
+                <div class="empty-state">
+                  <div class="empty-icon">&#128241;</div>
+                  <div>Pick a day and press Generate.</div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div id="rpt-perf" style="display:none;">
@@ -1329,10 +1349,12 @@ function perfDestroyCharts(){
 }
 
 function switchReport(which){
-  const m = document.getElementById('rpt-monthly');
-  const p = document.getElementById('rpt-perf');
-  if (m) m.style.display = which === 'monthly' ? '' : 'none';
-  if (p) p.style.display = which === 'perf' ? '' : 'none';
+  // Driven off the panel ids so a new report is one button and one div,
+  // with nothing here to remember to update.
+  document.querySelectorAll('[id^="rpt-"]').forEach(el => {
+    el.style.display = (el.id === 'rpt-' + which) ? '' : 'none';
+  });
+  if (which === 'daily') dailyInit();
   document.querySelectorAll('.rsw').forEach(b =>
     b.classList.toggle('active', b.getAttribute('data-r') === which));
 }
@@ -1371,6 +1393,109 @@ async function perfInit(){
   document.getElementById('perfFromY').innerHTML = yOpts(now.getFullYear());
   document.getElementById('perfToM').innerHTML   = mOpts(now.getMonth());
   document.getElementById('perfToY').innerHTML   = yOpts(now.getFullYear());
+}
+
+/* ================= DAILY WHATSAPP SUMMARY =================
+   Plain text for someone who does not use the app. No tables, no columns -
+   WhatsApp reflows everything, so the layout has to survive being one
+   narrow column on a phone. *asterisks* are WhatsApp's own bold. */
+
+function dailyInit(){
+  const el = document.getElementById('dailyDate');
+  if (el && !el.value) el.value = localISO(new Date());
+}
+
+function dailyLine(n, s){
+  const L = Math.round(Number(s.litres) || 0);
+  const tba = !!s.price_tba;
+  const price = Number(s.price_per_litre) || 0;
+  const value = tba ? 0 : L * price;
+  const who = [s.location, s.rep_name].filter(Boolean).join(' \u00b7 ');
+  const money = v => '$' + v.toLocaleString('en-US', {maximumFractionDigits:0});
+  return [
+    n + '. *' + (s.customer || '(no name)') + '*',
+    '   ' + L.toLocaleString() + ' L ' + (s.fuel_type || '').toLowerCase() +
+      (tba ? ' @ price TBA' : ' @ $' + price.toFixed(3) + ' = ' + money(value)),
+    who ? '   ' + who : null
+  ].filter(Boolean).join(String.fromCharCode(10));
+}
+
+function dailyText(day, rows){
+  const NL = String.fromCharCode(10);
+  const d = new Date(day + 'T00:00:00');
+  const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const header = DAYS[d.getDay()] + ' ' + String(d.getDate()).padStart(2,'0') + ' ' +
+    MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+
+  if (!rows.length) {
+    return '*SKELSEE \u2014 DAILY SALES*' + NL + header + NL + NL + 'No sales recorded today.';
+  }
+
+  const litres = rows.reduce((t,s) => t + (Number(s.litres)||0), 0);
+  const value  = rows.reduce((t,s) => t + (s.price_tba ? 0 : (Number(s.litres)||0) * (Number(s.price_per_litre)||0)), 0);
+  const tbaN   = rows.filter(s => s.price_tba).length;
+  const custs  = new Set(rows.map(s => (s.customer||'').trim().toLowerCase())).size;
+  const money  = v => '$' + Math.round(v).toLocaleString();
+
+  const out = ['*SKELSEE \u2014 DAILY SALES*', header, ''];
+  rows.forEach((s,i) => { out.push(dailyLine(i+1, s)); out.push(''); });
+  out.push('\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014');
+  out.push('*TOTAL: ' + Math.round(litres).toLocaleString() + ' L*');
+  // A TBA sale is logged at zero, so the money line has to say so or it reads
+  // as though the day was worth less than it was.
+  out.push('*Value: ' + money(value) + '*' + (tbaN ? '  (' + tbaN + ' at price TBA, not counted)' : ''));
+  out.push(rows.length + ' sale' + (rows.length===1?'':'s') + ' \u00b7 ' + custs + ' customer' + (custs===1?'':'s'));
+  return out.join(NL);
+}
+
+async function generateDaily(){
+  const day = document.getElementById('dailyDate').value;
+  const box = document.getElementById('dailyContent');
+  const copyBtn = document.getElementById('dailyCopyBtn');
+  if (!day) { alert('Pick a day first.'); return; }
+  box.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9203;</div><div>Working&hellip;</div></div>';
+  if (copyBtn) copyBtn.style.display = 'none';
+  try {
+    const { data, error } = await sb.from('sales')
+      .select('customer,location,litres,price_per_litre,price_tba,fuel_type,rep_name,created_at')
+      .eq('sale_date', day).neq('status','cancelled')
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    const rows = data || [];
+    const text = dailyText(day, rows);
+    box.innerHTML =
+      '<textarea id="dailyText" spellcheck="false" style="width:100%;min-height:340px;padding:14px;' +
+      'border:1px solid var(--gray-border);border-radius:10px;font-family:var(--mono);font-size:12.5px;' +
+      'line-height:1.6;resize:vertical;outline:none;background:#fff;color:var(--text);"></textarea>' +
+      '<p style="font-size:11.5px;color:var(--gray-text);margin-top:8px;line-height:1.5;">' +
+      'Edit anything you like before copying \u2014 what you send is whatever is in the box. ' +
+      'The *asterisks* become bold in WhatsApp.</p>';
+    document.getElementById('dailyText').value = text;
+    if (copyBtn) copyBtn.style.display = '';
+  } catch(e) {
+    box.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9888;</div><div>Could not load: ' +
+      String((e && e.message) || e).replace(/</g,'&lt;') + '</div></div>';
+  }
+}
+
+async function copyDaily(){
+  const ta = document.getElementById('dailyText');
+  const btn = document.getElementById('dailyCopyBtn');
+  if (!ta) return;
+  const done = ok => {
+    if (!btn) return;
+    btn.textContent = ok ? '\u2713 Copied' : 'Press Ctrl+C';
+    setTimeout(() => { btn.innerHTML = '&#128203; Copy for WhatsApp'; }, 2200);
+  };
+  try {
+    await navigator.clipboard.writeText(ta.value);
+    done(true);
+  } catch(e) {
+    // Older browsers, or a page the clipboard API will not run on: select it
+    // so the keyboard shortcut works instead of the button doing nothing.
+    ta.focus(); ta.select();
+    done(false);
+  }
 }
 
 async function generatePerf(){
