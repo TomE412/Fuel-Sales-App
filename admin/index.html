@@ -2450,6 +2450,31 @@ function updateLockDots() {
   }
 }
 
+// Turns a sale note into safe, tappable HTML.
+//
+// Escape FIRST, linkify SECOND. The other order would destroy the anchors
+// just built, and the escape is what stops a pasted note injecting markup
+// into the page - notes are free text typed by reps on phones.
+//
+// A Google Maps URL is shown as a short label rather than its full text: a
+// shared maps link is 60+ characters of noise in a 10px note, and what the
+// office wants is somewhere to tap, not something to read.
+function noteHtml(raw){
+  const text = String(raw == null ? '' : raw).replace(/[&<>"']/g, c => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[c]));
+  return text.replace(/https?:\/\/[^\s<]+/g, function(url){
+    const isMap = /google\.[a-z.]+\/maps|maps\.app\.goo\.gl|goo\.gl\/maps|maps\.google\./i.test(url);
+    const label = isMap
+      ? '&#128205; Open in Maps'
+      : (url.length > 34 ? url.slice(0, 32) + '&hellip;' : url);
+    // stopPropagation so tapping the link never also triggers the row behind it.
+    return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" ' +
+      'onclick="event.stopPropagation()" ' +
+      'style="color:var(--blue);font-weight:700;text-decoration:underline;">' + label + '</a>';
+  });
+}
+
 function lockKey(k) {
   const lockedUntil = parseInt(localStorage.getItem('admin_sales_lock_until') || '0');
   if (Date.now() < lockedUntil) return;
@@ -2873,7 +2898,7 @@ const OverviewApp = (() => {
           <div style="flex:1;min-width:0;">
             <div class="order-name">${s.customer}${fp}</div>
             <div class="order-meta">${s.location||'—'} · ${s.rep}</div>
-            ${s.notes?`<div style="font-size:11px;color:var(--text2);margin-top:3px;background:var(--gray-light);padding:4px 6px;border-radius:4px;border-left:2px solid var(--amber);">📝 ${s.notes}</div>`:''}
+            ${s.notes?`<div style="font-size:11px;color:var(--text2);margin-top:3px;background:var(--gray-light);padding:4px 6px;border-radius:4px;border-left:2px solid var(--amber);">📝 ${noteHtml(s.notes)}</div>`:''}
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
             <div class="order-litres" style="color:var(--green-dark)">${(s.litres||0).toLocaleString()} L</div>
@@ -2964,7 +2989,7 @@ const OverviewApp = (() => {
             <div class="order-name${s.delivered?' delivered':''}">${s.customer}${np}${fp}${dp}</div>
             <div class="order-meta">${s.location||'—'} · Del: ${fmtDate(s.deliveryDate)} · ${s.rep}</div>
             ${ts?`<div class="order-time">Received: ${ts}</div>`:''}
-            ${s.notes?`<div style="font-size:11px;color:var(--text2);margin-top:3px;background:var(--gray-light);padding:4px 6px;border-radius:4px;border-left:2px solid var(--amber);">📝 ${s.notes}</div>`:''}
+            ${s.notes?`<div style="font-size:11px;color:var(--text2);margin-top:3px;background:var(--gray-light);padding:4px 6px;border-radius:4px;border-left:2px solid var(--amber);">📝 ${noteHtml(s.notes)}</div>`:''}
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
             <div class="order-litres">${(s.litres||0).toLocaleString()} L</div>
@@ -3356,7 +3381,7 @@ function money2(v){ return '$' + Number(v).toFixed(3); }
         ? '<span style="color:var(--amber);">&mdash;</span>'
         : money(s.value||0);
       const notes = s.notes
-        ? '<div style="font-size:10px;color:var(--amber);background:var(--amber-light);padding:2px 6px;border-radius:4px;display:inline-block;margin-top:3px;">&#128221; '+s.notes+'</div>'
+        ? '<div style="font-size:10px;color:var(--amber);background:var(--amber-light);padding:2px 6px;border-radius:4px;display:inline-block;margin-top:3px;">&#128221; '+noteHtml(s.notes)+'</div>'
         : '';
       const due = s.paymentDue
         ? '<div style="font-size:10px;color:var(--gray-text);">due '+fmtDate(s.paymentDue)+'</div>'
@@ -4983,7 +5008,7 @@ const LogisticsApp = (() => {
       '<div class="info">'+
         '<div class="nm">'+esc(s.customer)+fp+dp+'</div>'+
         '<div class="meta">'+loc+fmt(s.delivery_date)+(s.rep_name?' · '+esc(s.rep_name):'')+
-          (s.notes?' · <i>'+esc(s.notes)+'</i>':'')+'</div>'+
+          (s.notes?' · <i>'+noteHtml(s.notes)+'</i>':'')+'</div>'+
       '</div>'+
       '<div class="lit">'+(s.litres||0).toLocaleString()+' L</div>'+
       btn+

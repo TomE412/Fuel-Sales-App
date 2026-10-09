@@ -816,7 +816,7 @@ function row(s,opts){
     '<div class="info">'+
       '<div class="nm">'+esc(s.customer)+fp+dp+'</div>'+
       '<div class="meta">'+loc+fmt(s.delivery_date)+(s.rep_name?' · '+esc(s.rep_name):'')+
-        (s.notes?' · <i>'+esc(s.notes)+'</i>':'')+'</div>'+
+        (s.notes?' · <i>'+noteHtml(s.notes)+'</i>':'')+'</div>'+
     '</div>'+
     '<div class="lit">'+(s.litres||0).toLocaleString()+' L</div>'+
     btn+
@@ -1229,6 +1229,31 @@ function placesOnRoute(k){
   const s=new Set();
   BOARD.filter(b=>b.route_key===k).forEach(b=>s.add((b.place||'').toLowerCase()));
   return s;
+}
+
+// Turns a sale note into safe, tappable HTML.
+//
+// Escape FIRST, linkify SECOND. The other order would destroy the anchors
+// just built, and the escape is what stops a pasted note injecting markup
+// into the page - notes are free text typed by reps on phones.
+//
+// A Google Maps URL is shown as a short label rather than its full text: a
+// shared maps link is 60+ characters of noise in a 10px note, and what the
+// office wants is somewhere to tap, not something to read.
+function noteHtml(raw){
+  const text = String(raw == null ? '' : raw).replace(/[&<>"']/g, c => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[c]));
+  return text.replace(/https?:\/\/[^\s<]+/g, function(url){
+    const isMap = /google\.[a-z.]+\/maps|maps\.app\.goo\.gl|goo\.gl\/maps|maps\.google\./i.test(url);
+    const label = isMap
+      ? '&#128205; Open in Maps'
+      : (url.length > 34 ? url.slice(0, 32) + '&hellip;' : url);
+    // stopPropagation so tapping the link never also triggers the row behind it.
+    return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" ' +
+      'onclick="event.stopPropagation()" ' +
+      'style="color:var(--blue);font-weight:700;text-decoration:underline;">' + label + '</a>';
+  });
 }
 
 function renderRoute(){
