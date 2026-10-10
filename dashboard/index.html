@@ -98,6 +98,30 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .ph-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;display:flex;align-items:center;gap:7px;}
 .ph-count{font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;}
 
+.rigbtn{padding:4px 9px;border:1px solid var(--gray-border);background:#fff;color:var(--gray-text);
+border-radius:99px;font-family:var(--font);font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.rigbtn:hover{border-color:var(--blue);color:var(--blue);}
+.rigbtn.on{background:var(--blue-light);border-color:var(--blue);color:var(--blue-dark);}
+.rigm{position:fixed;inset:0;background:rgba(26,26,24,.45);display:none;align-items:center;
+justify-content:center;z-index:900;padding:18px;}
+.rigm.on{display:flex;}
+.rigbox{background:#fff;border-radius:14px;padding:20px 22px;width:100%;max-width:420px;
+box-shadow:0 18px 50px rgba(0,0,0,.25);max-height:90vh;overflow-y:auto;}
+.rigbox h2{font-size:17px;font-weight:800;margin:0 0 3px;}
+.rigbox .sub{font-size:12px;color:var(--gray-text);margin-bottom:16px;}
+.rigfld{margin-bottom:12px;}
+.rigfld label{display:block;font-size:11px;font-weight:700;color:var(--gray-text);
+text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;}
+.rigfld select{width:100%;padding:10px 11px;background:var(--gray-light);border:1.5px solid var(--gray-border);
+border-radius:8px;font-family:var(--font);font-size:13px;outline:none;}
+.rigfld select:focus{border-color:var(--blue);background:#fff;}
+.rigerr{font-size:12px;color:var(--red);min-height:16px;margin-bottom:8px;font-weight:700;}
+.rigrow{display:flex;gap:8px;margin-top:4px;}
+.rigrow button{flex:1;padding:11px;border:none;border-radius:8px;font-family:var(--font);
+font-size:13px;font-weight:700;cursor:pointer;}
+.rigrow .pri{background:var(--blue);color:#fff;}
+.rigrow .sec{background:var(--gray-light);color:var(--text);}
+.rigrow .dgr{background:#fff;color:var(--red);border:1px solid var(--red);}
 .today-row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--gray-light);}
 .today-row:last-child{border-bottom:none;}
 .today-icon{width:32px;height:32px;border-radius:8px;background:var(--green-light);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
@@ -467,6 +491,8 @@ async function fetchData() {
     // Cache for offline
     try { localStorage.setItem('dash_cache', JSON.stringify(allSales)); } catch(e) {}
     document.getElementById('last-sync').textContent = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    await loadFleet();
+    await loadAssignments();
     renderAll();
   } catch(e) {
     console.log('Fetch error:', e);
@@ -524,6 +550,147 @@ function noteHtml(raw){
   });
 }
 
+function esc(x){ return String(x == null ? '' : x).replace(/[&<>"']/g, c => ({
+  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ================= RIG ASSIGNMENT =================
+   Which truck, trailer and driver is taking a delivery.
+
+   Lives in delivery_assignment, not delivery_plan: the planning board needs a
+   truck_key from its own 3-lane list, and assigning a real fleet vehicle here
+   must not drag the order onto that board as a side effect.
+
+   Trailer is optional on purpose. The 8 collection trucks (SH01-08) each pair
+   with a trailer; the 6 delivery trucks (SR01-06) are rigid and have none. */
+
+let FLEET = { vehicles: [], trailers: [], drivers: [] };
+let ASSIGN = {};            // sale_id -> assignment row
+let rigSaleId = null;       // the sale the modal is open on
+
+async function loadFleet(){
+  if (FLEET.vehicles.length) return;            // static data, fetch once
+  try {
+    const [v, t, d] = await Promise.all([
+      sb.from('vehicles').select('id,fleet_no,reg_no,model,default_trip_type,default_driver_id,default_trailer_id,active')
+        .eq('active', true).order('fleet_no'),
+      sb.from('trailers').select('id,trailer_no,reg_no,make,model,active').eq('active', true).order('trailer_no'),
+      sb.from('drivers').select('id,full_name,id_number,phone,active').eq('active', true).order('full_name'),
+    ]);
+    FLEET = { vehicles: v.data || [], trailers: t.data || [], drivers: d.data || [] };
+  } catch(e) { console.warn('fleet', e); }
+}
+
+async function loadAssignments(){
+  try {
+    const { data, error } = await sb.from('delivery_assignment')
+      .select('sale_id,vehicle_id,trailer_id,driver_id,assigned_at,assigned_by,seen_by_rep_at');
+    if (error) throw error;
+    ASSIGN = {};
+    (data || []).forEach(a => { ASSIGN[String(a.sale_id)] = a; });
+  } catch(e) { console.warn('assignments', e); }
+}
+
+const byId = (arr, id) => arr.find(x => String(x.id) === String(id)) || null;
+
+/* The badge on a delivery row: what is assigned, or an invitation to assign. */
+function rigBadge(saleId){
+  const a = ASSIGN[String(saleId)];
+  const open = 'onclick="event.stopPropagation();openRig(\'' + saleId + '\')"';
+  if (!a) {
+    return '<button class="rigbtn" ' + open + '>&#128666; Assign</button>';
+  }
+  const v = byId(FLEET.vehicles, a.vehicle_id);
+  const d = byId(FLEET.drivers, a.driver_id);
+  const label = [v ? v.fleet_no : null, d ? d.full_name : null].filter(Boolean).join(' · ') || 'Assigned';
+  return '<button class="rigbtn on" ' + open + ' title="Tap to change">&#128666; ' + esc(label) + '</button>';
+}
+
+function openRig(saleId){
+  rigSaleId = String(saleId);
+  const a = ASSIGN[rigSaleId] || {};
+  const sale = (allSales || []).find(s => String(s.id) === rigSaleId);
+
+  const opt = (list, val, label, sel) => '<option value="' + val(list) + '"' +
+    (String(sel) === String(val(list)) ? ' selected' : '') + '>' + esc(label(list)) + '</option>';
+
+  document.getElementById('rig-who').textContent = sale
+    ? sale.customer + '  ·  ' + (sale.litres || 0).toLocaleString() + ' L'
+    : 'Delivery';
+
+  document.getElementById('rig-vehicle').innerHTML =
+    '<option value="">— pick a truck —</option>' +
+    FLEET.vehicles.map(v => opt(v, x => x.id,
+      x => x.fleet_no + '  ' + (x.reg_no || '') + '  ' + (x.model || ''), a.vehicle_id)).join('');
+
+  document.getElementById('rig-trailer').innerHTML =
+    '<option value="">— none —</option>' +
+    FLEET.trailers.map(t => opt(t, x => x.id,
+      x => x.trailer_no + '  ' + (x.reg_no || ''), a.trailer_id)).join('');
+
+  document.getElementById('rig-driver').innerHTML =
+    '<option value="">— pick a driver —</option>' +
+    FLEET.drivers.map(d => opt(d, x => x.id, x => x.full_name, a.driver_id)).join('');
+
+  document.getElementById('rig-clear').style.display = ASSIGN[rigSaleId] ? '' : 'none';
+  document.getElementById('rig-err').textContent = '';
+  document.getElementById('rigm').classList.add('on');
+}
+
+function closeRig(){ document.getElementById('rigm').classList.remove('on'); rigSaleId = null; }
+
+/* Picking a truck fills in the trailer and driver it normally runs with, so
+   whoever is assigning only has to touch them when it is a swap. Only fills
+   blanks - it never overwrites a choice already made. */
+function rigVehiclePicked(){
+  const v = byId(FLEET.vehicles, document.getElementById('rig-vehicle').value);
+  if (!v) return;
+  const tr = document.getElementById('rig-trailer');
+  const dr = document.getElementById('rig-driver');
+  if (!tr.value && v.default_trailer_id) tr.value = v.default_trailer_id;
+  if (!dr.value && v.default_driver_id)  dr.value = v.default_driver_id;
+}
+
+async function saveRig(){
+  if (!rigSaleId) return;
+  const vehicle_id = document.getElementById('rig-vehicle').value || null;
+  const trailer_id = document.getElementById('rig-trailer').value || null;
+  const driver_id  = document.getElementById('rig-driver').value || null;
+  const err = document.getElementById('rig-err');
+  if (!vehicle_id) { err.textContent = 'Pick a truck.'; return; }
+  if (!driver_id)  { err.textContent = 'Pick a driver — the rep needs someone to ring.'; return; }
+
+  const btn = document.getElementById('rig-save');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  // Re-assigning is a change the rep should see again, so clear the seen stamp.
+  const row = { sale_id: Number(rigSaleId), vehicle_id, trailer_id, driver_id,
+                assigned_at: new Date().toISOString(), assigned_by: (document.getElementById('who') ? document.getElementById('who').textContent.trim() : null), seen_by_rep_at: null };
+  try {
+    const { error } = await sb.from('delivery_assignment').upsert(row, { onConflict: 'sale_id' });
+    if (error) throw error;
+    ASSIGN[rigSaleId] = row;
+    closeRig();
+    renderAll();
+  } catch(e) {
+    err.textContent = 'Could not save: ' + ((e && e.message) || e);
+  }
+  btn.disabled = false; btn.textContent = 'Save';
+}
+
+async function clearRig(){
+  if (!rigSaleId) return;
+  if (!confirm('Take this delivery off its truck?')) return;
+  const id = rigSaleId;
+  try {
+    const { error } = await sb.from('delivery_assignment').delete().eq('sale_id', Number(id));
+    if (error) throw error;
+    delete ASSIGN[id];
+    closeRig();
+    renderAll();
+  } catch(e) {
+    document.getElementById('rig-err').textContent = 'Could not clear: ' + ((e && e.message) || e);
+  }
+}
+
 function renderAll() {
   // Exclude cancelled sales from all views
   const activeSales = allSales.filter(s => s.status !== 'cancelled');
@@ -547,6 +714,7 @@ function renderAll() {
           <div class="order-name">${s.customer}${fp}</div>
           <div class="order-meta">${s.location||'—'} · ${s.rep}</div>
           ${s.notes?`<div style="font-size:11px;color:var(--text2);margin-top:3px;background:var(--gray-light);padding:4px 6px;border-radius:4px;border-left:2px solid var(--amber);">📝 ${noteHtml(s.notes)}</div>`:''}
+          <div style="margin-top:5px;">${rigBadge(s.id)}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
           <div class="order-litres" style="color:var(--green-dark)">${(s.litres||0).toLocaleString()} L</div>
@@ -602,6 +770,7 @@ function renderAll() {
           <div class="order-meta">${s.location||'—'} · Del: ${fmtDate(s.deliveryDate)} · ${s.rep}</div>
           ${ts?`<div class="order-time">Received: ${ts}</div>`:''}
           ${s.notes?`<div style="font-size:11px;color:var(--text2);margin-top:3px;background:var(--gray-light);padding:4px 6px;border-radius:4px;border-left:2px solid var(--amber);">📝 ${noteHtml(s.notes)}</div>`:''}
+          <div style="margin-top:5px;">${rigBadge(s.id)}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
           <div class="order-litres">${(s.litres||0).toLocaleString()} L</div>
@@ -752,5 +921,25 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
 </script>
+<div class="rigm" id="rigm">
+  <div class="rigbox">
+    <h2>&#128666; Assign a rig</h2>
+    <div class="sub" id="rig-who">&mdash;</div>
+    <div class="rigfld"><label>Truck</label>
+      <select id="rig-vehicle" onchange="rigVehiclePicked()"></select></div>
+    <div class="rigfld"><label>Trailer <span style="font-weight:400;text-transform:none;">&mdash; rigid trucks have none</span></label>
+      <select id="rig-trailer"></select></div>
+    <div class="rigfld"><label>Driver</label>
+      <select id="rig-driver"></select></div>
+    <div class="rigerr" id="rig-err"></div>
+    <div class="rigrow">
+      <button class="pri" id="rig-save" onclick="saveRig()">Save</button>
+      <button class="sec" onclick="closeRig()">Cancel</button>
+    </div>
+    <div class="rigrow" id="rig-clear" style="display:none;">
+      <button class="dgr" onclick="clearRig()">Take off this truck</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
