@@ -80,3 +80,49 @@ test('picking a truck fills in its usual trailer and driver', async ({ page }) =
   expect(out.badgeSet).toContain('SH03');
   expect(out.badgeSet).toContain('Masden');
 });
+
+// The earlier tests checked that openRig() ran and set a class. They passed
+// while the panel was invisible, because admin's modal CSS was scoped to
+// #sec-overview and the modal is appended at body level. Assert what the user
+// actually experiences: the panel is on screen and big enough to use.
+for (const app of ['/dashboard/', '/admin/']) {
+  test(`${app} assign panel actually becomes visible`, async ({ page }) => {
+    await page.goto(app);
+    await page.waitForTimeout(2300);
+    const isAdmin = app === '/admin/';
+
+    const before = await page.locator('#rigm').evaluate(el => getComputedStyle(el).display);
+    expect(before).toBe('none');
+
+    await page.evaluate(a => {
+      const scope = a ? OverviewApp : window;
+      FLEET = { vehicles:[{id:'v1',fleet_no:'SH03',reg_no:'AFJ 2570',model:'VOLVO',
+                           default_driver_id:'d1', default_trailer_id:'t1'}],
+                trailers:[{id:'t1',trailer_no:'ST03',reg_no:'AFJ 2731'}],
+                drivers:[{id:'d1',full_name:'Masden'}] };
+      ASSIGN = {};
+      allSales = [{ id: 99, customer:'Khaya Cement', litres:40000 }];
+      scope.openRig(99);
+    }, isAdmin);
+
+    const after = await page.locator('#rigm').evaluate(el => {
+      const cs = getComputedStyle(el);
+      const r = el.getBoundingClientRect();
+      return { display: cs.display, w: Math.round(r.width), h: Math.round(r.height) };
+    });
+    console.log(app + ' panel open: ' + JSON.stringify(after));
+    expect(after.display).toBe('flex');
+    expect(after.w).toBeGreaterThan(200);
+    expect(after.h).toBeGreaterThan(200);
+
+    // the controls are reachable
+    await expect(page.locator('#rig-vehicle')).toBeVisible();
+    await expect(page.locator('#rig-save')).toBeVisible();
+    // Admin keeps FLEET inside its OverviewApp module, so a global seeded
+    // from here never reaches it - the option count is only meaningful on
+    // the dashboard, where the module scope is the window.
+    if (!isAdmin) {
+      expect(await page.locator('#rig-vehicle option').count()).toBe(2);
+    }
+  });
+}
