@@ -136,6 +136,8 @@ text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;}
 .rigfld select{width:100%;padding:10px 11px;background:var(--gray-light);border:1.5px solid var(--gray-border);
 border-radius:8px;font-family:var(--font);font-size:13px;outline:none;}
 .rigfld select:focus{border-color:var(--blue);background:#fff;}
+.riglink{background:none;border:none;padding:0;font-family:var(--font);font-size:11.5px;
+font-weight:700;color:var(--blue);cursor:pointer;text-decoration:underline;}
 .rigerr{font-size:12px;color:var(--red);min-height:16px;margin-bottom:8px;font-weight:700;}
 .rigrow{display:flex;gap:8px;margin-top:4px;}
 .rigrow button{flex:1;padding:11px;border:none;border-radius:8px;font-family:var(--font);
@@ -2931,6 +2933,9 @@ const OverviewApp = (() => {
      Trailer is optional on purpose. The 8 collection trucks (SH01-08) each pair
      with a trailer; the 6 delivery trucks (SR01-06) are rigid and have none. */
 
+    function rigEsc(x){ return String(x == null ? '' : x)
+    .replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
   let FLEET = { vehicles: [], trailers: [], drivers: [] };
   let ASSIGN = {};            // sale_id -> assignment row
   let rigSaleId = null;       // the sale the modal is open on
@@ -2970,7 +2975,7 @@ const OverviewApp = (() => {
     const v = byId(FLEET.vehicles, a.vehicle_id);
     const d = byId(FLEET.drivers, a.driver_id);
     const label = [v ? v.fleet_no : null, d ? d.full_name : null].filter(Boolean).join(' · ') || 'Assigned';
-    return '<button class="rigbtn on" ' + open + ' title="Tap to change">&#128666; ' + esc(label) + '</button>';
+    return '<button class="rigbtn on" ' + open + ' title="Tap to change">&#128666; ' + rigEsc(label) + '</button>';
   }
 
   function openRig(saleId){
@@ -2979,7 +2984,7 @@ const OverviewApp = (() => {
     const sale = (allSales || []).find(s => String(s.id) === rigSaleId);
 
     const opt = (list, val, label, sel) => '<option value="' + val(list) + '"' +
-      (String(sel) === String(val(list)) ? ' selected' : '') + '>' + esc(label(list)) + '</option>';
+      (String(sel) === String(val(list)) ? ' selected' : '') + '>' + rigEsc(label(list)) + '</option>';
 
     document.getElementById('rig-who').textContent = sale
       ? sale.customer + '  ·  ' + (sale.litres || 0).toLocaleString() + ' L'
@@ -2999,9 +3004,52 @@ const OverviewApp = (() => {
       '<option value="">— pick a driver —</option>' +
       FLEET.drivers.map(d => opt(d, x => x.id, x => x.full_name, a.driver_id)).join('');
 
+    // One entry per TRUCK, named by its driver. Not one per driver: Phillip
+    // runs SR01 and SR06, Nkosana SR04 and SR05, so a driver alone does not
+    // identify a rig. Showing them twice is honest; guessing would not be.
+    document.getElementById('rig-rig').innerHTML =
+      '<option value="">\u2014 pick a driver \u2014</option>' +
+      FLEET.vehicles.map(v => {
+        const d = byId(FLEET.drivers, v.default_driver_id);
+        const t = byId(FLEET.trailers, v.default_trailer_id);
+        const label = (d ? d.full_name : '(no driver)') + '  \u2014  ' + v.fleet_no +
+          (v.reg_no ? ' (' + v.reg_no + ')' : '') +
+          (t ? '  +  ' + t.trailer_no + (t.reg_no ? ' (' + t.reg_no + ')' : '') : '');
+        return '<option value="' + v.id + '"' +
+          (String(a.vehicle_id) === String(v.id) ? ' selected' : '') + '>' +
+          rigEsc(label) + '</option>';
+      }).join('');
+
+    // Open the detail fields only when this assignment is NOT the usual rig —
+    // otherwise the one-click case stays one click.
+    const picked = byId(FLEET.vehicles, a.vehicle_id);
+    const unusual = !!picked && (
+      (a.driver_id  && String(a.driver_id)  !== String(picked.default_driver_id)) ||
+      (a.trailer_id && String(a.trailer_id) !== String(picked.default_trailer_id)));
+    setRigAdvanced(unusual);
+
     document.getElementById('rig-clear').style.display = ASSIGN[rigSaleId] ? '' : 'none';
     document.getElementById('rig-err').textContent = '';
     document.getElementById('rigm').classList.add('on');
+  }
+
+  function setRigAdvanced(show){
+    document.getElementById('rig-adv').style.display = show ? '' : 'none';
+    document.getElementById('rig-adv-btn').textContent =
+      show ? 'Hide truck and trailer' : 'Swap truck or trailer';
+  }
+  function toggleRigAdvanced(){
+    setRigAdvanced(document.getElementById('rig-adv').style.display === 'none');
+  }
+
+  // The picker is a shortcut, not a second source of truth: it fills the three
+  // fields below and saving still reads only those. One place to be wrong.
+  function rigPicked(){
+    const v = byId(FLEET.vehicles, document.getElementById('rig-rig').value);
+    document.getElementById('rig-vehicle').value = v ? v.id : '';
+    document.getElementById('rig-trailer').value = (v && v.default_trailer_id) || '';
+    document.getElementById('rig-driver').value  = (v && v.default_driver_id)  || '';
+    document.getElementById('rig-err').textContent = '';
   }
 
   function closeRig(){ document.getElementById('rigm').classList.remove('on'); rigSaleId = null; }
@@ -3315,7 +3363,9 @@ const OverviewApp = (() => {
   }
 
   return { init, markDelivered,
-    openRig, closeRig, saveRig, clearRig, rigVehiclePicked };
+    openRig, closeRig, saveRig, clearRig, rigVehiclePicked,
+    rigPicked, toggleRigAdvanced,
+    __seed(o){ if(o.FLEET)FLEET=o.FLEET; if(o.ASSIGN)ASSIGN=o.ASSIGN; if(o.allSales)allSales=o.allSales; } };
 })();
 
 /* ================= ACCOUNTS APP (ported from accounts/index.html) ================= */
@@ -9289,12 +9339,19 @@ async function exportToCSV() {
   <div class="rigbox">
     <h2>&#128666; Assign a rig</h2>
     <div class="sub" id="rig-who">&mdash;</div>
+    <div class="rigfld"><label>Driver &amp; rig</label>
+      <select id="rig-rig" onchange="OverviewApp.rigPicked()"></select></div>
+    <div style="text-align:right;margin:-6px 0 10px;">
+      <button type="button" class="riglink" id="rig-adv-btn" onclick="OverviewApp.toggleRigAdvanced()">Swap truck or trailer</button>
+    </div>
+    <div id="rig-adv" style="display:none;">
     <div class="rigfld"><label>Truck</label>
       <select id="rig-vehicle" onchange="OverviewApp.rigVehiclePicked()"></select></div>
     <div class="rigfld"><label>Trailer <span style="font-weight:400;text-transform:none;">&mdash; rigid trucks have none</span></label>
       <select id="rig-trailer"></select></div>
     <div class="rigfld"><label>Driver</label>
       <select id="rig-driver"></select></div>
+    </div>
     <div class="rigerr" id="rig-err"></div>
     <div class="rigrow">
       <button class="pri" id="rig-save" onclick="OverviewApp.saveRig()">Save</button>
