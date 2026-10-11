@@ -61,11 +61,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
   .clock{font-size:18px!important;}
   .date-txt{font-size:9px!important;}
 
-  /* The upcoming/delivered side-by-side split squishes badly on a phone —
-     stack it instead so each gets full width. */
-  .col-left > div[style*="grid-template-columns:1fr 1fr"]{
-    display:flex!important;flex-direction:column!important;
-  }
+  /* The row's fixed cells have to give way on a phone - wrap them onto a
+     second line rather than squeeze the customer name to nothing. */
+  .order-row{flex-wrap:wrap;row-gap:7px;}
+  .ord-mid{flex:1 1 calc(100% - 56px)!important;}
+  .ord-rig{width:auto!important;flex:1 1 auto!important;min-width:0;order:3;}
+  .ord-lit{width:auto!important;flex:0 0 auto!important;order:4;}
+  .ord-del{width:auto!important;flex:0 0 auto!important;order:5;}
+  .order-name{white-space:normal!important;}
 
   /* Cap the tall scrolling panels so the page doesn't become endless, but
      give them enough room to be useful. */
@@ -74,7 +77,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
   /* Roomier tap targets — this is Munya marking deliveries with a thumb. */
   .deliver-btn{padding:10px 14px!important;font-size:14px!important;}
-  .today-row,.order-row{padding:10px!important;}
+  .order-row{padding:10px!important;}
   .order-name{font-size:14px!important;}
   .order-litres{font-size:15px!important;}
 
@@ -124,11 +127,8 @@ font-size:13px;font-weight:700;cursor:pointer;}
 .rigrow .pri{background:var(--blue);color:#fff;}
 .rigrow .sec{background:var(--gray-light);color:var(--text);}
 .rigrow .dgr{background:#fff;color:var(--red);border:1px solid var(--red);}
-.today-row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--gray-light);}
-.today-row:last-child{border-bottom:none;}
-.today-icon{width:32px;height:32px;border-radius:8px;background:var(--green-light);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
 
-.order-row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--gray-light);}
+.order-row{display:flex;align-items:center;gap:9px;padding:6px 12px;border-bottom:1px solid var(--gray-light);}
 .order-row:last-child{border-bottom:none;}
 .order-row.delivered{opacity:0.5;}
 .deliver-btn{padding:6px 12px;background:var(--green,#2e7d32);color:#fff;border:none;border-radius:7px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
@@ -141,7 +141,15 @@ font-size:13px;font-weight:700;cursor:pointer;}
 .date-box.today .date-num{color:var(--red-dark);}
 .date-mon{font-size:8px;font-weight:700;color:var(--green-dark);text-transform:uppercase;margin-top:1px;}
 .date-box.today .date-mon{color:var(--red-dark);}
-.order-name{font-size:13px;font-weight:700;color:var(--text);}
+.order-name{font-size:13px;font-weight:700;color:var(--text);
+white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ord-mid{flex:1;min-width:0;}
+.ord-rig{flex-shrink:0;width:152px;}
+.ord-rig .rigbtn{display:block;width:100%;overflow:hidden;text-overflow:ellipsis;text-align:center;}
+.ord-lit{flex-shrink:0;width:84px;}
+.ord-del{flex-shrink:0;width:124px;}
+.ord-del .deliver-btn{width:100%;}
+.ord-late{font-weight:700;color:var(--red);}
 .order-name.delivered{color:var(--gray-text);text-decoration:line-through;}
 .order-meta{font-size:11px;color:var(--gray-text);margin-top:1px;}
 .order-time{font-size:10px;color:var(--gray-text);font-family:var(--mono);}
@@ -221,29 +229,19 @@ font-size:13px;font-weight:700;cursor:pointer;}
 
   <div class="main">
     <div class="col-left">
-      <div class="panel scroll">
+      <div class="panel scroll" style="flex:2;min-height:0;">
         <div class="ph">
-          <div class="ph-title" style="color:var(--red);">🚛 Deliveries going out today</div>
-          <span class="ph-count" id="today-count" style="background:var(--red-light);color:var(--red-dark);">0</span>
+          <div class="ph-title" style="color:var(--red);">🚛 Deliveries — soonest first</div>
+          <span class="ph-count" id="week-count" style="background:var(--red-light);color:var(--red-dark);">0</span>
         </div>
-        <div class="panel-body" id="today-list"><div class="empty-msg">No deliveries scheduled for today</div></div>
+        <div class="panel-body" id="week-list"><div class="empty-msg">Nothing outstanding</div></div>
       </div>
-      <!-- SPLIT: Upcoming and Delivered side by side -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:1;min-height:0;">
-        <div class="panel scroll" style="min-height:0;">
-          <div class="ph">
-            <div class="ph-title" style="color:var(--blue);">📅 Upcoming deliveries</div>
-            <span class="ph-count" id="week-count" style="background:var(--blue-light);color:var(--blue-dark);">0</span>
-          </div>
-          <div class="panel-body" id="week-list"><div class="empty-msg">No upcoming deliveries</div></div>
+      <div class="panel scroll" style="flex:1;min-height:0;">
+        <div class="ph">
+          <div class="ph-title" style="color:var(--green-dark);">✓ Delivered</div>
+          <span class="ph-count" id="delivered-count" style="background:var(--green-light);color:var(--green-dark);">0</span>
         </div>
-        <div class="panel scroll" style="min-height:0;">
-          <div class="ph">
-            <div class="ph-title" style="color:var(--green-dark);">✓ Delivered</div>
-            <span class="ph-count" id="delivered-count" style="background:var(--green-light);color:var(--green-dark);">0</span>
-          </div>
-          <div class="panel-body" id="delivered-list"><div class="empty-msg">No completed deliveries yet</div></div>
-        </div>
+        <div class="panel-body" id="delivered-list"><div class="empty-msg">No completed deliveries yet</div></div>
       </div>
     </div>
     <div class="col-right">
@@ -292,32 +290,6 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-// 14 distinct colours for date grouping
-const DATE_COLOURS = [
-  {bg:'#FCEBEB', border:'#D4180A', text:'#A32D2D'}, // red
-  {bg:'#E6F1FB', border:'#185FA5', text:'#0C447C'}, // blue
-  {bg:'#EAF3DE', border:'#1D9E75', text:'#3B6D11'}, // green
-  {bg:'#FAEEDA', border:'#BA7517', text:'#633806'}, // amber
-  {bg:'#F0E6FF', border:'#7B4BB5', text:'#4B2BB5'}, // purple
-  {bg:'#DEF3F0', border:'#0E9488', text:'#0B6E63'}, // teal
-  {bg:'#FDE7F0', border:'#C33777', text:'#7B1F4B'}, // pink
-  {bg:'#EEF0DE', border:'#7A8B24', text:'#4A5A15'}, // olive
-  {bg:'#DDE7F5', border:'#4A5CC3', text:'#2A3B85'}, // indigo
-  {bg:'#FFEBD6', border:'#D96A00', text:'#A03D00'}, // orange
-  {bg:'#DFF2F7', border:'#268CAC', text:'#155F76'}, // sky
-  {bg:'#F5E6D3', border:'#8B5A2B', text:'#5A3819'}, // brown
-  {bg:'#E6F5EA', border:'#2E8B57', text:'#1B5638'}, // seagreen
-  {bg:'#F7D9E4', border:'#B23A6D', text:'#7A1E48'}, // rose
-  {bg:'#E4E4F5', border:'#5C5CB8', text:'#38387A'}, // slate
-];
-
-function colourForDate(dateStr, dateList) {
-  if (!dateStr || !dateList) return DATE_COLOURS[0];
-  const uniqueDates = [...new Set(dateList)].sort();
-  const idx = uniqueDates.indexOf(dateStr);
-  if (idx < 0) return DATE_COLOURS[0];
-  return DATE_COLOURS[idx % DATE_COLOURS.length];
-}
 const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const AV_COLORS = [['#FCEBEB','#A32D2D'],['#EAF3DE','#3B6D11'],['#FAEEDA','#633806'],['#E6F1FB','#0C447C']];
 const RANK_COLS = ['#F5C400','#C0C0C0','#CD7F32'];
@@ -742,44 +714,28 @@ async function clearRig(){
 function renderAll() {
   // Exclude cancelled sales from all views
   const activeSales = allSales.filter(s => s.status !== 'cancelled');
-  const today = todayStr();
   const now = new Date(); now.setHours(0,0,0,0);
-  const weekAgo = new Date(now.getTime()-7*86400000).toISOString().split('T')[0];
   const y = now.getFullYear();
   const curM = now.getMonth();
 
-  // TODAY DELIVERIES
-  const todayDeliveries = activeSales.filter(s => (s.deliveryDate||'').split('T')[0] === today && !s.delivered);
-  const pending = todayDeliveries.length;
-  document.getElementById('today-count').textContent = pending;
-  const toEl = document.getElementById('today-list');
-  if (todayDeliveries.length) {
-    toEl.innerHTML = todayDeliveries.map(s => {
-      const fp = s.fuelType ? `<span class="pill ${s.fuelType==='Petrol'?'p-petrol':s.fuelType==='Paraffin'?'p-paraffin':'p-diesel'}">${s.fuelType}</span>` : '';
-      return `<div class="today-row">
-        <div class="today-icon">🚛</div>
-        <div style="flex:1;min-width:0;">
-          <div class="order-name">${s.customer}${fp}</div>
-          <div class="order-meta">${s.location||'—'} · ${s.rep}</div>
-          ${s.notes?`<div style="font-size:11px;color:var(--text2);margin-top:3px;background:var(--gray-light);padding:4px 6px;border-radius:4px;border-left:2px solid var(--amber);">📝 ${noteHtml(s.notes)}</div>`:''}
-          <div style="margin-top:5px;">${rigBadge(s.id)}</div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
-          <div class="order-litres" style="color:var(--green-dark)">${(s.litres||0).toLocaleString()} L</div>
-          <button class="deliver-btn" onclick="markDelivered('${s.id}')">✓ Mark delivered</button>
-        </div>
-      </div>`;
-    }).join('');
-  } else {
-    toEl.innerHTML = '<div class="empty-msg">No deliveries scheduled for today</div>';
-  }
-
-  // Split into UPCOMING and DELIVERED
-  const upcomingSales = activeSales.filter(s => {
-    if (s.delivered) return false;
-    const sd = (s.date||'').split('T')[0];
-    if (!sd || sd < weekAgo) return false;
-    return true;
+  // DELIVERIES - one list, soonest first.
+  //
+  // Keyed off the delivery date the rep put on the order, not the sale
+  // date: an order placed for ten days out belongs at the bottom and walks
+  // up as the date comes closer. Nothing ages off this list - the only way
+  // off is being marked delivered - so an order whose date has gone by
+  // stays pinned at the top until somebody deals with it. That is the
+  // point of the board: what is still owed, in the order you would work it.
+  const DAY_MS = 86400000;
+  const delDay = x => (x.deliveryDate||'').split('T')[0];
+  const upcomingSales = activeSales.filter(s => !s.delivered).sort((a,b) => {
+    const da = delDay(a), db = delDay(b);
+    // No delivery date yet sinks to the bottom, oldest order first, so a
+    // forgotten one still surfaces instead of hiding among next week's.
+    if (!da && !db) return (a.date||'').localeCompare(b.date||'');
+    if (!da) return 1;
+    if (!db) return -1;
+    return da.localeCompare(db) || (a.date||'').localeCompare(b.date||'');
   });
 
   const deliveredSales = activeSales.filter(s => {
@@ -790,47 +746,53 @@ function renderAll() {
     return days <= 7 && days >= -7;
   });
 
-  document.getElementById('week-count').textContent = upcomingSales.length;
+  document.getElementById('week-count').textContent = upcomingSales.length + ' · ' +
+    upcomingSales.reduce((t,x) => t + (x.litres||0), 0).toLocaleString() + ' L';
   document.getElementById('delivered-count').textContent = deliveredSales.length;
 
   const weekEl = document.getElementById('week-list');
   if (upcomingSales.length) {
     weekEl.innerHTML = upcomingSales.map(s => {
-      const sd = (s.date||'').split('T')[0];
-      const deldate = (s.deliveryDate||'').split('T')[0];
-      const dd = deldate ? new Date(deldate+'T00:00:00') : new Date(sd+'T00:00:00');
-      const isToday = deldate === today;
-      // Get colour for this delivery date
-      const allDelDates = upcomingSales.map(x => (x.deliveryDate||'').split('T')[0]).filter(Boolean);
-      const dateColour = colourForDate(deldate, allDelDates);
+      const dd = delDay(s);
+      const d = dd ? new Date(dd+'T00:00:00') : null;
+      const days = d ? Math.round((d - now)/DAY_MS) : null;
+      // Urgency, not a palette. The box colour says late / today / ahead,
+      // and the words repeat it in the meta line, because a long customer
+      // name truncates and must never be able to hide that an order is late.
+      const kind = days === null ? 'none' : days < 0 ? 'late' : days === 0 ? 'today' : 'ahead';
+      const box = { late:  ['var(--red-light)','var(--red)','var(--red)'],
+                    today: ['var(--amber-light)','var(--amber)','var(--amber)'],
+                    ahead: ['var(--green-light)','var(--green)','var(--green-dark)'],
+                    none:  ['var(--gray-light)','var(--gray-border)','var(--gray-text)'] }[kind];
+      const urg = kind === 'late'
+          ? ` · <span class="ord-late">${-days} day${days === -1 ? '' : 's'} late</span>`
+        : kind === 'today'
+          ? ' · <span class="ord-late" style="color:var(--amber);">today</span>'
+        : kind === 'none'
+          ? ' · no delivery date'
+        : '';
       const isNew = !lastKnownIds.has(String(s.id)) && !isFirstLoad;
       const fp = s.fuelType ? `<span class="pill ${s.fuelType==='Petrol'?'p-petrol':s.fuelType==='Paraffin'?'p-paraffin':'p-diesel'}">${s.fuelType}</span>` : '';
-      const dp = s.delivered ? `<span class="pill p-del">✓ Delivered</span>` : '';
       const np = isNew ? `<span class="pill p-new">NEW</span>` : '';
-      const ts = fmtTime(s.created_at);
-      return `<div class="order-row${s.delivered?' delivered':''}">
-        <div class="date-box" style="background:${dateColour.bg};border-color:${dateColour.border};">
-          <div class="date-num" style="color:${dateColour.text};">${!isNaN(dd)?String(dd.getDate()).padStart(2,'0'):'—'}</div>
-          <div class="date-mon" style="color:${dateColour.text};">${!isNaN(dd)?MN[dd.getMonth()]:''}</div>
+      return `<div class="order-row">
+        <div class="date-box" style="background:${box[0]};border-color:${box[1]};" title="Delivery: ${fmtDate(s.deliveryDate)}">
+          <div class="date-num" style="color:${box[2]};">${d?String(d.getDate()).padStart(2,'0'):'—'}</div>
+          <div class="date-mon" style="color:${box[2]};">${d?MN[d.getMonth()]:'TBC'}</div>
         </div>
-        <div style="flex:1;min-width:0;">
-          <div class="order-name${s.delivered?' delivered':''}">${s.customer}${np}${fp}${dp}</div>
-          <div class="order-meta">${s.location||'—'} · Del: ${fmtDate(s.deliveryDate)} · ${s.rep}</div>
-          ${ts?`<div class="order-time">Received: ${ts}</div>`:''}
+        <div class="ord-mid">
+          <div class="order-name">${s.customer}${np}${fp}</div>
+          <div class="order-meta">${s.location||'—'} · ${s.rep}${urg}</div>
           ${s.notes?`<div style="font-size:11px;color:var(--text2);margin-top:3px;background:var(--gray-light);padding:4px 6px;border-radius:4px;border-left:2px solid var(--amber);">📝 ${noteHtml(s.notes)}</div>`:''}
-          <div style="margin-top:5px;">${rigBadge(s.id)}</div>
         </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-          <div class="order-litres">${(s.litres||0).toLocaleString()} L</div>
-          ${s.delivered?'':`<button class="deliver-btn" onclick="markDelivered('${s.id}')">✓ Mark delivered</button>`}
-        </div>
+        <div class="ord-rig">${rigBadge(s.id)}</div>
+        <div class="order-litres ord-lit">${(s.litres||0).toLocaleString()} L</div>
+        <div class="ord-del"><button class="deliver-btn" onclick="markDelivered('${s.id}')">✓ Mark delivered</button></div>
       </div>`;
     }).join('');
   } else {
-    weekEl.innerHTML = '<div class="empty-msg">No upcoming deliveries</div>';
+    weekEl.innerHTML = '<div class="empty-msg">Nothing outstanding — every order is marked delivered</div>';
   }
-
-  // DELIVERED LIST
+// DELIVERED LIST
   const delEl = document.getElementById('delivered-list');
   if (deliveredSales.length) {
     delEl.innerHTML = deliveredSales.map(s => {

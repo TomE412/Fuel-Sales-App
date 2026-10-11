@@ -87,6 +87,27 @@ textarea:focus{border-color:var(--red);background:#fff;}
 .edit-status{margin-top:10px;font-size:13px;color:var(--text2);line-height:1.4;}
 
 /* SALES LOG */
+.rigpill{display:inline-flex;align-items:center;gap:4px;margin-top:7px;padding:5px 11px;
+background:var(--blue-light,#E6F1FB);border:1px solid var(--blue,#185FA5);color:var(--blue,#185FA5);
+border-radius:99px;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;}
+.rigpill.new{background:var(--blue,#185FA5);color:#fff;}
+.rigpill b{font-size:9.5px;letter-spacing:.06em;}
+.rigdm{position:fixed;inset:0;background:rgba(26,26,24,.5);display:none;align-items:flex-end;
+justify-content:center;z-index:950;}
+.rigdm.on{display:flex;}
+.rigdbox{background:#fff;border-radius:18px 18px 0 0;padding:22px 20px 28px;width:100%;
+max-width:520px;max-height:88vh;overflow-y:auto;}
+.rigdbox h2{font-size:18px;font-weight:800;margin:0 0 2px;}
+.rigdbox .sub2{font-size:12.5px;color:var(--text3,#847F76);margin-bottom:18px;}
+.rigdrow{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;
+padding:11px 0;border-bottom:1px solid var(--border,#E0E0DE);}
+.rigdrow:last-child{border-bottom:none;}
+.rigdrow .k{font-size:11px;font-weight:700;color:var(--text3,#847F76);text-transform:uppercase;
+letter-spacing:.05em;padding-top:2px;flex-shrink:0;}
+.rigdrow .v{font-size:14.5px;font-weight:700;text-align:right;word-break:break-word;}
+.rigdrow .sub{font-size:11.5px;font-weight:400;color:var(--text3,#847F76);margin-top:2px;}
+.rigdclose{width:100%;margin-top:18px;padding:13px;background:var(--gray,#F4F4F2);border:none;
+border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;}
 .sale-row{background:#fff;border-radius:var(--radius);border:1px solid var(--border);padding:14px;margin-bottom:10px;}
 .sale-customer{font-size:15px;font-weight:700;}
 .sale-meta{font-size:12px;color:var(--text3);margin-top:3px;}
@@ -1600,6 +1621,7 @@ async function loadSales() {
     const cached = localStorage.getItem('sales_cache_' + (currentUser?.id || 'x'));
     if (cached) {
       allSales = JSON.parse(cached);
+      rigLoadCached();
       renderSales();
       renderDash();
     }
@@ -1620,6 +1642,7 @@ async function loadSales() {
       localStorage.setItem('sales_cache_' + (currentUser?.id || 'x'), JSON.stringify(allSales));
       localStorage.setItem('last_synced_at', new Date().toISOString());
     } catch(e) {}
+    await loadRigInfo();
     renderSales();
     renderDash();
     // If there are queued offline sales, try to sync them now that we're online
@@ -2118,10 +2141,118 @@ function renderSales() {
       </div>
       <div class="sale-meta">${s.location||'—'} · ${fmtDate(s.sale_date)} · ${s.payment_term}</div>
       <div class="sale-meta">Del: ${fmtDate(s.delivery_date)} · Pay due: ${fmtDate(s.payment_due)}</div>
+      ${repRigBadge(s.id)}
       ${delBtn}${editBtn}${cancelBtn}
     </div>`;
   }).join('');
 }
+
+/* ================= RIG DETAILS FOR THE REP =================
+   Which truck, trailer and driver is taking each of the rep's loads, and the
+   driver's number so they can ring him about an offload.
+
+   Cached to localStorage alongside the sales cache. A rep standing at a gate
+   with no signal is exactly when they need the driver's number, so this has
+   to survive being offline — the whole point of the app. */
+
+let RIG = { assign: {}, vehicles: {}, trailers: {}, drivers: {} };
+
+function rigCacheKey(){ return 'rig_cache_' + ((typeof currentUser !== 'undefined' && currentUser && currentUser.id) || 'x'); }
+
+function rigLoadCached(){
+  try {
+    const c = localStorage.getItem(rigCacheKey());
+    if (c) RIG = JSON.parse(c);
+  } catch(e) {}
+}
+
+async function loadRigInfo(){
+  try {
+    const [a, v, t, d] = await Promise.all([
+      sb.from('delivery_assignment').select('sale_id,vehicle_id,trailer_id,driver_id,assigned_at,seen_by_rep_at'),
+      sb.from('vehicles').select('id,fleet_no,reg_no,model'),
+      sb.from('trailers').select('id,trailer_no,reg_no,make,model'),
+      sb.from('drivers').select('id,full_name,id_number,phone'),
+    ]);
+    const map = (rows) => { const o = {}; (rows || []).forEach(r => { o[String(r.id)] = r; }); return o; };
+    const assign = {};
+    (a.data || []).forEach(r => { assign[String(r.sale_id)] = r; });
+    RIG = { assign, vehicles: map(v.data), trailers: map(t.data), drivers: map(d.data) };
+    try { localStorage.setItem(rigCacheKey(), JSON.stringify(RIG)); } catch(e) {}
+  } catch(e) {
+    console.log('Rig info unavailable (offline?):', e.message);
+  }
+}
+
+/* The badge on a sale row. Stays marked NEW until the rep has opened it once —
+   a re-assignment clears that stamp at the office end, so a changed truck
+   shows as new again rather than being missed. */
+function repRigBadge(saleId){
+  const a = RIG.assign[String(saleId)];
+  if (!a) return '';
+  const v = RIG.vehicles[String(a.vehicle_id)];
+  const d = RIG.drivers[String(a.driver_id)];
+  const label = [v ? (v.reg_no || v.fleet_no) : null, d ? d.full_name : null].filter(Boolean).join(' · ') || 'Assigned';
+  const isNew = !a.seen_by_rep_at;
+  return '<button class="rigpill' + (isNew ? ' new' : '') + '" ' +
+    'onclick="event.stopPropagation();openRepRig(' + saleId + ')">' +
+    '🚛 ' + repRigEsc(label) + (isNew ? ' <b>NEW</b>' : '') + '</button>';
+}
+
+function repRigEsc(x){
+  return String(x == null ? '' : x)
+    .replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function openRepRig(saleId){
+  const a = RIG.assign[String(saleId)];
+  if (!a) return;
+  const v = RIG.vehicles[String(a.vehicle_id)];
+  const t = RIG.trailers[String(a.trailer_id)];
+  const d = RIG.drivers[String(a.driver_id)];
+  const sale = (allSales || []).find(x => String(x.id) === String(saleId));
+
+  const row = (label, value, extra) =>
+    '<div class="rigdrow"><span class="k">' + label + '</span>' +
+    '<span class="v">' + (value || '<i style="color:var(--text3);font-weight:400;">not recorded</i>') +
+    (extra || '') + '</span></div>';
+
+  document.getElementById('rigd-who').textContent = sale
+    ? sale.customer + '  ·  ' + (sale.litres || 0).toLocaleString() + ' L'
+    : 'Your load';
+
+  // A phone number is only useful if it dials. tel: strips to digits and +.
+  const tel = d && d.phone ? String(d.phone).replace(/[^\d+]/g, '') : '';
+  const phoneHtml = tel
+    ? '<a href="tel:' + tel + '" style="color:var(--blue);font-weight:800;text-decoration:none;">' +
+      repRigEsc(d.phone) + '  📞</a>'
+    : '';
+
+  document.getElementById('rigd-body').innerHTML =
+    row('Truck', v ? repRigEsc((v.reg_no || '') + (v.fleet_no ? '  ·  ' + v.fleet_no : '')) : '',
+        v && v.model ? '<div class="sub">' + repRigEsc(v.model) + '</div>' : '') +
+    row('Trailer', t ? repRigEsc((t.reg_no || '') + (t.trailer_no ? '  ·  ' + t.trailer_no : '')) : '',
+        t && (t.make || t.model) ? '<div class="sub">' + repRigEsc([t.make, t.model].filter(Boolean).join(' ')) + '</div>' : '') +
+    row('Driver', d ? repRigEsc(d.full_name) : '') +
+    row('ID number', d && d.id_number ? repRigEsc(d.id_number) : '') +
+    row('Phone', phoneHtml);
+
+  document.getElementById('rigdm').classList.add('on');
+
+  // Mark it seen. Best effort: if this fails the rep still has the details,
+  // and it will simply still say NEW next time.
+  if (!a.seen_by_rep_at) {
+    const stamp = new Date().toISOString();
+    a.seen_by_rep_at = stamp;
+    try { localStorage.setItem(rigCacheKey(), JSON.stringify(RIG)); } catch(e) {}
+    renderSales();
+    sb.from('delivery_assignment').update({ seen_by_rep_at: stamp })
+      .eq('sale_id', Number(saleId))
+      .then(({ error }) => { if (error) console.log('seen stamp not saved:', error.message); });
+  }
+}
+
+function closeRepRig(){ document.getElementById('rigdm').classList.remove('on'); }
 
 function renderDash() {
   const now = new Date();
@@ -3543,5 +3674,13 @@ setInterval(() => {
   }
 }, 30000);
 </script>
+<div class="rigdm" id="rigdm" onclick="if(event.target===this)closeRepRig()">
+  <div class="rigdbox">
+    <h2>&#128666; Your delivery</h2>
+    <div class="sub2" id="rigd-who">&mdash;</div>
+    <div id="rigd-body"></div>
+    <button class="rigdclose" onclick="closeRepRig()">Close</button>
+  </div>
+</div>
 </body>
 </html>
