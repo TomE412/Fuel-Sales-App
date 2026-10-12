@@ -4468,8 +4468,38 @@ function money2(v){ return '$' + Number(v).toFixed(3); }
           ? avgLitres > 0
           : (avgLitres > 0 ? (recentOrderLitres >= avgLitres*0.4 && recentOrderLitres <= avgLitres*1.8) : true);
 
-        const inRecencyBand = lastOrderDate && daysSinceLastOrder >= 7 && daysSinceLastOrder <= 84;
-        const inCycleBand = avgCycleDays >= 14 && avgCycleDays <= 90;
+        // Both floors used to be absolute, which is a category error in a model
+        // built on each customer's own rhythm.
+        //
+        // The 14-day cycle floor made every customer who buys more often than
+        // fortnightly invisible to the forecast. Measured on the week of 5 Oct
+        // 2026: 19 such customers ordered 473,373 L, 52% of everything ordered
+        // that week, and the forecast could not name one of them. Over seven
+        // weeks it named 193 customers and got 18 right.
+        //
+        // The 7-day recency floor then excluded the same people twice over: a
+        // customer who buys every 6 days and ordered 5 days ago is due, not
+        // "too soon".
+        //
+        // ripeness_pct was confirmed on 12 Oct 2026 to be
+        //     days_since_last / avg_cycle_days * 100
+        // (checked against 12 customers, worst disagreement 0.5 points), so the
+        // projection below is exactly  days_since_last + n >= 0.85 * avg_cycle.
+        // It therefore already refuses anyone who ordered too recently FOR THEM,
+        // and the absolute recency floor only ever bound when 0.85 * cycle < 7
+        // - that is, on cycles under 8.2 days, precisely where it was wrong.
+        //
+        // Keeping the floor at min(7, half their cycle) leaves it at 7 days for
+        // every cycle of 14 days or more, so NO customer who was predicted
+        // before stops being predicted. This change is purely additive.
+        //
+        // The cycle floor stays at 3 rather than going to 1: a one or two day
+        // cycle is almost always a data artefact, and a customer who genuinely
+        // buys that often would place more than one order inside a five-day
+        // week, which this model does not express.
+        const recencyFloor = Math.min(7, avgCycleDays * 0.5);
+        const inRecencyBand = lastOrderDate && daysSinceLastOrder >= recencyFloor && daysSinceLastOrder <= 84;
+        const inCycleBand = avgCycleDays >= 3 && avgCycleDays <= 90;
         if(!inRecencyBand || !inCycleBand || !recentOrderConsistent) return;
 
         const ratePerDay=100/avgCycleDays;
