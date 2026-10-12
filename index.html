@@ -2071,6 +2071,32 @@ async function markDelivered(id) {
   if (!error) await loadSales();
 }
 
+/* Marking a sale paid is a money record, so it says who did it and when.
+   Accounts reconcile against this, and a rep's tick has to be tellable
+   apart from theirs.
+
+   Unlike markDelivered this surfaces the error rather than swallowing it:
+   if the write is refused the rep must know, because otherwise they will
+   believe the money is logged when it is not. */
+async function markPaid(id) {
+  const sale = (allSales || []).find(x => String(x.id) === String(id));
+  const who = sale ? sale.customer : 'this sale';
+  if (!confirm('Mark the sale to ' + who + ' as PAID?\n\nAccounts will see that you marked it.')) return;
+
+  const stamp = {
+    paid: true,
+    paid_at: new Date().toISOString(),
+    paid_by: (currentProfile && currentProfile.full_name) ||
+             (currentUser && currentUser.email) || null,
+  };
+  const { error } = await sb.from('sales').update(stamp).eq('id', id);
+  if (error) {
+    alert('Could not mark it paid.\n\n' + (error.message || error) +
+          '\n\nIf you are offline, try again once you have signal.');
+    return;
+  }
+  await loadSales();
+}
 // ---- RENDER ----
 // Price shown under the litres on each sale row: total value, with the
 // unit price beneath it. A TBA sale has no agreed price yet, so show that
@@ -2131,6 +2157,12 @@ function renderSales() {
       `<button class="del-btn" style="background:#fff;color:var(--text2);border:1px solid var(--border);margin-top:6px;" onclick="openSaleForEdit(${s.id});event.stopPropagation()">✎ Edit sale</button>` : '';
     const cancelBtn = !isCancelled && !delivered ?
       `<button class="del-btn" style="background:transparent;color:var(--red);border:1px solid var(--red);margin-top:6px;" onclick="cancelSale(${s.id});event.stopPropagation()">🗑 Delete sale</button>` : '';
+    // Only for reps switched on for it, and only while the sale is still
+    // unpaid and live. Outlined rather than solid so it does not compete
+    // with "Mark as delivered", which is the one every rep uses daily.
+    const canMarkPaid = !!(currentProfile && currentProfile.can_mark_paid);
+    const paidBtn = canMarkPaid && !s.paid && !isCancelled ?
+      `<button class="del-btn" style="background:#fff;color:var(--green-dark);border:1px solid var(--green);margin-top:6px;" onclick="markPaid(${s.id});event.stopPropagation()">💵 Mark as paid</button>` : '';
     return `<div class="sale-row" style="opacity:${(delivered||isCancelled)?'0.6':'1'}" onclick="openSaleForEdit(${s.id})">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div class="sale-customer" style="${(delivered||isCancelled)?'text-decoration:line-through;color:var(--text3);':''}">${s.customer}${fuelPill}${delPill}${paidPill}${cancelledPill}${tbaPill}</div>
@@ -2142,7 +2174,7 @@ function renderSales() {
       <div class="sale-meta">${s.location||'—'} · ${fmtDate(s.sale_date)} · ${s.payment_term}</div>
       <div class="sale-meta">Del: ${fmtDate(s.delivery_date)} · Pay due: ${fmtDate(s.payment_due)}</div>
       ${repRigBadge(s.id)}
-      ${delBtn}${editBtn}${cancelBtn}
+      ${delBtn}${paidBtn}${editBtn}${cancelBtn}
     </div>`;
   }).join('');
 }
