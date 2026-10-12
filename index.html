@@ -2155,7 +2155,7 @@ function renderSales() {
    with no signal is exactly when they need the driver's number, so this has
    to survive being offline — the whole point of the app. */
 
-let RIG = { assign: {}, vehicles: {}, trailers: {}, drivers: {} };
+let RIG = { assign: {}, vehicles: {}, trailers: {}, drivers: {}, pumps: {} };
 
 function rigCacheKey(){ return 'rig_cache_' + ((typeof currentUser !== 'undefined' && currentUser && currentUser.id) || 'x'); }
 
@@ -2168,16 +2168,21 @@ function rigLoadCached(){
 
 async function loadRigInfo(){
   try {
-    const [a, v, t, d] = await Promise.all([
-      sb.from('delivery_assignment').select('sale_id,vehicle_id,trailer_id,driver_id,assigned_at,seen_by_rep_at'),
-      sb.from('vehicles').select('id,fleet_no,reg_no,model'),
+    const [a, v, t, d, p] = await Promise.all([
+      // '*' on both of these: pump_unit_id and needs_pump arrive with the
+      // phase_d2 migration, and naming a column before it exists would fail
+      // the query and leave the rep with no rig details at all.
+      sb.from('delivery_assignment').select('*'),
+      sb.from('vehicles').select('*'),
       sb.from('trailers').select('id,trailer_no,reg_no,make,model'),
       sb.from('drivers').select('id,full_name,id_number,phone'),
+      sb.from('pump_units').select('id,unit_no,reg_no,model,driver_id,is_hired'),
     ]);
     const map = (rows) => { const o = {}; (rows || []).forEach(r => { o[String(r.id)] = r; }); return o; };
     const assign = {};
     (a.data || []).forEach(r => { assign[String(r.sale_id)] = r; });
-    RIG = { assign, vehicles: map(v.data), trailers: map(t.data), drivers: map(d.data) };
+    RIG = { assign, vehicles: map(v.data), trailers: map(t.data),
+            drivers: map(d.data), pumps: map(p.data) };
     try { localStorage.setItem(rigCacheKey(), JSON.stringify(RIG)); } catch(e) {}
   } catch(e) {
     console.log('Rig info unavailable (offline?):', e.message);
@@ -2204,6 +2209,36 @@ function repRigEsc(x){
     .replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+/* What to show for the pumping unit. A horse and tanker cannot discharge
+   on its own; a rigid carries its own pump and needs none. Saying so
+   explicitly matters - a blank row would read as 'forgotten' on a rigid
+   and as 'fine' on a tanker, which is exactly backwards. */
+function repPumpRow(row, assignment, vehicle){
+  if (!vehicle || !vehicle.needs_pump) {
+    return row('Pumping unit', '<span style="font-weight:400;">Not needed</span>',
+      '<div class="sub">This truck has its own pump.</div>');
+  }
+  const p = RIG.pumps[String(assignment.pump_unit_id)];
+  if (!p) {
+    return row('Pumping unit', '<span style="color:var(--amber,#BA7517);">Not assigned yet</span>',
+      '<div class="sub">The office will confirm which unit is coming.</div>');
+  }
+  if (p.is_hired) {
+    return row('Pumping unit', repRigEsc(p.unit_no) + ' &mdash; hired in',
+      '<div class="sub">Not one of ours. The office will message you the ' +
+      'reg and driver on the day.</div>');
+  }
+  const pd = RIG.drivers[String(p.driver_id)];
+  const ptel = pd && pd.phone ? String(pd.phone).replace(/[^\d+]/g, '') : '';
+  const sub = [
+    pd ? repRigEsc(pd.full_name) : null,
+    ptel ? '<a href="tel:' + ptel + '" style="color:var(--blue);font-weight:800;' +
+           'text-decoration:none;">' + repRigEsc(pd.phone) + '  &#128222;</a>' : null,
+  ].filter(Boolean).join('  &middot;  ');
+  return row('Pumping unit',
+    repRigEsc((p.reg_no || '') + (p.unit_no ? '  \u00b7  ' + p.unit_no : '')),
+    sub ? '<div class="sub">' + sub + '</div>' : '');
+}
 function openRepRig(saleId){
   const a = RIG.assign[String(saleId)];
   if (!a) return;
@@ -2233,7 +2268,13 @@ function openRepRig(saleId){
         v && v.model ? '<div class="sub">' + repRigEsc(v.model) + '</div>' : '') +
     row('Trailer', t ? repRigEsc((t.reg_no || '') + (t.trailer_no ? '  ·  ' + t.trailer_no : '')) : '',
         t && (t.make || t.model) ? '<div class="sub">' + repRigEsc([t.make, t.model].filter(Boolean).join(' ')) + '</div>' : '') +
-    row('Driver', d ? repRigEsc(d.full_name) : '') +
+    repPumpRow(row, a, v) +
+    // No driver on a load is normally a gap worth chasing, but on the small
+    // runabout it is how the yard works - say which it is.
+    row('Driver', d ? repRigEsc(d.full_name)
+         : (v && v.driver_optional
+              ? '<span style="font-weight:400;">Whoever is free &mdash; small vehicle</span>'
+              : '')) +
     row('ID number', d && d.id_number ? repRigEsc(d.id_number) : '') +
     row('Phone', phoneHtml);
 

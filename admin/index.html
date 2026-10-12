@@ -126,6 +126,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 border-radius:99px;font-family:var(--font);font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;}
 #sec-overview .rigbtn:hover{border-color:var(--blue);color:var(--blue);}
 #sec-overview .rigbtn.on{background:var(--blue-light);border-color:var(--blue);color:var(--blue-dark);}
+#sec-overview .rigbtn.warn{background:var(--amber-light);border-color:var(--amber);color:var(--amber);}
 .rigm{position:fixed;inset:0;background:rgba(26,26,24,.45);display:none;align-items:center;
 justify-content:center;z-index:900;padding:18px;}
 .rigm.on{display:flex;}
@@ -2910,27 +2911,31 @@ const OverviewApp = (() => {
     function rigEsc(x){ return String(x == null ? '' : x)
     .replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-  let FLEET = { vehicles: [], trailers: [], drivers: [] };
+  let FLEET = { vehicles: [], trailers: [], drivers: [], pumps: [] };
   let ASSIGN = {};            // sale_id -> assignment row
   let rigSaleId = null;       // the sale the modal is open on
 
   async function loadFleet(){
     if (FLEET.vehicles.length) return;            // static data, fetch once
     try {
-      const [v, t, d] = await Promise.all([
-        sb.from('vehicles').select('id,fleet_no,reg_no,model,default_trip_type,default_driver_id,default_trailer_id,active')
-          .eq('active', true).order('fleet_no'),
+      const [v, t, d, p] = await Promise.all([
+        sb.from('vehicles').select('*').eq('active', true).order('fleet_no'),
         sb.from('trailers').select('id,trailer_no,reg_no,make,model,active').eq('active', true).order('trailer_no'),
         sb.from('drivers').select('id,full_name,id_number,phone,active').eq('active', true).order('full_name'),
+        // Absent until phase_d2 runs. Its error is swallowed by design: the
+        // pump field simply does not appear and everything else still works.
+        sb.from('pump_units').select('id,unit_no,reg_no,model,driver_id,is_hired,active')
+          .eq('active', true).order('unit_no'),
       ]);
-      FLEET = { vehicles: v.data || [], trailers: t.data || [], drivers: d.data || [] };
+      FLEET = { vehicles: v.data || [], trailers: t.data || [], drivers: d.data || [],
+                pumps: p.data || [] };
     } catch(e) { console.warn('fleet', e); }
   }
 
   async function loadAssignments(){
     try {
       const { data, error } = await sb.from('delivery_assignment')
-        .select('sale_id,vehicle_id,trailer_id,driver_id,assigned_at,assigned_by,seen_by_rep_at');
+        .select('*');   // '*' so pump_unit_id appears the moment phase_d2 runs
       if (error) throw error;
       ASSIGN = {};
       (data || []).forEach(a => { ASSIGN[String(a.sale_id)] = a; });
@@ -2949,9 +2954,46 @@ const OverviewApp = (() => {
     const v = byId(FLEET.vehicles, a.vehicle_id);
     const d = byId(FLEET.drivers, a.driver_id);
     const label = [v ? v.fleet_no : null, d ? d.full_name : null].filter(Boolean).join(' · ') || 'Assigned';
-    return '<button class="rigbtn on" ' + open + ' title="Tap to change">&#128666; ' + rigEsc(label) + '</button>';
+    // A tanker with no pump yet is the one thing on this row that still
+    // needs doing, so it gets the warning triangle rather than the truck:
+    // the label truncates at this width, and a marker at the front is the
+    // only part guaranteed to survive.
+    const wantsPump = !!(v && v.needs_pump) && !a.pump_unit_id;
+    return '<button class="rigbtn ' + (wantsPump ? 'warn' : 'on') + '" ' + open +
+      ' title="' + (wantsPump ? 'No pumping unit yet — tap to add one' : 'Tap to change') + '">' +
+      (wantsPump ? '&#9888;' : '&#128666;') + ' ' + rigEsc(label) + '</button>';
   }
 
+  // SP01 and SP02 are ours and have a named driver. SP03 stands for a unit
+  // hired in from another company, so it carries no reg and no driver - the
+  // office messages the customer with those on the day.
+  function rigPumpOptions(sel){
+    const el = document.getElementById('rig-pump');
+    if (!el) return;
+    el.innerHTML = '<option value="">\u2014 none yet \u2014</option>' +
+      (FLEET.pumps || []).map(p => {
+        const d = byId(FLEET.drivers, p.driver_id);
+        const label = p.unit_no +
+          (p.is_hired ? '  (hired in)' : (d ? '  \u2014  ' + d.full_name : '')) +
+          (p.reg_no ? '  (' + p.reg_no + ')' : '');
+        return '<option value="' + p.id + '"' +
+          (String(sel) === String(p.id) ? ' selected' : '') + '>' +
+          rigEsc(label) + '</option>';
+      }).join('');
+  }
+
+  // Only a horse and tanker needs a pump alongside it. A rigid has one
+  // built on, so the field stays hidden rather than inviting a wrong
+  // answer. needs_pump is read off the vehicle, not guessed from the fleet
+  // number, so ops can correct it without a code change.
+  function rigPumpVisibility(){
+    const wrap = document.getElementById('rig-pump-wrap');
+    if (!wrap) return;
+    const v = byId(FLEET.vehicles, document.getElementById('rig-vehicle').value);
+    const show = !!(v && v.needs_pump) && (FLEET.pumps || []).length > 0;
+    wrap.style.display = show ? '' : 'none';
+    if (!show) document.getElementById('rig-pump').value = '';
+  }
   function openRig(saleId){
     rigSaleId = String(saleId);
     const a = ASSIGN[rigSaleId] || {};
@@ -2978,22 +3020,28 @@ const OverviewApp = (() => {
       '<option value="">— pick a driver —</option>' +
       FLEET.drivers.map(d => opt(d, x => x.id, x => x.full_name, a.driver_id)).join('');
 
-    // One entry per TRUCK, named by its driver. Not one per driver: Phillip
-    // runs SR01 and SR06, Nkosana SR04 and SR05, so a driver alone does not
-    // identify a rig. Showing them twice is honest; guessing would not be.
+    // One entry per TRUCK, named by its driver. (The old note here said some
+    // drivers ran two trucks each - that came from the guessed seed data and
+    // the register shows one truck per driver.) SR01 has no fixed driver at
+    // all, so it is labelled by what it is. Capacity rides on the label so a
+    // 40,000 L load is not put on the 3,500 L runabout.
     document.getElementById('rig-rig').innerHTML =
       '<option value="">\u2014 pick a driver \u2014</option>' +
       FLEET.vehicles.map(v => {
         const d = byId(FLEET.drivers, v.default_driver_id);
         const t = byId(FLEET.trailers, v.default_trailer_id);
-        const label = (d ? d.full_name : '(no driver)') + '  \u2014  ' + v.fleet_no +
+        const label = (d ? d.full_name : (v.driver_optional ? 'Any driver' : '(no driver)')) +
+          '  \u2014  ' + v.fleet_no +
           (v.reg_no ? ' (' + v.reg_no + ')' : '') +
-          (t ? '  +  ' + t.trailer_no + (t.reg_no ? ' (' + t.reg_no + ')' : '') : '');
+          (t ? '  +  ' + t.trailer_no + (t.reg_no ? ' (' + t.reg_no + ')' : '') : '') +
+          (v.capacity_litres ? '  \u00b7  ' + v.capacity_litres.toLocaleString() + ' L' : '');
         return '<option value="' + v.id + '"' +
           (String(a.vehicle_id) === String(v.id) ? ' selected' : '') + '>' +
           rigEsc(label) + '</option>';
       }).join('');
 
+    rigPumpOptions(a.pump_unit_id);
+    rigPumpVisibility();
     // Open the detail fields only when this assignment is NOT the usual rig —
     // otherwise the one-click case stays one click.
     const picked = byId(FLEET.vehicles, a.vehicle_id);
@@ -3024,6 +3072,7 @@ const OverviewApp = (() => {
     document.getElementById('rig-trailer').value = (v && v.default_trailer_id) || '';
     document.getElementById('rig-driver').value  = (v && v.default_driver_id)  || '';
     document.getElementById('rig-err').textContent = '';
+    rigPumpVisibility();
   }
 
   function closeRig(){ document.getElementById('rigm').classList.remove('on'); rigSaleId = null; }
@@ -3038,6 +3087,7 @@ const OverviewApp = (() => {
     const dr = document.getElementById('rig-driver');
     if (!tr.value && v.default_trailer_id) tr.value = v.default_trailer_id;
     if (!dr.value && v.default_driver_id)  dr.value = v.default_driver_id;
+    rigPumpVisibility();
   }
 
   async function saveRig(){
@@ -3045,15 +3095,30 @@ const OverviewApp = (() => {
     const vehicle_id = document.getElementById('rig-vehicle').value || null;
     const trailer_id = document.getElementById('rig-trailer').value || null;
     const driver_id  = document.getElementById('rig-driver').value || null;
+    const pump_unit_id = document.getElementById('rig-pump').value || null;
     const err = document.getElementById('rig-err');
     if (!vehicle_id) { err.textContent = 'Pick a truck.'; return; }
-    if (!driver_id)  { err.textContent = 'Pick a driver — the rep needs someone to ring.'; return; }
+    const chosen = byId(FLEET.vehicles, vehicle_id);
+
+    // SR01 is the small runabout - whoever is free takes it, so it is the
+    // one truck that may go out without a named driver.
+    if (!driver_id && !(chosen && chosen.driver_optional)) {
+      err.textContent = 'Pick a driver — the rep needs someone to ring.'; return;
+    }
+
+    // A tanker still needs a pump alongside it to offload, but which one is
+    // often not known when the truck is booked. So this does NOT block the
+    // save - the load goes on the board marked as still needing one, and
+    // the pump is added later by tapping the same button.
 
     const btn = document.getElementById('rig-save');
     btn.disabled = true; btn.textContent = 'Saving…';
     // Re-assigning is a change the rep should see again, so clear the seen stamp.
     const row = { sale_id: Number(rigSaleId), vehicle_id, trailer_id, driver_id,
                   assigned_at: new Date().toISOString(), assigned_by: myName, seen_by_rep_at: null };
+    // Only sent once the pump table exists, so an un-migrated database
+    // still saves the truck and driver instead of refusing the whole row.
+    if ((FLEET.pumps || []).length) row.pump_unit_id = pump_unit_id;
     try {
       const { error } = await sb.from('delivery_assignment').upsert(row, { onConflict: 'sale_id' });
       if (error) throw error;
@@ -9315,6 +9380,9 @@ async function exportToCSV() {
     <div class="sub" id="rig-who">&mdash;</div>
     <div class="rigfld"><label>Driver &amp; rig</label>
       <select id="rig-rig" onchange="OverviewApp.rigPicked()"></select></div>
+    <div class="rigfld" id="rig-pump-wrap" style="display:none;">
+      <label>Pumping unit <span style="font-weight:400;text-transform:none;">&mdash; leave blank and add it later if you do not know yet</span></label>
+      <select id="rig-pump"></select></div>
     <div style="text-align:right;margin:-6px 0 10px;">
       <button type="button" class="riglink" id="rig-adv-btn" onclick="OverviewApp.toggleRigAdvanced()">Swap truck or trailer</button>
     </div>
