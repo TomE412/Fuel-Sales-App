@@ -155,6 +155,9 @@ font-size:13px;font-weight:700;cursor:pointer;}
 #sec-overview .order-row.delivered{opacity:0.5;}
 #sec-overview .deliver-btn{padding:6px 12px;background:var(--green,#2e7d32);color:#fff;border:none;border-radius:7px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
 #sec-overview .deliver-btn:hover{filter:brightness(1.08);}
+#sec-overview .undo-btn{padding:4px 9px;background:#fff;color:var(--amber);border:1px solid var(--amber);
+border-radius:6px;font-family:var(--font);font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;}
+#sec-overview .undo-btn:hover{background:var(--amber-light);}
 #sec-overview .deliver-btn:active{transform:scale(0.97);}
 #sec-overview .deliver-btn:disabled{opacity:0.5;cursor:default;}
 #sec-overview .date-box{border-radius:7px;padding:4px 7px;text-align:center;flex-shrink:0;min-width:44px;background:var(--green-light);border:1px solid var(--green);}
@@ -2806,6 +2809,45 @@ const OverviewApp = (() => {
     }
   }
 
+  /* Put a delivery back. The office uses this when a rep ticked the wrong
+     row; the rep has the same thing in their own app.
+
+     Two deliberate choices. An already-invoiced sale says so in the
+     confirmation, because accounts have acted on the tick and the invoice is
+     already with the customer. And the status change is sent on its own with
+     the trail following separately - if phase_d4 has not been run the
+     correction still lands, which matters more than the audit line. */
+  async function undoDelivered(id){
+    const sale = (allSales || []).find(x => String(x.id) === String(id));
+    const who = sale ? sale.customer : 'this delivery';
+    let msg = 'Put the delivery to ' + who + ' back to NOT delivered?';
+    if (sale && sale.invoiced) {
+      msg += String.fromCharCode(10,10) +
+        'CAREFUL: accounts have already invoiced this one. Ring them, or the' +
+        String.fromCharCode(10) + 'invoice will not match what was delivered.';
+    }
+    if (!confirm(msg)) return;
+
+    try {
+      const { error } = await sb.from('sales')
+        .update({ status: 'pending', delivered_at: null })
+        .eq('id', id);
+      if (error) throw error;
+    } catch (e) {
+      alert('Could not change it back: ' + (e.message || e));
+      return;
+    }
+
+    // Best effort, and never allowed to block the correction itself.
+    sb.from('sales').update({
+      undelivered_at: new Date().toISOString(),
+      undelivered_by: myName,
+    }).eq('id', id).then(({ error }) => {
+      if (error) console.log('undo trail not recorded:', error.message);
+    });
+
+    await fetchData();
+  }
   async function fetchData() {
     try {
       // SECURITY: Only fetch fields needed for dashboard, limit to last 90 days
@@ -2829,6 +2871,7 @@ const OverviewApp = (() => {
           rep_name,
           status,
           paid,
+          invoiced,
           notes
         `)
         .gte('sale_date', fromDate.toISOString().split('T')[0])
@@ -2853,6 +2896,7 @@ const OverviewApp = (() => {
         delivered: s.status === 'delivered',
         status: s.status,
         paid: s.paid,
+        invoiced: !!s.invoiced,
         notes: s.notes || '',
         created_at: s.created_at
       }));
@@ -3260,7 +3304,10 @@ const OverviewApp = (() => {
             <div class="order-name delivered">${s.customer}${fp}</div>
             <div class="order-meta">${s.location||'—'} · ${s.rep}</div>
           </div>
-          <div class="order-litres" style="color:var(--gray-text);">${(s.litres||0).toLocaleString()} L</div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;">
+            <div class="order-litres" style="color:var(--gray-text);">${(s.litres||0).toLocaleString()} L</div>
+            <button class="undo-btn" onclick="OverviewApp.undoDelivered('${s.id}')">↩ Not delivered</button>
+          </div>
         </div>`;
       }).join('');
     } else {
@@ -3371,7 +3418,7 @@ const OverviewApp = (() => {
     setInterval(loadDueSoon, 30000);
   }
 
-  return { init, markDelivered,
+  return { init, markDelivered, undoDelivered,
     openRig, closeRig, saveRig, clearRig, rigVehiclePicked,
     rigPicked, toggleRigAdvanced,
     __seed(o){ if(o.FLEET)FLEET=o.FLEET; if(o.ASSIGN)ASSIGN=o.ASSIGN; if(o.allSales)allSales=o.allSales; } };

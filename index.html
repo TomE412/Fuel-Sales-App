@@ -2062,7 +2062,14 @@ async function syncQueue() {
 }
 
 async function markDelivered(id) {
-  if (!confirm('Mark this delivery as completed?')) return;
+  // Naming the customer here is the cheapest guard there is: the whole
+  // problem this is meant to prevent is a rep ticking the row above or
+  // below the one they meant.
+  const sale = (allSales || []).find(x => String(x.id) === String(id));
+  const what = sale
+    ? sale.customer + '  ·  ' + (sale.litres || 0).toLocaleString() + ' L'
+    : 'this delivery';
+  if (!confirm('Mark as DELIVERED?' + String.fromCharCode(10,10) + what)) return;
   const { error } = await sb.from('sales').update({
     status: 'delivered',
     delivered_at: new Date().toISOString()
@@ -2095,6 +2102,47 @@ async function markPaid(id) {
           '\n\nIf you are offline, try again once you have signal.');
     return;
   }
+  await loadSales();
+}
+/* The way back from a delivered tick.
+
+   Accounts invoice off this flag, so a sale they have already invoiced
+   says so before anything changes - the rep needs to know to ring them,
+   not just quietly put it back.
+
+   The status change goes on its own and the trail follows separately, so
+   the correction still lands on a database where phase_d4 has not been
+   run yet. Getting the sale right matters more than the audit line. */
+async function undoDelivered(id) {
+  const sale = (allSales || []).find(x => String(x.id) === String(id));
+  const who = sale ? sale.customer : 'this sale';
+  let msg = 'Put the sale to ' + who + ' back to NOT delivered?';
+  if (sale && sale.invoiced) {
+    msg += String.fromCharCode(10,10) +
+      'CAREFUL: accounts have already invoiced this one.' + String.fromCharCode(10) +
+      'Tell them, or the invoice will not match what was delivered.';
+  }
+  if (!confirm(msg)) return;
+
+  try {
+    const { error } = await sb.from('sales')
+      .update({ status: 'pending', delivered_at: null })
+      .eq('id', id);
+    if (error) throw error;
+  } catch (e) {
+    alert('Could not change it back.' + String.fromCharCode(10,10) + (e.message || e) +
+          String.fromCharCode(10,10) + 'If you are offline, try again once you have signal.');
+    return;
+  }
+
+  sb.from('sales').update({
+    undelivered_at: new Date().toISOString(),
+    undelivered_by: (currentProfile && currentProfile.full_name) ||
+                    (currentUser && currentUser.email) || null,
+  }).eq('id', id).then(({ error }) => {
+    if (error) console.log('undo trail not recorded:', error.message);
+  });
+
   await loadSales();
 }
 // ---- RENDER ----
@@ -2160,6 +2208,11 @@ function renderSales() {
     // Only for reps switched on for it, and only while the sale is still
     // unpaid and live. Outlined rather than solid so it does not compete
     // with "Mark as delivered", which is the one every rep uses daily.
+    // The way back. Only on a sale that is actually marked delivered, and
+    // styled as a correction so it is never mistaken for the green button
+    // above it.
+    const undoBtn = delivered && !isCancelled ?
+      `<button class="del-btn" style="background:#fff;color:var(--amber);border:1px solid var(--amber);margin-top:6px;" onclick="undoDelivered(${s.id});event.stopPropagation()">↩ Undo — not delivered</button>` : '';
     const canMarkPaid = !!(currentProfile && currentProfile.can_mark_paid);
     const paidBtn = canMarkPaid && !s.paid && !isCancelled ?
       `<button class="del-btn" style="background:#fff;color:var(--green-dark);border:1px solid var(--green);margin-top:6px;" onclick="markPaid(${s.id});event.stopPropagation()">💵 Mark as paid</button>` : '';
@@ -2174,7 +2227,7 @@ function renderSales() {
       <div class="sale-meta">${s.location||'—'} · ${fmtDate(s.sale_date)} · ${s.payment_term}</div>
       <div class="sale-meta">Del: ${fmtDate(s.delivery_date)} · Pay due: ${fmtDate(s.payment_due)}</div>
       ${repRigBadge(s.id)}
-      ${delBtn}${paidBtn}${editBtn}${cancelBtn}
+      ${delBtn}${undoBtn}${paidBtn}${editBtn}${cancelBtn}
     </div>`;
   }).join('');
 }
