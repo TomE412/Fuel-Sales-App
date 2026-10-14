@@ -1540,7 +1540,13 @@ function setPaymentTerm(termLabel) {
   const buttons = Array.from(document.querySelectorAll('#terms-grid .term-btn'));
   const exact = buttons.find(b => b.textContent.trim() === termLabel);
   if (exact) {
-    selTerm(termLabel, exact);
+    // The button READS "30 days" but its value is "30". Passing the label
+    // back made the next save write "30 days days", and the save after
+    // that matched nothing and fell through to COD - quietly turning a
+    // credit sale into a paid cash one. COD and Other carry no digits and
+    // pass through untouched.
+    const asDays = termLabel.match(/^(\d+)\s*days$/);
+    selTerm(asDays ? asDays[1] : termLabel, exact);
     return;
   }
   const daysMatch = termLabel.match(/^(\d+)\s*days$/);
@@ -1758,6 +1764,13 @@ async function recordSale() {
       const { error } = await withTimeout(
         sb.from('sales').update({
           sale_date: date,
+          // customer and customer_id MUST be here. They were missing, so correcting
+          // a rep's wrong customer silently did nothing: the row updated, no error
+          // came back, and the name stayed as it was. fillSaleForm() restores
+          // selectedCustomerId from the sale being edited, so the hard link is kept
+          // when the customer is unchanged and re-pointed when it is.
+          customer,
+          customer_id: selectedCustomerId,
           location,
           fuel_type: curFuel,
           litres,
@@ -2604,7 +2617,11 @@ function selTerm(val, btn) {
 function addDays(dateStr, days) {
   const d = new Date(dateStr + 'T00:00:00');
   d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
+  // NOT toISOString() - it converts to UTC first, which in Harare lands
+  // on the previous day and made every payment_due one day early.
+  return d.getFullYear() + '-' +
+         String(d.getMonth() + 1).padStart(2, '0') + '-' +
+         String(d.getDate()).padStart(2, '0');
 }
 
 function fmtDate(ds) {
