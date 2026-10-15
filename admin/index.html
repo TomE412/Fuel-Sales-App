@@ -149,6 +149,10 @@ font-size:13px;font-weight:700;cursor:pointer;}
 .rigrow .pri{background:var(--blue);color:#fff;}
 .rigrow .sec{background:var(--gray-light);color:var(--text);}
 .rigrow .dgr{background:#fff;color:var(--red);border:1px solid var(--red);}
+.rigrow .wha{background:var(--green);color:#fff;}
+.rigwa{width:100%;margin-top:9px;min-height:200px;padding:10px;resize:vertical;
+border:1px solid var(--gray-border);border-radius:8px;background:var(--gray-light);
+font-family:var(--mono);font-size:11.5px;line-height:1.55;color:var(--text);}
 
 #sec-overview .order-row{display:flex;align-items:center;gap:9px;padding:6px 12px;border-bottom:1px solid var(--gray-light);}
 #sec-overview .order-row:last-child{border-bottom:none;}
@@ -3040,6 +3044,10 @@ const OverviewApp = (() => {
   }
   function openRig(saleId){
     rigSaleId = String(saleId);
+    // The last job's message must not be sitting there when the next
+    // one is opened - that is how the wrong job gets sent.
+    const waBox = document.getElementById('rig-wa-text');
+    if (waBox) { waBox.value = ''; waBox.style.display = 'none'; }
     const a = ASSIGN[rigSaleId] || {};
     const sale = (allSales || []).find(s => String(s.id) === rigSaleId);
 
@@ -3117,6 +3125,87 @@ const OverviewApp = (() => {
     document.getElementById('rig-driver').value  = (v && v.default_driver_id)  || '';
     document.getElementById('rig-err').textContent = '';
     rigPumpVisibility();
+  }
+
+  /* The job as the driver needs to read it on a phone.
+
+     No price and no payment terms, on purpose: a driver does not need them
+     and this message gets forwarded on. *asterisks* are WhatsApp's own
+     bold, and there are no columns or tables because WhatsApp reflows
+     everything into one narrow strip. The notes go in raw so a pasted maps
+     link stays tappable. */
+  function driverMessage(){
+    const NL = String.fromCharCode(10);
+    const sale = (allSales || []).find(x => String(x.id) === String(rigSaleId)) || {};
+    const val = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+    const v = byId(FLEET.vehicles, val('rig-vehicle'));
+    const t = byId(FLEET.trailers, val('rig-trailer'));
+    const d = byId(FLEET.drivers,  val('rig-driver'));
+    const p = byId(FLEET.pumps || [], val('rig-pump'));
+
+    // fleet number and reg together - the driver checks the plate, the yard
+    // calls it by its number.
+    const unit = x => x ? [x.fleet_no || x.trailer_no || x.unit_no, x.reg_no]
+      .filter(Boolean).join('  \u00b7  ') : '';
+    const bold = (label, value) => value ? '*' + label + ':* ' + value : null;
+
+    // A tanker that cannot discharge on its own says so rather than going
+    // out silently short of a pump.
+    let pumpLine = null;
+    if (v && v.needs_pump) {
+      if (p) {
+        const pd = byId(FLEET.drivers, p.driver_id);
+        pumpLine = unit(p) + (p.is_hired ? '  (hired in)' : '') +
+          (pd ? '  \u2014  ' + pd.full_name + (pd.phone ? '  ' + pd.phone : '') : '');
+      } else {
+        pumpLine = 'TO BE CONFIRMED';
+      }
+    }
+
+    const litres = (sale.litres || 0).toLocaleString() + ' L' +
+      (sale.fuelType ? '  ' + sale.fuelType : '');
+
+    return [
+      '*SKELSEE DELIVERY*',
+      '',
+      bold('Customer', sale.customer),
+      bold('Where', sale.location),
+      bold('Date', fmtDate(sale.deliveryDate)),
+      bold('Load', litres),
+      '',
+      bold('Truck', unit(v)),
+      bold('Trailer', unit(t)),
+      bold('Driver', d ? d.full_name + (d.phone ? '  ' + d.phone : '') : null),
+      bold('Pump unit', pumpLine),
+      sale.notes ? '' : null,
+      sale.notes ? '*Notes:*' : null,
+      sale.notes ? String(sale.notes) : null,
+      '',
+      sale.rep ? 'Sales rep: ' + sale.rep : null,
+      'Ref: ' + (sale.id != null ? sale.id : '-'),
+    ].filter(x => x !== null && x !== undefined).join(NL);
+  }
+
+  async function copyDriverMessage(){
+    const ta = document.getElementById('rig-wa-text');
+    const btn = document.getElementById('rig-wa-btn');
+    if (!ta) return;
+    ta.value = driverMessage();
+    ta.style.display = '';
+    const done = ok => {
+      if (!btn) return;
+      btn.textContent = ok ? '\u2713 Copied - paste into WhatsApp' : 'Press Ctrl+C to copy';
+      setTimeout(() => { btn.innerHTML = '&#128203; Copy job for the driver'; }, 2600);
+    };
+    try {
+      await navigator.clipboard.writeText(ta.value);
+      done(true);
+    } catch (e) {
+      // The clipboard API is refused on some phones and over plain http.
+      // Select it instead so the button is never a dead end.
+      ta.focus(); ta.select();
+      done(false);
+    }
   }
 
   function closeRig(){ document.getElementById('rigm').classList.remove('on'); rigSaleId = null; }
@@ -3420,7 +3509,7 @@ const OverviewApp = (() => {
 
   return { init, markDelivered, undoDelivered,
     openRig, closeRig, saveRig, clearRig, rigVehiclePicked,
-    rigPicked, toggleRigAdvanced,
+    rigPicked, toggleRigAdvanced, copyDriverMessage,
     __seed(o){ if(o.FLEET)FLEET=o.FLEET; if(o.ASSIGN)ASSIGN=o.ASSIGN; if(o.allSales)allSales=o.allSales; } };
 })();
 
@@ -9465,6 +9554,10 @@ async function exportToCSV() {
       <button class="pri" id="rig-save" onclick="OverviewApp.saveRig()">Save</button>
       <button class="sec" onclick="OverviewApp.closeRig()">Cancel</button>
     </div>
+    <div class="rigrow" style="margin-top:9px;">
+      <button class="wha" id="rig-wa-btn" onclick="OverviewApp.copyDriverMessage()">&#128203; Copy job for the driver</button>
+    </div>
+    <textarea class="rigwa" id="rig-wa-text" readonly style="display:none;"></textarea>
     <div class="rigrow" id="rig-clear" style="display:none;">
       <button class="dgr" onclick="OverviewApp.clearRig()">Take off this truck</button>
     </div>
