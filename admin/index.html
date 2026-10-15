@@ -7374,7 +7374,7 @@ const SalesApp = (() => {
 
     if (editingSaleId) {
       try {
-        const { error } = await withTimeout(
+        const { data, error } = await withTimeout(
           sb.from('sales').update({
             // customer and customer_id MUST be here. They were missing, so correcting
             // a rep's wrong customer silently did nothing: the row updated, no error
@@ -7386,10 +7386,18 @@ const SalesApp = (() => {
             price_per_litre: priceTBA ? 0 : price, cost_price: costPrice, price_tba: priceTBA,
             delivery_date: delivery || null, payment_term: termLabel, payment_due: paymentDue,
             paid: curTerm === 'COD', notes, distance_km: distanceKm
-          }).eq('id', editingSaleId),
+          }).eq('id', editingSaleId).select('id'),
           8000
         );
         if (error) throw error;
+        // An UPDATE refused by row-level security changes no rows and reports
+        // no error, so success has to be proven rather than assumed.
+        if (!data || !data.length) {
+          throw new Error('Nothing was saved. The database accepted the request ' +
+            'but changed no rows - usually that means this account is not allowed ' +
+            'to edit another rep\'s sale. Nothing has been lost; the sale is ' +
+            'unchanged.');
+        }
         savedOnline = true;
       } catch (e) {
         updateFailed = true;

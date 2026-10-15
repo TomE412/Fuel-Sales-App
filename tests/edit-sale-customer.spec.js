@@ -81,6 +81,54 @@ test('correcting the customer on a saved sale actually sends the customer', asyn
   expect(errs).toEqual([]);
 });
 
+// Row-level security refuses an UPDATE by matching no rows, not by raising an
+// error - PostgREST returns { error: null } and the app used to report success
+// and reload the unchanged sale. Indistinguishable from a save that worked,
+// which is how a wrong customer survives days of somebody "correcting" it.
+test('an edit the database refuses is reported, not swallowed', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForTimeout(2300);
+
+  const out = await page.evaluate(async sale => {
+    currentUser = { id: 'u-tom', email: 'tom@skelsee.co.zw' };
+    currentProfile = { full_name: 'Tom Eager', role: 'admin' };
+    allSales = [sale];
+    window.confirm = () => true;
+    let alerted = null;
+    window.alert = m => { alerted = m; };
+    loadSales = async () => {}; renderSales = () => {}; renderDash = () => {};
+
+    // What RLS actually returns when it blocks you: no error, no rows.
+    let rowsBack = [];
+    sb.from = () => ({
+      update: () => ({ eq: () => ({ select: async () => ({ data: rowsBack, error: null }) }) }),
+    });
+
+    openSaleForEdit(sale.id);
+    document.getElementById('s-customer').value = 'Olivine Industries';
+    await recordSale();
+    const refused = alerted;
+
+    // And the same call when it genuinely lands.
+    alerted = null;
+    rowsBack = [{ id: sale.id }];
+    openSaleForEdit(sale.id);
+    document.getElementById('s-customer').value = 'Olivine Industries';
+    await recordSale();
+    return { refused, accepted: alerted };
+  }, SALE);
+  console.log(JSON.stringify(out, null, 1));
+
+  // A refusal must say so, say why, and say the sale is untouched.
+  expect(out.refused).toBeTruthy();
+  expect(out.refused).toContain('Nothing was saved');
+  expect(out.refused).toMatch(/not allowed|permission/i);
+  expect(out.refused).toContain('unchanged');
+
+  // A real save must stay silent.
+  expect(out.accepted).toBeNull();
+});
+
 // The rep app and the admin Sales tab are duplicated code. The bug was in
 // both, so the guard has to be in both. Several places update sales (mark
 // delivered, mark paid, invoiced); the edit-save is the one carrying litres.

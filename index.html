@@ -1761,7 +1761,7 @@ async function recordSale() {
 
   if (editingSaleId) {
     try {
-      const { error } = await withTimeout(
+      const { data, error } = await withTimeout(
         sb.from('sales').update({
           sale_date: date,
           // customer and customer_id MUST be here. They were missing, so correcting
@@ -1782,10 +1782,18 @@ async function recordSale() {
           payment_due: paymentDue,
           paid: curTerm === 'COD',
           notes
-        }).eq('id', editingSaleId),
+        }).eq('id', editingSaleId).select('id'),
         8000
       );
       if (error) throw error;
+      // An UPDATE refused by row-level security changes no rows and reports
+      // no error, so success has to be proven rather than assumed.
+      if (!data || !data.length) {
+        throw new Error('Nothing was saved. The database accepted the request ' +
+          'but changed no rows - usually that means this account is not allowed ' +
+          'to edit another rep\'s sale. Nothing has been lost; the sale is ' +
+          'unchanged.');
+      }
       savedOnline = true;
     } catch (e) {
       updateFailed = true;
