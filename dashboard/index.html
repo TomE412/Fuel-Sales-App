@@ -129,6 +129,20 @@ font-size:13px;font-weight:700;cursor:pointer;}
 .rigrow .sec{background:var(--gray-light);color:var(--text);}
 .rigrow .dgr{background:#fff;color:var(--red);border:1px solid var(--red);}
 .rigrow .wha{background:var(--green);color:#fff;}
+.sched-btn{padding:4px 10px;border:1px solid var(--red);background:#fff;color:var(--red);
+border-radius:99px;font-family:var(--font);font-size:10px;font-weight:700;cursor:pointer;
+white-space:nowrap;text-transform:uppercase;letter-spacing:.05em;}
+.sched-btn:hover{background:var(--red-light);}
+.schedm{position:fixed;inset:0;background:rgba(26,26,24,.45);display:none;
+align-items:center;justify-content:center;z-index:900;padding:18px;}
+.schedm.on{display:flex;}
+.schedbox{background:#fff;border-radius:14px;padding:20px 22px;width:100%;max-width:560px;
+box-shadow:0 18px 50px rgba(0,0,0,.25);max-height:90vh;display:flex;flex-direction:column;}
+.schedbox h2{font-size:17px;font-weight:800;margin:0 0 3px;}
+.schedbox .sub{font-size:12px;color:var(--gray-text);margin-bottom:12px;}
+.schedta{flex:1;min-height:300px;width:100%;padding:11px;resize:vertical;
+border:1px solid var(--gray-border);border-radius:8px;background:var(--gray-light);
+font-family:var(--mono);font-size:11.5px;line-height:1.55;color:var(--text);margin-bottom:10px;}
 .rigwa{width:100%;margin-top:9px;min-height:200px;padding:10px;resize:vertical;
 border:1px solid var(--gray-border);border-radius:8px;background:var(--gray-light);
 font-family:var(--mono);font-size:11.5px;line-height:1.55;color:var(--text);}
@@ -240,7 +254,10 @@ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
       <div class="panel scroll" style="flex:2;min-height:0;">
         <div class="ph">
           <div class="ph-title" style="color:var(--red);">🚛 Deliveries — soonest first</div>
-          <span class="ph-count" id="week-count" style="background:var(--red-light);color:var(--red-dark);">0</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button class="sched-btn" onclick="openDeliverySchedule()">&#128203; Delivery schedule</button>
+            <span class="ph-count" id="week-count" style="background:var(--red-light);color:var(--red-dark);">0</span>
+          </div>
         </div>
         <div class="panel-body" id="week-list"><div class="empty-msg">Nothing outstanding</div></div>
       </div>
@@ -591,6 +608,7 @@ function rigEsc(x){ return String(x == null ? '' : x)
 
 let FLEET = { vehicles: [], trailers: [], drivers: [], pumps: [] };
 let ASSIGN = {};            // sale_id -> assignment row
+let BOARD = [];              // the deliveries panel, as rendered
 let rigSaleId = null;       // the sale the modal is open on
 
 async function loadFleet(){
@@ -623,6 +641,96 @@ async function loadAssignments(){
 const byId = (arr, id) => arr.find(x => String(x.id) === String(id)) || null;
 
 /* The badge on a delivery row: what is assigned, or an invitation to assign. */
+/* The week's promises, as one WhatsApp message.
+
+   Grouped by the day it was promised, because that is the unit people
+   plan in, with litres per day and per fuel at the top - those are the
+   numbers you order supply against. Built from BOARD, the same list the
+   panel renders, so the message can never disagree with the screen.
+
+   Late days are labelled rather than dropped: fuel still owed is still
+   fuel you have to find. */
+function scheduleMessage(){
+  const NL = String.fromCharCode(10);
+  const list = BOARD || [];
+  if (!list.length) return 'Nothing outstanding - every order is marked delivered.';
+
+  const DAY = 86400000;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const fmtL = v => Math.round(v || 0).toLocaleString() + ' L';
+
+  const groups = [], at = {};
+  const fuel = {};
+  let total = 0;
+  list.forEach(s => {
+    const key = (s.deliveryDate || '').split('T')[0] || 'none';
+    if (!at[key]) { at[key] = { key, rows: [], litres: 0 }; groups.push(at[key]); }
+    at[key].rows.push(s);
+    at[key].litres += s.litres || 0;
+    const ft = s.fuelType || 'Diesel';
+    fuel[ft] = (fuel[ft] || 0) + (s.litres || 0);
+    total += s.litres || 0;
+  });
+
+  const dayHead = key => {
+    if (key === 'none') return 'NO DATE AGREED YET';
+    const d = new Date(key + 'T00:00:00');
+    if (isNaN(d)) return 'NO DATE AGREED YET';
+    const nm = DAYS[d.getDay()].slice(0,3).toUpperCase() + ' ' +
+      String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0');
+    const off = Math.round((d - today) / DAY);
+    if (off < 0) return nm + '  (LATE by ' + (-off) + (off === -1 ? ' day)' : ' days)');
+    if (off === 0) return nm + '  (TODAY)';
+    if (off === 1) return nm + '  (TOMORROW)';
+    return nm;
+  };
+
+  const out = ['*SKELSEE DELIVERY SCHEDULE*', ''];
+  out.push('*Still to deliver: ' + fmtL(total) + '*');
+  out.push(Object.keys(fuel).map(k => k + ' ' + fmtL(fuel[k])).join('  \u00b7  '));
+  out.push('');
+  groups.forEach(g => {
+    out.push('*' + dayHead(g.key) + '  \u2014  ' + fmtL(g.litres) + '*');
+    g.rows.forEach(s => {
+      out.push('\u2022 ' + (s.customer || '(no name)') + '  \u2014  ' +
+        fmtL(s.litres) + ' ' + (s.fuelType || 'Diesel') +
+        (s.location ? '  \u2014  ' + s.location : ''));
+    });
+    out.push('');
+  });
+  out.push(list.length + (list.length === 1 ? ' order' : ' orders') + ' over ' +
+    groups.length + (groups.length === 1 ? ' day' : ' days'));
+  return out.join(NL);
+}
+
+function openDeliverySchedule(){
+  const ta = document.getElementById('sched-text');
+  const sub = document.getElementById('sched-sub');
+  if (!ta) return;
+  ta.value = scheduleMessage();
+  if (sub) sub.textContent = 'Everything still to be delivered, as it stands right now.';
+  document.getElementById('schedm').classList.add('on');
+}
+
+function closeSchedule(){ document.getElementById('schedm').classList.remove('on'); }
+
+async function copySchedule(){
+  const ta = document.getElementById('sched-text');
+  const btn = document.getElementById('sched-copy');
+  if (!ta) return;
+  const done = ok => {
+    if (!btn) return;
+    btn.textContent = ok ? '\u2713 Copied' : 'Press Ctrl+C to copy';
+    setTimeout(() => { btn.innerHTML = '&#128203; Copy for WhatsApp'; }, 2400);
+  };
+  try {
+    await navigator.clipboard.writeText(ta.value);
+    done(true);
+  } catch (e) {
+    ta.focus(); ta.select();
+    done(false);
+  }
+}
 function rigBadge(saleId){
   const a = ASSIGN[String(saleId)];
   const open = 'onclick="event.stopPropagation();openRig(\'' + saleId + '\')"';
@@ -925,6 +1033,8 @@ function renderAll() {
   // point of the board: what is still owed, in the order you would work it.
   const DAY_MS = 86400000;
   const delDay = x => (x.deliveryDate||'').split('T')[0];
+  // Stashed for the Delivery schedule button, so the message and the
+  // board are always the same list in the same order.
   const upcomingSales = activeSales.filter(s => !s.delivered).sort((a,b) => {
     const da = delDay(a), db = delDay(b);
     // No delivery date yet sinks to the bottom, oldest order first, so a
@@ -943,6 +1053,7 @@ function renderAll() {
     return days <= 7 && days >= -7;
   });
 
+  BOARD = upcomingSales;
   document.getElementById('week-count').textContent = upcomingSales.length + ' · ' +
     upcomingSales.reduce((t,x) => t + (x.litres||0), 0).toLocaleString() + ' L';
   document.getElementById('delivered-count').textContent = deliveredSales.length;
@@ -1162,6 +1273,17 @@ if ('serviceWorker' in navigator) {
     <textarea class="rigwa" id="rig-wa-text" readonly style="display:none;"></textarea>
     <div class="rigrow" id="rig-clear" style="display:none;">
       <button class="dgr" onclick="clearRig()">Take off this truck</button>
+    </div>
+  </div>
+</div>
+<div class="schedm" id="schedm" onclick="if(event.target===this)closeSchedule()">
+  <div class="schedbox">
+    <h2>&#128203; Delivery schedule</h2>
+    <div class="sub" id="sched-sub">&mdash;</div>
+    <textarea class="schedta" id="sched-text" readonly></textarea>
+    <div class="rigrow">
+      <button class="pri" id="sched-copy" onclick="copySchedule()">&#128203; Copy for WhatsApp</button>
+      <button class="sec" onclick="closeSchedule()">Close</button>
     </div>
   </div>
 </div>
