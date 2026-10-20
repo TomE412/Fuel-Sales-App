@@ -3029,6 +3029,19 @@ const OverviewApp = (() => {
     const today = new Date(); today.setHours(0,0,0,0);
     const fmtL = v => Math.round(v || 0).toLocaleString() + ' L';
 
+    // Which rig is on this load, short enough to sit on the end of a line:
+    // fleet number plus the driver's first name, as in "SH07 Amos". First
+    // names are unique across the register, so there is no ambiguity. A load
+    // with nothing on it says so - that is the gap a planner is looking for.
+    const rigFor = s => {
+      const a = ASSIGN[String(s.id)];
+      if (!a) return 'no truck yet';
+      const v = byId(FLEET.vehicles, a.vehicle_id);
+      const d = byId(FLEET.drivers, a.driver_id);
+      const first = d && d.full_name ? String(d.full_name).trim().split(/\s+/)[0] : null;
+      return [v ? v.fleet_no : null, first].filter(Boolean).join(' ') || 'no truck yet';
+    };
+
     const groups = [], at = {};
     const fuel = {};
     let total = 0;
@@ -3064,7 +3077,8 @@ const OverviewApp = (() => {
       g.rows.forEach(s => {
         out.push('\u2022 ' + (s.customer || '(no name)') + '  \u2014  ' +
           fmtL(s.litres) + ' ' + (s.fuelType || 'Diesel') +
-          (s.location ? '  \u2014  ' + s.location : ''));
+          (s.location ? '  \u2014  ' + s.location : '') +
+          '  \u2014  ' + rigFor(s));
       });
       out.push('');
     });

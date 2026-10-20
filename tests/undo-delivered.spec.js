@@ -4,18 +4,27 @@ const { test, expect } = require('@playwright/test');
 // off that flag. So there are two things to get right: make the tick harder to
 // misfire, and make it reversible by the rep and from the Overview board.
 
+// Dates are relative on purpose. The Delivered panel only shows deliveries
+// within seven days either side of today, so fixed dates rot: this fixture
+// passed in October and then started failing once the calendar moved past it.
+const day = n => {
+  const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + n);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+         '-' + String(d.getDate()).padStart(2, '0');
+};
+
 const SALES = [
   { id: 1, customer: 'Delivered Co', litres: 20000, status: 'delivered', paid: false,
-    invoiced: false, sale_date: '2026-10-12', delivery_date: '2026-10-12',
+    invoiced: false, sale_date: day(-2), delivery_date: day(-1),
     payment_term: '30 days', fuel_type: 'Diesel', location: 'Norton', price_per_litre: 1.8 },
   { id: 2, customer: 'Invoiced Co',  litres: 40000, status: 'delivered', paid: false,
-    invoiced: true,  sale_date: '2026-10-11', delivery_date: '2026-10-11',
+    invoiced: true,  sale_date: day(-3), delivery_date: day(-2),
     payment_term: '30 days', fuel_type: 'Diesel', location: 'Gweru', price_per_litre: 1.8 },
   { id: 3, customer: 'Still Pending', litres: 10000, status: 'pending', paid: false,
-    invoiced: false, sale_date: '2026-10-12', delivery_date: '2026-10-14',
+    invoiced: false, sale_date: day(-1), delivery_date: day(2),
     payment_term: 'COD', fuel_type: 'Diesel', location: 'Harare', price_per_litre: 1.8 },
   { id: 4, customer: 'Scrapped Co',  litres: 5000, status: 'cancelled', paid: false,
-    invoiced: false, sale_date: '2026-10-10', delivery_date: '2026-10-11',
+    invoiced: false, sale_date: day(-3), delivery_date: day(-1),
     payment_term: 'COD', fuel_type: 'Diesel', location: 'Mvuma', price_per_litre: 1.8 },
 ];
 
