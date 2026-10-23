@@ -189,7 +189,24 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 #view-reports .perf-sec{margin-top:26px;}
 #view-reports .perf-sec h4{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;color:var(--text);margin:0 0 10px;}
 #view-reports .perf-chart{position:relative;height:250px;background:#fff;border:1px solid var(--gray-border);border-radius:12px;padding:12px;}
-#view-reports .perf-note{font-size:11.5px;color:var(--gray-text);line-height:1.55;margin-top:8px;}
+#view-reports .cmp-wrap{overflow-x:auto;}
+.cmp-tbl{width:100%;border-collapse:collapse;min-width:520px;}
+.cmp-tbl th{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+color:var(--gray-text);text-align:right;padding:7px 8px;border-bottom:1px solid var(--gray-border);}
+.cmp-tbl td{padding:8px;border-bottom:1px solid var(--gray-light);text-align:right;
+font-size:13px;font-variant-numeric:tabular-nums;}
+.cmp-tbl th:first-child,.cmp-tbl td:first-child{text-align:left;}
+.cmp-n{font-family:var(--mono);}
+.cmp-best{color:var(--green-dark);font-weight:800;}
+.cmp-tbl tr.cmp-tot td{border-top:1px solid var(--gray-border);border-bottom:none;
+font-weight:800;background:var(--gray-light);}
+.cmp-dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;}
+.cmp-mults{display:grid;grid-template-columns:repeat(auto-fit,minmax(152px,1fr));gap:10px;}
+.cmp-mult{border:1px solid var(--gray-light);border-radius:9px;padding:9px 10px;}
+.cmp-mult b{display:block;font-size:12px;font-weight:700;margin-bottom:1px;}
+.cmp-mult i{display:block;font-size:10px;color:var(--gray-text);font-style:normal;
+font-family:var(--mono);margin-bottom:5px;}
+.perf-note{font-size:11.5px;color:var(--gray-text);line-height:1.55;margin-top:8px;}
 #view-reports .perf-note b{color:var(--amber);}
 #view-reports .perf-empty{padding:18px;background:var(--gray-light);border:1px solid var(--gray-border);border-radius:12px;font-size:13px;color:var(--gray-text);}
 #view-reports .perf-tablewrap{overflow-x:auto;border:1px solid var(--gray-border);border-radius:12px;background:#fff;}
@@ -1378,7 +1395,9 @@ async function perfInit(){
     });
   } catch(e) {}
   names.sort((a,b) => a.localeCompare(b));
-  sel.innerHTML = names.map(n => '<option>' + n.replace(/</g,'&lt;') + '</option>').join('');
+  // Pinned first, with a value no rep name can collide with.
+  sel.innerHTML = '<option value="__all__">\u{1F465} All reps \u2014 compare</option>' +
+    names.map(n => '<option>' + n.replace(/</g,'&lt;') + '</option>').join('');
   sel.dataset.filled = '1';
 
   const now = new Date();
@@ -1506,6 +1525,7 @@ async function generatePerf(){
   const tY = parseInt(document.getElementById('perfToY').value, 10);
   const box = document.getElementById('perfContent');
   if (!rep) { alert('Pick a rep first.'); return; }
+  const allReps = rep === '__all__';
 
   const start = new Date(fY, fM, 1);
   const end   = new Date(tY, tM + 1, 1);          // exclusive
@@ -1543,6 +1563,7 @@ async function generatePerf(){
       })).filter(r => r.rep_name !== '(unassigned)');
       const mineAll = shaped.filter(r => r.rep_name === rep)
         .map(r => ({ customer: r.customer, sale_date: r.sale_date }));
+      if (allReps) { perfRenderAll(start, end, shaped, 'book'); return; }
       perfRender(rep, start, end, shaped, mineAll, 'book');
       return;
     }
@@ -1551,6 +1572,8 @@ async function generatePerf(){
       .select('rep_name,sale_date,customer,litres,price_per_litre,price_tba,cost_price,status')
       .gte('sale_date', iso(start)).lt('sale_date', iso(end)).neq('status','cancelled')
       .order('sale_date'));
+
+    if (allReps) { perfRenderAll(start, end, rows, 'app'); return; }
 
     // The same rep's whole history, for a retention figure that is not an
     // artefact of the window the user happened to pick.
@@ -1562,6 +1585,281 @@ async function generatePerf(){
     box.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div>Could not load: '
       + String((e && e.message) || e).replace(/</g,'&lt;') + '</div></div>';
   }
+}
+
+/* ================= ALL REPS COMPARISON =================
+   Every rep's volume side by side, month by month, for the same period the
+   single-rep report uses. Four views of one table of numbers:
+
+     1. the table      - the numbers themselves, which is what gets read
+     2. grouped bars   - the same figures, compared within each month
+     3. small multiples - one line per rep, so a trend is visible per person
+     4. a line chart   - the top three plus everyone else, overlaid
+
+   On colour. Six series on ONE set of overlapping lines cannot be made
+   colourblind-safe: checked with the palette validator, green against orange
+   comes out at 3.2 where 8 is the target, and even four of the eight hues
+   fail the normal-vision floor. So the six-way comparison is bars (where only
+   neighbouring pairs must differ, and the set passes), and the overlaid line
+   chart is capped at four series on a triple that passes every pair.
+
+   Each rep keeps the same colour alphabetically, never by rank - otherwise
+   everybody would change colour whenever the standings moved and month-to-month
+   reading would break. The line chart is the one exception: its three slots are
+   positional, so every line is also labelled at its right-hand end and nobody
+   has to rely on the colour at all. */
+
+// Validated against scripts/validate_palette.js, light and dark, on the
+// adjacent pairlist. Do not reorder: the order IS the assignment.
+const PERF_SERIES = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948'];
+const PERF_GREY   = '#8A867A';
+// The three that pass on ALL pairs, for the overlaid lines.
+const PERF_LINE3  = ['#2a78d6','#eb6834','#1baf7a'];
+const PERF_MON    = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function perfMonthKey(d){
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+/* Shapes the rows into a rep x month grid. Returns the reps biggest first,
+   because that is the order the table is read in - colour is assigned
+   separately and alphabetically. */
+/* Colour has to follow the rep, not their place in whatever slice of data is
+   on screen. Indexing the alphabetical list of reps PRESENT in the rows looks
+   stable but is not: drop one rep and everyone after them shifts a slot and
+   the whole chart repaints, which breaks month-to-month reading.
+
+   So take the position from the full roster in the dropdown, which does not
+   move when the report is filtered. With no roster to hand - a test harness,
+   or before perfInit has run - fall back to a hash of the name, which is
+   arbitrary but at least cannot shift. */
+// Names seen this session, in first-seen order. Append-only on purpose: a rep
+// dropping out of the data must never shift anybody else along a slot.
+let PERF_SEEN = [];
+
+function perfColourFor(name){
+  // The dropdown holds the full roster in alphabetical order and does not
+  // change when the report is filtered, so it is the stable source.
+  const sel = document.getElementById('perfRep');
+  if (sel) {
+    for (let i = 0, k = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === '__all__') continue;
+      if (sel.options[i].textContent.trim() === name) {
+        return k < PERF_SERIES.length ? PERF_SERIES[k] : PERF_GREY;
+      }
+      k++;
+    }
+  }
+  // Not in the dropdown, or it has not been filled yet. Sequential indices,
+  // never a hash - hashing is stable but collides, and two reps sharing a
+  // colour on a comparison chart is worse than an arbitrary order.
+  let at = PERF_SEEN.indexOf(name);
+  if (at < 0) { PERF_SEEN.push(name); at = PERF_SEEN.length - 1; }
+  return at < PERF_SERIES.length ? PERF_SERIES[at] : PERF_GREY;
+}
+function perfBuildMatrix(rows, start, end){
+  const months = [];
+  for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d < end; d.setMonth(d.getMonth() + 1)) {
+    months.push({ key: perfMonthKey(d), label: PERF_MON[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2) });
+  }
+
+  const byRep = {};
+  (rows || []).forEach(r => {
+    const name = (r.rep_name || '').trim();
+    if (!name) return;
+    const d = new Date(String(r.sale_date).slice(0, 10) + 'T00:00:00');
+    if (isNaN(d)) return;
+    const key = perfMonthKey(d);
+    if (!byRep[name]) byRep[name] = { name: name, by: {}, total: 0, orders: 0 };
+    if (!byRep[name].by[key]) byRep[name].by[key] = { l: 0, o: 0 };
+    byRep[name].by[key].l += Number(r.litres) || 0;
+    byRep[name].by[key].o += 1;
+    byRep[name].total += Number(r.litres) || 0;
+    byRep[name].orders += 1;
+  });
+
+  const reps = Object.keys(byRep).map(k => byRep[k]);
+  reps.forEach(r => { r.colour = perfColourFor(r.name); });
+  reps.sort((a, b) => b.total - a.total);
+
+  const colTotal = months.map(mo => reps.reduce((a, r) => a + ((r.by[mo.key] || {}).l || 0), 0));
+  const colOrders = months.map(mo => reps.reduce((a, r) => a + ((r.by[mo.key] || {}).o || 0), 0));
+  // A month in which only one person logged anything is not a comparison -
+  // it is usually a month before the app was in general use.
+  const thin = months.map((mo, i) =>
+    reps.filter(r => ((r.by[mo.key] || {}).l || 0) > 0).length <= 1 && colTotal[i] > 0);
+
+  return { months: months, reps: reps, colTotal: colTotal, colOrders: colOrders, thin: thin };
+}
+
+function perfRenderAll(start, end, rows, mode){
+  const box = document.getElementById('perfContent');
+  const grid = perfBuildMatrix(rows, start, end);
+  const months = grid.months, reps = grid.reps;
+
+  if (!reps.length) {
+    box.innerHTML = '<div class="empty-state"><div class="empty-icon">\u{1F4ED}</div>' +
+      '<div>No sales in that period.</div></div>';
+    return;
+  }
+
+  const kL = v => Math.round((v || 0) / 1000).toLocaleString() + 'k';
+  const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g,
+    c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+  const isBook = mode === 'book';
+  const grand = grid.colTotal.reduce((a, b) => a + b, 0);
+  const grandO = grid.colOrders.reduce((a, b) => a + b, 0);
+
+  // ---- 1. the table ------------------------------------------------------
+  let head = '<tr><th>Rep</th>' +
+    months.map((mo, i) => '<th>' + esc(mo.label) + (grid.thin[i] ? ' *' : '') + '</th>').join('') +
+    '<th>Total</th><th>Orders</th><th>Avg / order</th></tr>';
+  let body = reps.map(r =>
+    '<tr><td><span class="cmp-dot" style="background:' + r.colour + '"></span>' + esc(r.name) + '</td>' +
+    months.map(mo => '<td class="cmp-n">' + kL((r.by[mo.key] || {}).l) + '</td>').join('') +
+    '<td class="cmp-n' + (r === reps[0] ? ' cmp-best' : '') + '">' + kL(r.total) + '</td>' +
+    '<td class="cmp-n">' + r.orders + '</td>' +
+    '<td class="cmp-n">' + (r.orders ? kL(r.total / r.orders) : '—') + '</td></tr>').join('');
+  const foot = '<tr class="cmp-tot"><td>All reps</td>' +
+    grid.colTotal.map(v => '<td class="cmp-n">' + kL(v) + '</td>').join('') +
+    '<td class="cmp-n">' + kL(grand) + '</td><td class="cmp-n">' + grandO + '</td>' +
+    '<td class="cmp-n">' + (grandO ? kL(grand / grandO) : '—') + '</td></tr>';
+
+  // ---- 3. small multiples, drawn inline so they cost no Chart objects ----
+  const peak = Math.max.apply(null, reps.map(r =>
+    Math.max.apply(null, months.map(mo => (r.by[mo.key] || {}).l || 0))));
+  const spark = r => {
+    const W = 150, H = 48, P = 5;
+    const n = Math.max(months.length - 1, 1);
+    const x = i => P + i * ((W - P * 2) / n);
+    const y = v => H - P - ((v || 0) / (peak || 1)) * (H - P * 2);
+    const d = months.map((mo, i) =>
+      (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y((r.by[mo.key] || {}).l).toFixed(1)).join(' ');
+    const lastV = (r.by[months[months.length - 1].key] || {}).l || 0;
+    const firstV = (r.by[months[0].key] || {}).l || 0;
+    const dir = lastV >= firstV ? '↑' : '↓';
+    const pct = firstV ? Math.round(Math.abs(lastV - firstV) / firstV * 100) : 0;
+    return '<div class="cmp-mult"><b><span class="cmp-dot" style="background:' + r.colour + '"></span>' +
+      esc(r.name) + '</b>' +
+      '<i>' + kL(r.total) + ' total &middot; ' + dir + ' ' + pct + '% since ' + esc(months[0].label) + '</i>' +
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(r.name) + ' by month">' +
+      '<path d="' + d + '" fill="none" stroke="' + r.colour + '" stroke-width="2"/>' +
+      '<circle cx="' + x(months.length - 1).toFixed(1) + '" cy="' + y(lastV).toFixed(1) +
+      '" r="3.5" fill="' + r.colour + '"/></svg></div>';
+  };
+
+  const thinNote = grid.thin.some(Boolean)
+    ? '<p class="perf-note">* Only one rep logged anything that month, so it is not a fair ' +
+      'comparison column &mdash; usually a month before the app was in general use.</p>'
+    : '';
+
+  box.innerHTML =
+    '<div class="perf-sec"><h4>Volume by rep, by month</h4>' +
+      '<div class="cmp-wrap"><table class="cmp-tbl">' + head + body + foot + '</table></div>' +
+      thinNote +
+      (isBook ? '<p class="perf-note">Basis: volume through each rep’s customer book. ' +
+        'Invoice-era orders carry no rep, so they are attributed through the customer’s ' +
+        'currently assigned rep.</p>' : '') + '</div>' +
+
+    '<div class="perf-sec"><h4>Side by side, each month</h4>' +
+      '<div class="perf-chart" style="height:300px;"><canvas id="perfCanvasAll"></canvas></div></div>' +
+
+    '<div class="perf-sec"><h4>Each rep over time</h4>' +
+      '<div class="cmp-mults">' + reps.map(spark).join('') + '</div>' +
+      '<p class="perf-note">All on one scale, so the heights compare across cards.</p></div>' +
+
+    '<div class="perf-sec"><h4>Top three against everyone else</h4>' +
+      '<div class="perf-chart" style="height:290px;"><canvas id="perfCanvasLine"></canvas></div>' +
+      '<p class="perf-note">Capped at four lines and each one is labelled, because six ' +
+      'overlapping colours cannot be told apart by a colourblind reader.</p></div>';
+
+  const cv = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const ink = cv('--text2') || '#56534A';
+  const rule = cv('--gray-border') || '#E0E0DE';
+
+  // ---- 2. grouped bars ---------------------------------------------------
+  perfChart1 = new Chart(document.getElementById('perfCanvasAll'), {
+    type: 'bar',
+    data: {
+      labels: months.map(mo => mo.label),
+      datasets: reps.map(r => ({
+        label: r.name,
+        data: months.map(mo => (r.by[mo.key] || {}).l || 0),
+        backgroundColor: r.colour, borderRadius: 3, maxBarThickness: 22,
+      })),
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { color: ink, boxWidth: 10, boxHeight: 10,
+          usePointStyle: true, pointStyle: 'rectRounded', font: { size: 11 } } },
+        tooltip: { callbacks: { label: c => c.dataset.label + ': ' + c.parsed.y.toLocaleString() + ' L' } },
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { color: ink, callback: v => (v / 1000) + 'k' },
+             grid: { color: rule } },
+        x: { ticks: { color: ink }, grid: { display: false } },
+      },
+    },
+  });
+
+  // ---- 4. the overlaid lines --------------------------------------------
+  const top3 = reps.slice(0, 3);
+  const rest = reps.slice(3);
+  const lineSets = top3.map((r, i) => ({
+    label: r.name,
+    data: months.map(mo => (r.by[mo.key] || {}).l || 0),
+    borderColor: PERF_LINE3[i], backgroundColor: PERF_LINE3[i],
+    borderWidth: 2, pointRadius: 4, tension: 0.25, fill: false,
+  }));
+  if (rest.length) {
+    lineSets.push({
+      label: 'Everyone else (' + rest.length + ')',
+      data: months.map(mo => rest.reduce((a, r) => a + ((r.by[mo.key] || {}).l || 0), 0)),
+      borderColor: PERF_GREY, backgroundColor: PERF_GREY,
+      borderWidth: 2, borderDash: [5, 4], pointRadius: 4, tension: 0.25, fill: false,
+    });
+  }
+
+  perfChart2 = new Chart(document.getElementById('perfCanvasLine'), {
+    type: 'line',
+    data: { labels: months.map(mo => mo.label), datasets: lineSets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { right: 118 } },   // room for the end labels
+      plugins: {
+        legend: { position: 'top', labels: { color: ink, boxWidth: 10, boxHeight: 10,
+          usePointStyle: true, pointStyle: 'line', font: { size: 11 } } },
+        tooltip: { mode: 'index', intersect: false,
+          callbacks: { label: c => c.dataset.label + ': ' + c.parsed.y.toLocaleString() + ' L' } },
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { color: ink, callback: v => (v / 1000) + 'k' },
+             grid: { color: rule } },
+        x: { ticks: { color: ink }, grid: { display: false } },
+      },
+    },
+    plugins: [{
+      // Identity must not rest on colour alone, so every line says its own
+      // name at the right-hand end. Ink, not the series colour - the line
+      // itself is the coloured mark sitting beside it.
+      id: 'perfEndLabels',
+      afterDatasetsDraw: function (chart) {
+        const ctx = chart.ctx;
+        chart.data.datasets.forEach(function (ds, i) {
+          const meta = chart.getDatasetMeta(i);
+          if (meta.hidden || !meta.data.length) return;
+          const pt = meta.data[meta.data.length - 1];
+          ctx.save();
+          ctx.font = '700 11px ' + (getComputedStyle(document.body).fontFamily || 'sans-serif');
+          ctx.fillStyle = ink;
+          ctx.textBaseline = 'middle';
+          ctx.fillText(ds.label, pt.x + 9, pt.y);
+          ctx.restore();
+        });
+      },
+    }],
+  });
 }
 
 function perfRender(rep, start, end, rows, allMine, mode){
