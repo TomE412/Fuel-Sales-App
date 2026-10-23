@@ -38,6 +38,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .auth-form{width:100%;max-width:360px;}
 .field{margin-bottom:14px;}
 .field label{font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em;}
+.field label.rt-row{display:flex;align-items:center;gap:8px;margin-bottom:0;text-transform:none;letter-spacing:0;font-size:13px;}
 .field input{width:100%;padding:13px 14px;background:var(--gray);border:1.5px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);font-size:15px;outline:none;transition:border-color 0.15s;}
 .tba-row{display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;}
 .tba-box{width:20px;height:20px;border:2px solid var(--border);border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all 0.15s;background:#fff;}
@@ -461,6 +462,13 @@ border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:poi
         <input type="date" id="s-delivery">
       </div>
       <div class="field">
+        <label class="tba-row rt-row" onclick="toggleRoundTrip(event)">
+          <span class="tba-box" id="rt-box"></span>
+          <span class="tba-txt">Round trip</span>
+        </label>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px;margin-left:28px;line-height:1.45;">Reference only &mdash; it changes no price. Tick it when the truck runs out and back for this load on its own. It shows on the Commission report.</div>
+      </div>
+      <div class="field">
         <label>Payment terms</label>
         <div class="terms-grid" id="terms-grid">
           <button class="term-btn selected" onclick="selTerm('COD',this)">COD</button>
@@ -605,6 +613,14 @@ border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:poi
         <label>Cost per km ($) <span style="font-weight:400;color:var(--text3);">— adjustable</span></label>
         <input type="number" id="calc-cpkm" placeholder="e.g. 2.40" inputmode="decimal" step="0.01" value="2.40">
       </div>
+      <div class="field">
+        <label>Trip</label>
+        <div style="display:flex;gap:8px;">
+          <button class="term-btn selected" id="calc-leg-round" style="flex:1;" onclick="setCalcLegs(2,this)">Round trip</button>
+          <button class="term-btn" id="calc-leg-one" style="flex:1;" onclick="setCalcLegs(1,this)">Return leg</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.45;">Round trip charges both legs. Return leg charges one &mdash; use it when the truck is already running back loaded for somebody else.</div>
+      </div>
       <button class="submit-btn" onclick="calcDelivery()" style="margin-top:8px;">Calculate</button>
       <div id="calc-result" style="margin-top:12px;display:none;">
         <div style="background:var(--green-light);border-radius:8px;padding:14px;">
@@ -747,6 +763,32 @@ function withTimeout(promise, ms = 8000) {
 // Price TBA — "send now, agree price later". When on, the price field is
 // disabled and the sale logs at $0 with price_tba = true. Accounts fills
 // the real price in afterwards; the sale stays out of revenue until then.
+// The round-trip marker is a REFERENCE ONLY. It is recorded against the sale
+// and printed on the Commission report so the workings can be followed, and
+// it deliberately feeds no price, no transport cost and no commission. The
+// report still charges two legs on every sale, exactly as it always has.
+let roundTrip = false;
+function toggleRoundTrip(e){
+  if(e) e.preventDefault();
+  setRoundTrip(!roundTrip);
+}
+function setRoundTrip(on){
+  roundTrip = (on === true);
+  const box = document.getElementById('rt-box');
+  if (box) box.classList.toggle('on', roundTrip);
+}
+
+// How many legs the CALCULATOR charges. This one does change the arithmetic,
+// but only inside the calculator - it never touches a recorded sale.
+let calcLegs = 2;
+function setCalcLegs(n, btn){
+  calcLegs = n;
+  const r = document.getElementById('calc-leg-round');
+  const o = document.getElementById('calc-leg-one');
+  if (r) r.classList.toggle('selected', n === 2);
+  if (o) o.classList.toggle('selected', n === 1);
+}
+
 function toggleTBA(e){
   if(e) e.preventDefault();
   priceTBA = !priceTBA;
@@ -1063,12 +1105,14 @@ function calcDelivery() {
 
   if (!dist || !litres || !depot) { alert('Please fill in distance, litres and depot price.'); return; }
 
-  // (Distance × 2 × cost per km) ÷ Litres + Depot price + Markup = Delivered price
-  const transport = (dist * 2 * cpkm) / litres;
+  // (Distance × legs × cost per km) ÷ Litres + Depot price + Markup = Delivered price
+  // legs is 2 for a round trip, 1 when only the return leg is being charged.
+  const transport = (dist * calcLegs * cpkm) / litres;
   const delivered = transport + depot + markup;
   const totalValue = delivered * litres;
 
-  document.getElementById('r-transport').textContent = '$' + transport.toFixed(4);
+  document.getElementById('r-transport').textContent =
+    '$' + transport.toFixed(4) + (calcLegs === 2 ? '  (2 legs)' : '  (1 leg)');
   document.getElementById('r-depot').textContent = '$' + depot.toFixed(4);
   document.getElementById('r-markup').textContent = '$' + markup.toFixed(4);
   document.getElementById('r-total').textContent = '$' + delivered.toFixed(4);
@@ -1532,6 +1576,7 @@ function clearForm() {
   if (priceTBA) toggleTBA();
   document.getElementById('s-delivery').value = '';
   document.getElementById('s-notes').value = '';
+  setRoundTrip(false);
   selectFuel('Diesel', document.getElementById('fuel-diesel'));
   setPaymentTerm('COD');
 }
@@ -1597,6 +1642,7 @@ function fillSaleForm(sale) {
   document.getElementById('s-delivery').value = sale.delivery_date || '';
   setPaymentTerm(sale.payment_term || 'COD');
   document.getElementById('s-notes').value = sale.notes || '';
+  setRoundTrip(sale.round_trip);
 }
 
 function openSaleForEdit(idOrLocalId) {
@@ -1753,6 +1799,7 @@ async function recordSale() {
     payment_due: paymentDue,
     paid: curTerm === 'COD',
     notes,
+    round_trip: roundTrip,
     status: 'pending'
   };
 
@@ -1781,7 +1828,8 @@ async function recordSale() {
           payment_term: termLabel,
           payment_due: paymentDue,
           paid: curTerm === 'COD',
-          notes
+          notes,
+          round_trip: roundTrip
         }).eq('id', editingSaleId).select('id'),
         8000
       );
@@ -1918,6 +1966,7 @@ async function recordSale() {
   if(priceTBA) toggleTBA();  // reset TBA back off for the next sale
   document.getElementById('s-delivery').value = '';
   document.getElementById('s-notes').value = '';
+  setRoundTrip(false);   // the next sale is a fresh question
   document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
   selectFuel('Diesel', document.getElementById('fuel-diesel'));
   curTerm = 'COD';

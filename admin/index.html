@@ -675,6 +675,7 @@ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
 #sec-sales .field{margin-bottom:14px;}
 #sec-sales .field label{font-size:12px;font-weight:600;color:#5a5a57;display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em;}
+#sec-sales .field label.rt-row{display:flex;align-items:center;gap:8px;margin-bottom:0;text-transform:none;letter-spacing:0;font-size:13px;}
 #sec-sales .field input{width:100%;padding:13px 14px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:15px;outline:none;transition:border-color 0.15s;}
 #sec-sales .tba-row{display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;}
 #sec-sales .tba-box{width:20px;height:20px;border:2px solid var(--gray-border);border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all 0.15s;background:#fff;}
@@ -1944,6 +1945,13 @@ font-family:var(--mono);margin-bottom:5px;}
               <input type="date" id="s-delivery">
             </div>
             <div class="field">
+              <label class="tba-row rt-row" onclick="SalesApp.toggleRoundTrip(event)">
+                <span class="tba-box" id="rt-box"></span>
+                <span class="tba-txt">Round trip</span>
+              </label>
+              <div style="font-size:11px;color:var(--gray-text);margin-top:6px;margin-left:28px;line-height:1.45;">Reference only &mdash; it changes no price. Tick it when the truck runs out and back for this load on its own. It shows on the Commission report.</div>
+            </div>
+            <div class="field">
               <label>Payment terms</label>
               <div class="terms-grid" id="terms-grid">
                 <button class="term-btn selected" onclick="SalesApp.selTerm('COD',this)">COD</button>
@@ -2086,6 +2094,14 @@ font-family:var(--mono);margin-bottom:5px;}
             <div class="field">
               <label>Cost per km ($) <span style="font-weight:400;color:var(--gray-text);">— adjustable</span></label>
               <input type="number" id="calc-cpkm" placeholder="e.g. 2.40" inputmode="decimal" step="0.01" value="2.40">
+            </div>
+            <div class="field">
+              <label>Trip</label>
+              <div style="display:flex;gap:8px;">
+                <button class="term-btn selected" id="calc-leg-round" style="flex:1;" onclick="SalesApp.setCalcLegs(2,this)">Round trip</button>
+                <button class="term-btn" id="calc-leg-one" style="flex:1;" onclick="SalesApp.setCalcLegs(1,this)">Return leg</button>
+              </div>
+              <div style="font-size:11px;color:var(--gray-text);margin-top:6px;line-height:1.45;">Round trip charges both legs. Return leg charges one &mdash; use it when the truck is already running back loaded for somebody else.</div>
             </div>
             <button class="submit-btn" onclick="SalesApp.calcDelivery()" style="margin-top:8px;">Calculate</button>
             <div id="calc-result" style="margin-top:12px;display:none;">
@@ -6884,6 +6900,32 @@ const SalesApp = (() => {
   let editingQueueId = null;
   let editingOriginalDistanceKm = null;
 
+  // The round-trip marker is a REFERENCE ONLY. It is recorded against the
+  // sale and printed on the Commission report so the workings can be
+  // followed, and it deliberately feeds no price, no transport cost and no
+  // commission. The report still charges two legs on every sale.
+  let roundTrip = false;
+  function toggleRoundTrip(e){
+    if(e) e.preventDefault();
+    setRoundTrip(!roundTrip);
+  }
+  function setRoundTrip(on){
+    roundTrip = (on === true);
+    const box = document.getElementById('rt-box');
+    if (box) box.classList.toggle('on', roundTrip);
+  }
+
+  // How many legs the CALCULATOR charges. This does change the arithmetic,
+  // but only inside the calculator - it never touches a recorded sale.
+  let calcLegs = 2;
+  function setCalcLegs(n, btn){
+    calcLegs = n;
+    const r = document.getElementById('calc-leg-round');
+    const o = document.getElementById('calc-leg-one');
+    if (r) r.classList.toggle('selected', n === 2);
+    if (o) o.classList.toggle('selected', n === 1);
+  }
+
   function toggleTBA(e){
     if(e) e.preventDefault();
     priceTBA = !priceTBA;
@@ -7296,6 +7338,7 @@ const SalesApp = (() => {
     if (priceTBA) toggleTBA();
     document.getElementById('s-delivery').value = '';
     document.getElementById('s-notes').value = '';
+    setRoundTrip(false);
     selectFuel('Diesel', document.getElementById('fuel-diesel'));
     setPaymentTerm('COD');
   }
@@ -7367,6 +7410,7 @@ const SalesApp = (() => {
     document.getElementById('s-delivery').value = sale.delivery_date || '';
     setPaymentTerm(sale.payment_term || 'COD');
     document.getElementById('s-notes').value = sale.notes || '';
+    setRoundTrip(sale.round_trip);
   }
 
   function openSaleForEdit(idOrLocalId) {
@@ -7508,6 +7552,7 @@ const SalesApp = (() => {
       payment_due: paymentDue,
       paid: curTerm === 'COD',
       notes,
+      round_trip: roundTrip,
       status: 'pending',
       distance_km: distanceKm
     };
@@ -7528,7 +7573,7 @@ const SalesApp = (() => {
             sale_date: date, location, fuel_type: curFuel, litres,
             price_per_litre: priceTBA ? 0 : price, cost_price: costPrice, price_tba: priceTBA,
             delivery_date: delivery || null, payment_term: termLabel, payment_due: paymentDue,
-            paid: curTerm === 'COD', notes, distance_km: distanceKm
+            paid: curTerm === 'COD', notes, round_trip: roundTrip, distance_km: distanceKm
           }).eq('id', editingSaleId).select('id'),
           8000
         );
@@ -7554,7 +7599,8 @@ const SalesApp = (() => {
           ...item.payload, sale_date: date, customer, customer_id: selectedCustomerId, location,
           fuel_type: curFuel, litres, price_per_litre: priceTBA ? 0 : price, cost_price: costPrice,
           price_tba: priceTBA, delivery_date: delivery || null, payment_term: termLabel,
-          payment_due: paymentDue, paid: curTerm === 'COD', notes, distance_km: distanceKm
+          payment_due: paymentDue, paid: curTerm === 'COD', notes, round_trip: roundTrip,
+          distance_km: distanceKm
         };
         saveQueue(q);
         savedOnline = false;
@@ -8045,10 +8091,12 @@ const SalesApp = (() => {
     const markup = parseFloat(document.getElementById('calc-markup').value) || 0;
     const cpkm = parseFloat(document.getElementById('calc-cpkm').value) || 2.40;
     if (!dist || !litres || !depot) { alert('Please fill in distance, litres and depot price.'); return; }
-    const transport = (dist * 2 * cpkm) / litres;
+    // legs is 2 for a round trip, 1 when only the return leg is charged.
+    const transport = (dist * calcLegs * cpkm) / litres;
     const delivered = transport + depot + markup;
     const totalValue = delivered * litres;
-    document.getElementById('r-transport').textContent = '$' + transport.toFixed(4);
+    document.getElementById('r-transport').textContent =
+      '$' + transport.toFixed(4) + (calcLegs === 2 ? '  (2 legs)' : '  (1 leg)');
     document.getElementById('r-depot').textContent = '$' + depot.toFixed(4);
     document.getElementById('r-markup').textContent = '$' + markup.toFixed(4);
     document.getElementById('r-total').textContent = '$' + delivered.toFixed(4);
@@ -8244,7 +8292,8 @@ const SalesApp = (() => {
       "Selling Price","Margin","Company GP Cent1 (60%)","Company Value Cent1","Carrie GP Cent1 (40%)",
       "Carrie Value Cent1","Company GP Cent2 (75%)","Company Value Cent2","Carrie GP Cent2 (25%)",
       "Carrie Value Cent2","Company GP Cent3 (50%)","Company Value Cent3","Carrie GP Cent3 (50%)",
-      "Carrie Value Cent3","Total Company GP Value","Total Carrie Commission","Paid?"];
+      "Carrie Value Cent3","Total Company GP Value","Total Carrie Commission","Paid?",
+      "Round trip (reference only)"];
     const HR = 5;
     headers.forEach((h,i)=> set(HR,i+1,S(h)));
 
@@ -8278,6 +8327,10 @@ const SalesApp = (() => {
       set(r,22,F(g("K"+r+"+O"+r+"+S"+r),money));
       set(r,23,F(g("IF("+I+"<=0,$E$3*C"+r+",M"+r+"+Q"+r+"+U"+r+")"),money));
       set(r,24,S(sale.paid ? "Yes" : "No"));
+      // Reference only - no formula reads this. NULL means the sale predates
+      // the tick box, which is not the same as the rep answering "no".
+      set(r,25,S(sale.round_trip === true  ? "Yes"
+               : sale.round_trip === false ? "No" : "—"));
     });
 
     const last = r0 + sales.length - 1, tr = last+1;
@@ -8289,8 +8342,8 @@ const SalesApp = (() => {
     set(sm+1,2,S("Plus monthly retainer:"));                     set(sm+1,7,F("$H$3",money));
     set(sm+2,2,S("TOTAL PAYABLE TO "+repName.toUpperCase()+":")); set(sm+2,7,F("G"+sm+"+G"+(sm+1),money));
 
-    ws["!ref"] = "A1:"+addr(sm+2,24);
-    ws["!cols"] = [9,18,10,11,9,10,11,11,10,11,12,11,12,11,12,11,12,11,12,11,12,13,14,7].map(w=>({wch:w}));
+    ws["!ref"] = "A1:"+addr(sm+2,25);
+    ws["!cols"] = [9,18,10,11,9,10,11,11,10,11,12,11,12,11,12,11,12,11,12,11,12,13,14,7,22].map(w=>({wch:w}));
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "New contract");
@@ -8325,7 +8378,7 @@ const SalesApp = (() => {
     try {
       if (typeof XLSX === "undefined") { alert("Spreadsheet library still loading — check your connection and try again."); return; }
       const { data: sales, error } = await sb.from("sales")
-        .select("sale_date, customer, location, litres, price_per_litre, cost_price, paid, status, distance_km")
+        .select("sale_date, customer, location, litres, price_per_litre, cost_price, paid, status, distance_km, round_trip")
         .eq("rep_name", repName).gte("sale_date", start).lt("sale_date", endEx)
         .neq("status", "cancelled").order("sale_date", { ascending: true });
       if (error) throw error;
@@ -8662,6 +8715,7 @@ const SalesApp = (() => {
     toggleTBA, clearCustomerMatch, clearLocationMatch,
     acPick, acPickNew, locAcPick, locAcPickNew,
     selectFuel, checkCostVsPrice, selTerm, recordSale, cancelEdit, openSaleForEdit, markDelivered, cancelSale,
+    toggleRoundTrip, setCalcLegs,
     showTab, calNav, showCalDay,
     calcDelivery, changePin, changePassword,
     removeGoneQuietCustomer,
