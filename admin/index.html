@@ -1949,7 +1949,7 @@ font-family:var(--mono);margin-bottom:5px;}
                 <span class="tba-box" id="rt-box"></span>
                 <span class="tba-txt">Round trip</span>
               </label>
-              <div style="font-size:11px;color:var(--gray-text);margin-top:6px;margin-left:28px;line-height:1.45;">Reference only &mdash; it changes no price. Tick it when the truck runs out and back for this load on its own. It shows on the Commission report.</div>
+              <div style="font-size:11px;color:var(--gray-text);margin-top:6px;margin-left:28px;line-height:1.45;">Reference only &mdash; it changes no price. Tick it when the load went right round rather than straight out and back. It shows on the Commission report.</div>
             </div>
             <div class="field">
               <label>Payment terms</label>
@@ -2098,10 +2098,10 @@ font-family:var(--mono);margin-bottom:5px;}
             <div class="field">
               <label>Trip</label>
               <div style="display:flex;gap:8px;">
-                <button class="term-btn selected" id="calc-leg-round" style="flex:1;" onclick="SalesApp.setCalcLegs(2,this)">Round trip</button>
-                <button class="term-btn" id="calc-leg-one" style="flex:1;" onclick="SalesApp.setCalcLegs(1,this)">Return leg</button>
+                <button class="term-btn selected" id="calc-leg-return" style="flex:1;" onclick="SalesApp.setCalcLegs(2,this)">Return leg</button>
+                <button class="term-btn" id="calc-leg-round" style="flex:1;" onclick="SalesApp.setCalcLegs(1,this)">Round trip</button>
               </div>
-              <div style="font-size:11px;color:var(--gray-text);margin-top:6px;line-height:1.45;">Round trip charges both legs. Return leg charges one &mdash; use it when the truck is already running back loaded for somebody else.</div>
+              <div style="font-size:11px;color:var(--gray-text);margin-top:6px;line-height:1.45;">Return leg is there and back &mdash; both legs are charged. Round trip goes right round and back without retracing the outbound road, so only one leg is charged.</div>
             </div>
             <button class="submit-btn" onclick="SalesApp.calcDelivery()" style="margin-top:8px;">Calculate</button>
             <div id="calc-result" style="margin-top:12px;display:none;">
@@ -6920,10 +6920,10 @@ const SalesApp = (() => {
   let calcLegs = 2;
   function setCalcLegs(n, btn){
     calcLegs = n;
-    const r = document.getElementById('calc-leg-round');
-    const o = document.getElementById('calc-leg-one');
-    if (r) r.classList.toggle('selected', n === 2);
-    if (o) o.classList.toggle('selected', n === 1);
+    const ret = document.getElementById('calc-leg-return');
+    const rnd = document.getElementById('calc-leg-round');
+    if (ret) ret.classList.toggle('selected', n === 2);
+    if (rnd) rnd.classList.toggle('selected', n === 1);
   }
 
   function toggleTBA(e){

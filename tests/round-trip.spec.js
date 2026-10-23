@@ -80,11 +80,15 @@ for (const [app, url, prefix] of [['rep app', '/', ''], ['admin', '/admin/', 'Sa
       };
       run();
 
-      const roundBtn = document.getElementById('calc-leg-round');
-      const oneBtn   = document.getElementById('calc-leg-one');
+      // Tom's terms: a RETURN LEG is there and back (two legs, the default);
+      // a ROUND TRIP goes right round and back without retracing the
+      // outbound road, so only one leg is charged.
+      const returnBtn = document.getElementById('calc-leg-return');
+      const roundBtn  = document.getElementById('calc-leg-round');
 
-      // default: round trip selected
-      const defaultSelected = roundBtn.classList.contains('selected') && !oneBtn.classList.contains('selected');
+      // default: return leg selected
+      const defaultSelected = returnBtn.classList.contains('selected') && !roundBtn.classList.contains('selected');
+      const labels = { ret: returnBtn.textContent.trim(), round: roundBtn.textContent.trim() };
 
       const calcBtn = [...document.querySelectorAll('button')]
         .find(b => b.textContent.trim() === 'Calculate');
@@ -92,19 +96,22 @@ for (const [app, url, prefix] of [['rep app', '/', ''], ['admin', '/admin/', 'Sa
       const two = document.getElementById('r-transport').textContent;
       const twoTotal = document.getElementById('r-total').textContent;
 
-      oneBtn.click();
+      roundBtn.click();
       calcBtn.click();
       const one = document.getElementById('r-transport').textContent;
       const oneTotal = document.getElementById('r-total').textContent;
 
-      return { defaultSelected, two, twoTotal, one, oneTotal,
-               oneNowSelected: oneBtn.classList.contains('selected'),
-               roundNowOff: !roundBtn.classList.contains('selected') };
+      return { defaultSelected, labels, two, twoTotal, one, oneTotal,
+               oneNowSelected: roundBtn.classList.contains('selected'),
+               roundNowOff: !returnBtn.classList.contains('selected') };
     });
     console.log(app + ' ' + JSON.stringify(out));
 
-    // Round trip must stay the default so the calculator answers as it always has.
+    // Return leg is the default, so the calculator answers as it always has.
     expect(out.defaultSelected).toBe(true);
+    // The labels must not drift back to the wrong way round.
+    expect(out.labels.ret).toBe('Return leg');
+    expect(out.labels.round).toBe('Round trip');
 
     // 100km x 2.40 x 2 / 10,000 = 0.0480     and one leg is exactly half
     expect(out.two).toContain('0.0480');
