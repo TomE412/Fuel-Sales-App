@@ -8984,10 +8984,8 @@ async function generatePerf(){
 
 // Validated against scripts/validate_palette.js, light and dark, on the
 // adjacent pairlist. Do not reorder: the order IS the assignment.
-const PERF_SERIES = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948'];
+const PERF_SERIES = ['#2a78d6','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7'];
 const PERF_GREY   = '#8A867A';
-// The three that pass on ALL pairs, for the overlaid lines.
-const PERF_LINE3  = ['#2a78d6','#eb6834','#1baf7a'];
 const PERF_MON    = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function perfMonthKey(d){
@@ -9141,10 +9139,11 @@ function perfRenderAll(start, end, rows, mode){
       '<div class="cmp-mults">' + reps.map(spark).join('') + '</div>' +
       '<p class="perf-note">All on one scale, so the heights compare across cards.</p></div>' +
 
-    '<div class="perf-sec"><h4>Top three against everyone else</h4>' +
+    '<div class="perf-sec"><h4>Every rep, month by month</h4>' +
       '<div class="perf-chart" style="height:290px;"><canvas id="perfCanvasLine"></canvas></div>' +
-      '<p class="perf-note">Capped at four lines and each one is labelled, because six ' +
-      'overlapping colours cannot be told apart by a colourblind reader.</p></div>';
+      '<p class="perf-note">Each line is labelled at its end, so nobody has to tell the ' +
+      'colours apart. Orange is deliberately not in the set - against green it is ' +
+      'indistinguishable to a colourblind reader.</p></div>';
 
   const cv = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
   const ink = cv('--text2') || '#56534A';
@@ -9177,12 +9176,16 @@ function perfRenderAll(start, end, rows, mode){
   });
 
   // ---- 4. the overlaid lines --------------------------------------------
-  const top3 = reps.slice(0, 3);
-  const rest = reps.slice(3);
-  const lineSets = top3.map((r, i) => ({
+  // Every rep gets their own line now. The six hues above survive the
+  // all-pairs colour check in light mode, which is the only mode these
+  // apps run in, and every line is labelled at its right-hand end - which
+  // is what makes the closest pair (magenta against aqua) legal.
+  const named = reps.slice(0, PERF_SERIES.length);
+  const rest = reps.slice(PERF_SERIES.length);
+  const lineSets = named.map(r => ({
     label: r.name,
     data: months.map(mo => (r.by[mo.key] || {}).l || 0),
-    borderColor: PERF_LINE3[i], backgroundColor: PERF_LINE3[i],
+    borderColor: r.colour, backgroundColor: r.colour,
     borderWidth: 2, pointRadius: 4, tension: 0.25, fill: false,
   }));
   if (rest.length) {
@@ -9199,7 +9202,7 @@ function perfRenderAll(start, end, rows, mode){
     data: { labels: months.map(mo => mo.label), datasets: lineSets },
     options: {
       responsive: true, maintainAspectRatio: false,
-      layout: { padding: { right: 118 } },   // room for the end labels
+      layout: { padding: { right: 150 } },   // room for the end labels
       plugins: {
         legend: { position: 'top', labels: { color: ink, boxWidth: 10, boxHeight: 10,
           usePointStyle: true, pointStyle: 'line', font: { size: 11 } } },
@@ -9219,17 +9222,38 @@ function perfRenderAll(start, end, rows, mode){
       id: 'perfEndLabels',
       afterDatasetsDraw: function (chart) {
         const ctx = chart.ctx;
+        const edge = chart.chartArea.right;
+        const room = chart.width - edge - 12;
+        ctx.save();
+        ctx.font = '700 11px ' + (getComputedStyle(document.body).fontFamily || 'sans-serif');
+        ctx.fillStyle = ink;
+        ctx.textBaseline = 'middle';
+
+        const marks = [];
         chart.data.datasets.forEach(function (ds, i) {
           const meta = chart.getDatasetMeta(i);
           if (meta.hidden || !meta.data.length) return;
           const pt = meta.data[meta.data.length - 1];
-          ctx.save();
-          ctx.font = '700 11px ' + (getComputedStyle(document.body).fontFamily || 'sans-serif');
-          ctx.fillStyle = ink;
-          ctx.textBaseline = 'middle';
-          ctx.fillText(ds.label, pt.x + 9, pt.y);
-          ctx.restore();
+          // Trim to the room available rather than running off the canvas.
+          let txt = ds.label;
+          if (ctx.measureText(txt).width > room) {
+            while (txt.length > 3 && ctx.measureText(txt + '\u2026').width > room) {
+              txt = txt.slice(0, -1);
+            }
+            txt += '\u2026';
+          }
+          marks.push({ y: pt.y, txt: txt });
         });
+
+        // Two reps ending on the same volume would print one over the other,
+        // so nudge them apart top-down. The label is the only thing carrying
+        // identity here - it cannot be allowed to overlap.
+        marks.sort(function (a, b) { return a.y - b.y; });
+        for (let i = 1; i < marks.length; i++) {
+          if (marks[i].y - marks[i - 1].y < 13) marks[i].y = marks[i - 1].y + 13;
+        }
+        marks.forEach(function (m) { ctx.fillText(m.txt, edge + 9, m.y); });
+        ctx.restore();
       },
     }],
   });

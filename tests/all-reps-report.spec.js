@@ -86,8 +86,12 @@ test('all reps compare side by side, month by month', async ({ page }) => {
 
   // Bars carry all six; the line chart is capped at four.
   expect(out.barSeries).toBe(6);
-  expect(out.lineSeries).toBe(4);
-  expect(out.lineLabels[3]).toBe('Everyone else (3)');
+  expect(out.lineSeries).toBe(6);   // every rep now has a line
+  expect(out.lineLabels).toEqual(out.barColours.map(d => d.n));   // same reps, same order
+  // and the same rep is the same colour on both charts
+  expect(out.lineColours).toEqual(out.barColours.map(d => d.c));
+  // orange is out of the set: against green it is unreadable to a colourblind eye
+  expect(out.lineColours).not.toContain('#eb6834');
 
   expect(errs).toEqual([]);
 });
