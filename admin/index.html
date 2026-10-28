@@ -6597,10 +6597,85 @@ const LogisticsApp = (() => {
       .addTo(map).bindTooltip('⛽ '+D.name,{permanent:false});
   }
 
+  /* ====== COORDINATES PASTED INTO THE SEARCH ======
+     WhatsApp's own 'send location' puts the raw numbers in the link, so
+     those can be read here with no network at all. A Google Maps SHORT
+     link (maps.app.goo.gl/...) does not contain the numbers - they live
+     behind a redirect on Google's server that a static page cannot
+     follow - so that form is reported honestly rather than guessed at.
+
+     Zimbabwe sits at latitude -15 to -23 and longitude 25 to 34. That is
+     what lets us catch the two mistakes that actually happen: a dropped
+     minus sign (17.8 is in Sudan) and the pair the wrong way round. */
+  const ZW_LAT = [-23.0, -15.0], ZW_LNG = [25.0, 34.0];
+  const inZW = (v, r) => v >= r[0] && v <= r[1];
+
+  function parseLatLng(raw){
+    const t = String(raw || '').trim();
+    if (!t) return null;
+    if (/maps\.app\.goo\.gl|goo\.gl\/maps/i.test(t)) return { shortLink: true };
+
+    const N = '(-?\\d{1,3}(?:\\.\\d+)?)';
+    const hit =
+        t.match(new RegExp('[?&]q=' + N + '\\s*,\\s*' + N))   // whatsapp, ?q=lat,lng
+     || t.match(new RegExp('[?&]ll=' + N + '\\s*,\\s*' + N))  // older maps links
+     || t.match(new RegExp('@' + N + ',' + N))                   // maps /@lat,lng,zoom
+     || t.match(new RegExp('^' + N + '\\s*[, ]\\s*' + N + '$'));  // typed by hand
+    if (!hit) return null;
+
+    const a = parseFloat(hit[1]), b = parseFloat(hit[2]);
+    if (!isFinite(a) || !isFinite(b)) return null;
+
+    if (inZW(a, ZW_LAT) && inZW(b, ZW_LNG)) return { lat:a, lng:b, fix:null };
+    if (inZW(-a, ZW_LAT) && inZW(b, ZW_LNG))
+      return { lat:-a, lng:b, fix:'Added the minus sign \u2014 ' + a + ' is in Sudan.' };
+    if (inZW(b, ZW_LAT) && inZW(a, ZW_LNG))
+      return { lat:b, lng:a, fix:'Swapped them \u2014 longitude was given first.' };
+    if (inZW(-b, ZW_LAT) && inZW(a, ZW_LNG))
+      return { lat:-b, lng:a, fix:'Swapped them and added the minus sign.' };
+    return { lat:a, lng:b, fix:null, outside:true };
+  }
+
+  function coordsHtml(C){
+    if (C.shortLink) return '<div class="grp">Coordinates</div><div class="none" style="text-align:left;">That is a shortened Google link \u2014 the numbers are not in it. Open it once, then copy the coordinates from the top of the Maps page.</div>';
+    const ll = C.lat.toFixed(5) + ', ' + C.lng.toFixed(5);
+    if (C.outside) return '<div class="grp">Coordinates</div><div class="none">' + ll +
+      ' is outside Zimbabwe \u2014 worth checking the numbers.</div>';
+    let h = '<div class="grp">Coordinates</div>' +
+      '<div class="hit" onclick="LogisticsApp.flyToCoords(' + C.lat + ',' + C.lng + ')">' +
+        '<span style="font-size:11px;">\uD83D\uDCCD</span><b>Go to this point</b>' +
+        '<span>' + ll + '</span></div>' +
+      '<div class="hit" onclick="LogisticsApp.addHere(' + C.lat + ',' + C.lng + ')">' +
+        '<span style="font-size:11px;">\u2795</span><b>Add a customer here</b>' +
+        '<span>new site</span></div>';
+    if (C.fix) h += '<div class="none" style="text-align:left;color:#BA7517;">' + esc(C.fix) + '</div>';
+    return h;
+  }
+
+  let coordMarker = null;
+  function flyToCoords(lat, lng){
+    closeSearch();
+    map.flyTo([lat, lng], 14, { duration: 0.8 });
+    if (coordMarker) map.removeLayer(coordMarker);
+    coordMarker = L.marker([lat, lng]).addTo(map)
+      .bindPopup(lat.toFixed(5) + ', ' + lng.toFixed(5)).openPopup();
+  }
+
+  function addHere(lat, lng){
+    closeSearch();
+    // dropPin() ends by calling startAdd(), which TOGGLES add mode. The map
+    // click path only ever reaches it with add mode already on, so set it
+    // here too or the map is left stuck in crosshair mode behind the form.
+    addMode = true;
+    dropPin({ lat: lat, lng: lng });
+  }
   /* ============ MAP SEARCH ============ */
   function mapSearch(){
     const q=(document.getElementById('msq').value||'').toLowerCase().trim();
     const el=document.getElementById('mres');
+    // Coordinates are read from the box as typed, not the lowercased copy.
+    const C = parseLatLng(document.getElementById('msq').value);
+    if (C) { el.innerHTML = coordsHtml(C); el.classList.add('on'); return; }
     if(q.length<2){ el.classList.remove('on'); return; }
 
     const seenSite={};
@@ -6872,7 +6947,8 @@ const LogisticsApp = (() => {
     closeAdd, saveCustomer, suggest, pickName,
     pickTruck, setStopLitres, removeStop, addStop,
     pickDepot,
-    flyToSite, flyToPlace,
+    flyToSite, flyToPlace, flyToCoords, addHere,
+    parseLatLng,   // pure, exported so the tests can drive it directly
   };
 })();
 
