@@ -29,6 +29,10 @@ for (const [app, url] of [['ops planner', '/ops/'], ['admin', '/admin/']]) {
         noMinus:  run('17.8252, 31.0335'),
         swapped:  run('31.0335, -17.8252'),
         shortUrl: run('https://maps.app.goo.gl/Ab1Cd2Ef3'),
+        // Tom's real link, straight off his phone - note the ?g_st=iw tail
+        realShort: run('https://maps.app.goo.gl/YEhvbmCnJDLt8vdt8?g_st=iw'),
+        // and the long form you get after opening that link in a browser
+        resolved: run('https://www.google.com/maps/place/Harare/@-17.8252,31.0335,17z/data=!3m1!4b1'),
         london:   run('51.5074, -0.1278'),
         aName:    run('Proton Bakers'),
         empty:    run(''),
@@ -57,6 +61,16 @@ for (const [app, url] of [['ops planner', '/ops/'], ['admin', '/admin/']]) {
     // a shortened google link genuinely cannot be resolved by a static page
     expect(out.shortUrl.shortLink).toBe(true);
     expect(out.shortUrl.lat).toBeUndefined();
+    // the real one off Tom's phone must be recognised as that case, tail and all,
+    // rather than falling through to "Nothing found" with no explanation
+    expect(out.realShort.shortLink).toBe(true);
+    expect(out.realShort.lat).toBeUndefined();
+
+    // ...and once he opens it, the address bar form IS readable. This is the
+    // whole manual workaround, so it has to keep working.
+    expect(out.resolved.lat).toBeCloseTo(HARARE.lat, 4);
+    expect(out.resolved.lng).toBeCloseTo(HARARE.lng, 4);
+    expect(out.resolved.fix).toBeNull();
 
     // a real point that is not in Zimbabwe is flagged, not silently flown to
     expect(out.london.outside).toBe(true);

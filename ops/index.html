@@ -1978,7 +1978,7 @@ function parseLatLng(raw){
 }
 
 function coordsHtml(C){
-  if (C.shortLink) return '<div class="grp">Coordinates</div><div class="none" style="text-align:left;">That is a shortened Google link \u2014 the numbers are not in it. Open it once, then copy the coordinates from the top of the Maps page.</div>';
+  if (C.shortLink) return '<div class="grp">Coordinates</div><div class="none" style="text-align:left;">Shortened Google link \u2014 the coordinates are not inside it. Tap it to open Maps, let it load, then copy the web address from the top of the page: it turns into the long form with the numbers in it, and that pastes straight in here.</div>';
   const ll = C.lat.toFixed(5) + ', ' + C.lng.toFixed(5);
   if (C.outside) return '<div class="grp">Coordinates</div><div class="none">' + ll +
     ' is outside Zimbabwe \u2014 worth checking the numbers.</div>';
