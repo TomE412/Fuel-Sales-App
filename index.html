@@ -93,6 +93,11 @@ background:var(--blue-light,#E6F1FB);border:1px solid var(--blue,#185FA5);color:
 border-radius:99px;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;}
 .rigpill.new{background:var(--blue,#185FA5);color:#fff;}
 .rigpill b{font-size:9.5px;letter-spacing:.06em;}
+.push-test-btn{width:100%;padding:11px;background:#fff;color:var(--blue);
+  border:1px solid var(--blue);border-radius:var(--radius-sm);font-family:var(--font);
+  font-size:14px;font-weight:700;cursor:pointer;}
+.push-test-btn:active{background:var(--blue-light);}
+.push-test-btn:disabled{opacity:.5;cursor:default;}
 .bellbtn{position:relative;background:none;border:none;font-size:21px;line-height:1;
   padding:4px 3px;cursor:pointer;flex-shrink:0;}
 .bellbtn:active{transform:scale(0.92);}
@@ -582,6 +587,23 @@ border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:poi
       <div style="font-size:12px;color:var(--text3);" id="more-email">—</div>
       <div style="font-size:12px;color:var(--text3);margin-top:2px;" id="more-role">—</div>
       <div style="font-size:11px;color:var(--text3);margin-top:8px;font-family:var(--mono);" id="more-version">—</div>
+    </div>
+
+    <div class="card" id="push-card">
+      <div class="card-title">&#128276; Phone notifications</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px;">
+        Get a buzz on your phone when the office books a truck for one of your
+        loads, sends it on its way, or marks it delivered &mdash; even when the
+        app is shut.
+      </div>
+      <button class="btn-primary" id="push-btn" onclick="pushButtonTapped()" style="display:none;">Turn on notifications</button>
+      <div id="push-state" style="font-size:12px;color:var(--text3);margin-top:10px;line-height:1.5;">Checking&hellip;</div>
+      <div id="push-extra" style="display:none;margin-top:10px;">
+        <button class="push-test-btn" id="push-test" onclick="sendTestPush()">Send me a test</button>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center;">
+          <a href="#" onclick="event.preventDefault();disablePush();" style="color:var(--text3);">Turn notifications off on this phone</a>
+        </div>
+      </div>
     </div>
 
     <div class="card" id="report-card" style="display:none;">
@@ -2523,6 +2545,199 @@ function markAllNotifsRead(){
   renderNotifBadge();
   openNotifs();
 }
+/* ================= PHONE NOTIFICATIONS =================
+   The buzz on a shut phone, as opposed to the bell inside the app.
+
+   The bell needs nothing from any of this. It is worked out from three
+   timestamps the app already has, works offline, and keeps working if every
+   line below fails. This part is strictly an extra: it asks the phone's
+   permission, stores what the browser maker gives back, and from then on the
+   office end can have the phone woken up.
+
+   The key below is the PUBLIC half of the signing pair. It is meant to be
+   visible - it is how the phone recognises that a message is ours. The
+   private half lives only in Supabase's secret store and must never appear
+   in this file: GitHub Pages serves this repository publicly. */
+
+const VAPID_PUBLIC_KEY = 'BJlwIpB2xU2G9UOwlYJXVM29SMPbE7itnadsEiyA66Y1e_NR0_FWIFM4gZxPwdtr_HO1wo1UP44-NXZ8V-jw75A';
+
+// The browser wants the key as raw bytes, not as the text above.
+function vapidKeyBytes(b64){
+  const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+function pushSupported(){
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+
+// An iPhone will not do web notifications at all unless the app has been
+// added to the Home Screen first. Detecting that is the difference between a
+// rep thinking the feature is broken and a rep knowing what to do next.
+function pushIsIOS(){
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function pushInstalled(){
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+         navigator.standalone === true;
+}
+
+// Which phone this is, so a rep with a phone and a tablet can tell their two
+// rows apart and 'it works on one but not the other' is answerable.
+function pushDeviceLabel(){
+  const ua = navigator.userAgent;
+  const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad'
+           : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows'
+           : /Mac/.test(ua) ? 'Mac' : 'Phone';
+  const br = /EdgA?\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera'
+           : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'browser';
+  return os + ' \u00b7 ' + br;
+}
+
+function pushSay(msg, btnLabel, showExtra){
+  const st = document.getElementById('push-state');
+  const btn = document.getElementById('push-btn');
+  const extra = document.getElementById('push-extra');
+  if (st) st.innerHTML = msg;
+  if (btn) {
+    btn.style.display = btnLabel ? '' : 'none';
+    if (btnLabel) btn.textContent = btnLabel;
+    btn.disabled = false;
+  }
+  if (extra) extra.style.display = showExtra ? '' : 'none';
+}
+
+/* What the card says depends on five different situations, and saying the
+   wrong one is worse than saying nothing: a rep told 'turn it on' by a
+   button that cannot work will tap it and conclude the app is broken. */
+async function renderPushCard(){
+  if (!document.getElementById('push-card')) return;
+
+  if (pushIsIOS() && !pushInstalled()) {
+    pushSay('On an iPhone, notifications only work once this app is on your ' +
+            'Home Screen.<br><br>Tap the <b>Share</b> button at the bottom of ' +
+            'Safari, choose <b>Add to Home Screen</b>, then open the app from ' +
+            'there and come back to this page.', null, false);
+    return;
+  }
+  if (!pushSupported()) {
+    pushSay('This browser cannot do notifications. The bell at the top of the ' +
+            'app still shows everything when you open it.', null, false);
+    return;
+  }
+  if (Notification.permission === 'denied') {
+    pushSay('Notifications are blocked for this app. To turn them back on, ' +
+            'open your browser\u2019s settings for this site and allow ' +
+            'notifications \u2014 the app cannot ask you again itself.', null, false);
+    return;
+  }
+
+  let sub = null;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    sub = await reg.pushManager.getSubscription();
+  } catch(e) {
+    pushSay('Could not check: ' + (e.message || e), 'Try again', false);
+    return;
+  }
+
+  if (sub && Notification.permission === 'granted') {
+    // Nothing more than this: the paragraph above the button already says
+    // what being on means, and saying it twice reads as two settings.
+    pushSay('<b style="color:var(--green-dark);">On for this phone.</b>', null, true);
+  } else {
+    pushSay('Off. The bell inside the app still works either way.',
+            'Turn on notifications', false);
+  }
+}
+
+async function pushButtonTapped(){
+  const btn = document.getElementById('push-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Asking\u2026'; }
+  try {
+    // Must be called straight off the tap. A browser refuses to ask on behalf
+    // of a page that was not just touched by the person.
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { await renderPushCard(); return; }
+
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidKeyBytes(VAPID_PUBLIC_KEY),
+      });
+    }
+    const j = sub.toJSON();
+
+    // .select() on purpose: row-level security refuses a write by matching no
+    // rows and reporting no error, so an empty result is the only way to tell
+    // a refusal from a success. Without this the rep would be told it was on
+    // and then never hear anything.
+    const { data, error } = await sb.from('push_subscriptions').upsert({
+      user_id: currentUser.id,
+      endpoint: j.endpoint,
+      p256dh: j.keys.p256dh,
+      auth: j.keys.auth,
+      device_label: pushDeviceLabel(),
+      expired_at: null,
+      last_error: null,
+    }, { onConflict: 'endpoint' }).select('id');
+    if (error) throw error;
+    if (!data || !data.length) throw new Error('the database would not store it');
+
+    await renderPushCard();
+  } catch(e) {
+    pushSay('Could not turn them on: ' + (e.message || e) +
+            '<br><br>The bell inside the app is unaffected.', 'Try again', false);
+  }
+}
+
+async function disablePush(){
+  if (!confirm('Stop this phone being notified about your loads?')) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      // Remove our record FIRST. If it went the other way round and the
+      // delete failed, the office would keep posting to a dead endpoint.
+      await sb.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+      await sub.unsubscribe();
+    }
+  } catch(e) {
+    alert('Could not turn them off: ' + (e.message || e));
+  }
+  await renderPushCard();
+}
+
+// Proves the whole chain - phone, keys, the function that does the sending -
+// before a real delivery depends on it.
+async function sendTestPush(){
+  const btn = document.getElementById('push-test');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
+  try {
+    const { data, error } = await sb.functions.invoke('notify-rep', { body: { stage: 'test' } });
+    if (error) throw error;
+    if (data && data.sent > 0) {
+      alert('Sent. It should arrive on this phone within a few seconds.');
+    } else {
+      // The function answers with WHY, so say that rather than 'failed'.
+      alert('Nothing was sent.' + String.fromCharCode(10,10) +
+            ((data && (data.skipped || data.error)) ||
+             (data && data.details && data.details.length
+                ? JSON.stringify(data.details[0]) : 'No reason given.')));
+    }
+  } catch(e) {
+    alert('Could not send a test: ' + (e.message || e) + String.fromCharCode(10,10) +
+          'If this says the function was not found, notify-rep has not been ' +
+          'deployed to Supabase yet.');
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'Send me a test'; }
+}
 /* ================= RIG DETAILS FOR THE REP =================
    Which truck, trailer and driver is taking each of the rep's loads, and the
    driver's number so they can ring him about an offload.
@@ -2851,6 +3066,7 @@ function showTab(id, btn) {
       document.getElementById('calc-cpkm').value = saved;
     }
     setupReportCard();
+    renderPushCard();
   }
 }
 

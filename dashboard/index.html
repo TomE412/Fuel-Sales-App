@@ -436,6 +436,26 @@ async function loadDueSoon() {
   }
 }
 
+/* Ask the server to buzz the rep's phone about one of their loads.
+
+   FIRE AND FORGET, on purpose. The rep's in-app bell is worked out from the
+   data itself and owes nothing to this call, so a push that fails - or a
+   notify-rep function that was never deployed at all - must never block or
+   undo the thing the office just did. Logged to the console, never shown:
+   there is nothing useful the person at this screen could do about it, and
+   the rep has not missed anything.
+
+   stage is 'assigned', 'en_route' or 'delivered'. */
+function notifyRep(saleId, stage){
+  try {
+    sb.functions.invoke('notify-rep', { body: { sale_id: Number(saleId), stage: stage } })
+      .then(r => {
+        if (r && r.error) console.log('push not sent:', r.error.message || r.error);
+        else if (r && r.data && r.data.skipped) console.log('push skipped:', r.data.skipped);
+      })
+      .catch(e => console.log('push not sent:', (e && e.message) || e));
+  } catch(e) { console.log('push not sent:', (e && e.message) || e); }
+}
 // Munya marks a delivery complete. Writes a timestamp (delivered_at) AND
 // sets status='delivered' so the existing upcoming/delivered split keeps
 // working. This is what clears the upcoming list — the fix for stale data.
@@ -448,6 +468,7 @@ async function markDelivered(id) {
       .update({ delivered_at: new Date().toISOString(), status: 'delivered' })
       .eq('id', id);
     if (error) throw error;
+    notifyRep(id, 'delivered');
     await fetchData();   // refresh immediately so it drops off upcoming
   } catch (e) {
     alert('Could not mark delivered: ' + (e.message || e));
@@ -531,6 +552,7 @@ async function setEnRoute(id){
       throw new Error('the database would not accept it \u2014 check you are signed in as ops or admin');
     }
     a.en_route_at = stamp; a.en_route_by = who;
+    notifyRep(id, 'en_route');
     renderAll();
   } catch(e) {
     alert('Could not send it on its way: ' + ((e && e.message) || e));
@@ -1132,6 +1154,7 @@ async function saveRig(){
     const { error } = await sb.from('delivery_assignment').upsert(row, { onConflict: 'sale_id' });
     if (error) throw error;
     ASSIGN[rigSaleId] = row;
+    notifyRep(rigSaleId, 'assigned');
     if (wasEnRoute) {
       sb.from('delivery_assignment')
         .update({ en_route_at: null, en_route_by: null })

@@ -2778,6 +2778,26 @@ setInterval(() => {
 // Accounts/Logistics bring in Phase 2/3. Only `init` (and `markDelivered`,
 // which needs to be reachable from inline onclick="" in generated HTML)
 // are exposed, via the returned object.
+/* Ask the server to buzz the rep's phone about one of their loads.
+
+   FIRE AND FORGET, on purpose. The rep's in-app bell is worked out from the
+   data itself and owes nothing to this call, so a push that fails - or a
+   notify-rep function that was never deployed at all - must never block or
+   undo the thing the office just did. Logged to the console, never shown:
+   there is nothing useful the person at this screen could do about it, and
+   the rep has not missed anything.
+
+   stage is 'assigned', 'en_route' or 'delivered'. */
+function notifyRep(saleId, stage){
+  try {
+    sb.functions.invoke('notify-rep', { body: { sale_id: Number(saleId), stage: stage } })
+      .then(r => {
+        if (r && r.error) console.log('push not sent:', r.error.message || r.error);
+        else if (r && r.data && r.data.skipped) console.log('push skipped:', r.data.skipped);
+      })
+      .catch(e => console.log('push not sent:', (e && e.message) || e));
+  } catch(e) { console.log('push not sent:', (e && e.message) || e); }
+}
 const OverviewApp = (() => {
   let sb; // set by init()
 
@@ -2869,6 +2889,7 @@ const OverviewApp = (() => {
         .update({ delivered_at: new Date().toISOString(), status: 'delivered' })
         .eq('id', id);
       if (error) throw error;
+      notifyRep(id, 'delivered');
       await fetchData();   // refresh immediately so it drops off upcoming
     } catch (e) {
       alert('Could not mark delivered: ' + (e.message || e));
@@ -2951,6 +2972,7 @@ const OverviewApp = (() => {
         throw new Error('the database would not accept it \u2014 check you are signed in as ops or admin');
       }
       a.en_route_at = stamp; a.en_route_by = myName;
+      notifyRep(id, 'en_route');
       renderAll();
     } catch(e) {
       alert('Could not send it on its way: ' + ((e && e.message) || e));
@@ -3529,6 +3551,7 @@ const OverviewApp = (() => {
       const { error } = await sb.from('delivery_assignment').upsert(row, { onConflict: 'sale_id' });
       if (error) throw error;
       ASSIGN[rigSaleId] = row;
+      notifyRep(rigSaleId, 'assigned');
       if (wasEnRoute) {
         sb.from('delivery_assignment')
           .update({ en_route_at: null, en_route_by: null })
@@ -8021,7 +8044,7 @@ const SalesApp = (() => {
     const { error } = await sb.from('sales').update({
       status: 'delivered', delivered_at: new Date().toISOString()
     }).eq('id', id);
-    if (!error) await loadSales();
+    if (!error) { notifyRep(id, 'delivered'); await loadSales(); }
   }
 
   // ---- RENDER ----
