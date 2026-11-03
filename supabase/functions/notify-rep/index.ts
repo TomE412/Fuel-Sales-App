@@ -18,11 +18,17 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")!;
-const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const VAPID_PUBLIC  = Deno.env.get("VAPID_PUBLIC_KEY")!;
-const VAPID_PRIVATE = Deno.env.get("VAPID_PRIVATE_KEY")!;
+// Supabase renamed its keys: the old anon / service_role pair became
+// publishable / secret on newer projects. Which pair a project gets depends on
+// when it was made, so both names are accepted and a missing one is reported
+// by name rather than crashing with "undefined".
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")
+                  ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? "";
+const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+                  ?? Deno.env.get("SUPABASE_SECRET_KEY") ?? "";
+const VAPID_PUBLIC  = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
+const VAPID_PRIVATE = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
 const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") ?? "mailto:marketing@skelsee.co.zw";
 
 const CORS = {
@@ -53,9 +59,21 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
 
-  if (!VAPID_PRIVATE || !VAPID_PUBLIC) {
-    return json({ error: "VAPID keys are not set on this function. " +
-      "Add VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY under Edge Functions -> Secrets." }, 500);
+  // Everything this needs, checked by name up front. A function that falls
+  // over on an undefined key three steps later is a support call; a function
+  // that names the missing setting is a thirty second fix.
+  const missing = [
+    !SUPABASE_URL  && "SUPABASE_URL",
+    !ANON_KEY      && "SUPABASE_ANON_KEY (or SUPABASE_PUBLISHABLE_KEY)",
+    !SERVICE_KEY   && "SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY)",
+    !VAPID_PUBLIC  && "VAPID_PUBLIC_KEY",
+    !VAPID_PRIVATE && "VAPID_PRIVATE_KEY",
+  ].filter(Boolean);
+  if (missing.length) {
+    return json({ error: "Missing from Edge Functions -> Secrets: " + missing.join(", "),
+                  hint: "The SUPABASE_* ones are normally provided automatically. " +
+                        "If one of those is named here, add it by hand from " +
+                        "Project Settings -> API." }, 500);
   }
 
   // ---- who is asking -------------------------------------------------
