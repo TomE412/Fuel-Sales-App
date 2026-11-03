@@ -178,6 +178,19 @@ border-radius:6px;font-family:var(--font);font-size:10.5px;font-weight:700;curso
 #sec-overview .undo-btn:hover{background:var(--amber-light);}
 #sec-overview .deliver-btn:active{transform:scale(0.97);}
 #sec-overview .deliver-btn:disabled{opacity:0.5;cursor:default;}
+#sec-overview .enroute-btn{width:100%;padding:6px 12px;margin-bottom:5px;background:#fff;
+  color:var(--blue,#185FA5);border:1px solid var(--blue,#185FA5);border-radius:7px;
+  font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
+#sec-overview .enroute-btn:hover{background:var(--blue-light,#E6F1FB);}
+#sec-overview .enroute-btn:active{transform:scale(0.97);}
+#sec-overview .enroute-btn:disabled{opacity:0.5;cursor:default;}
+#sec-overview .enroute-on{display:flex;align-items:center;justify-content:center;gap:5px;
+  width:100%;padding:6px 6px;margin-bottom:5px;background:var(--blue-light,#E6F1FB);
+  border:1px solid var(--blue,#185FA5);border-radius:7px;color:var(--blue,#185FA5);
+  font-size:11.5px;font-weight:800;white-space:nowrap;}
+#sec-overview .enroute-on .er-undo{background:none;border:none;color:var(--blue,#185FA5);
+  font-size:13px;line-height:1;padding:0 1px;cursor:pointer;}
+#sec-overview .enroute-on .er-undo:hover{opacity:.6;}
 #sec-overview .date-box{border-radius:7px;padding:4px 7px;text-align:center;flex-shrink:0;min-width:44px;background:var(--green-light);border:1px solid var(--green);}
 #sec-overview .date-box.today{background:var(--red-light);border-color:var(--red);}
 #sec-overview .date-num{font-size:13px;font-weight:700;font-family:var(--mono);color:var(--green-dark);line-height:1;}
@@ -2863,6 +2876,107 @@ const OverviewApp = (() => {
     }
   }
 
+  /* ================= ON ITS WAY =================
+     The middle stage of a delivery: the truck has actually left the yard.
+     Assigning a rig only says a truck is BOOKED for the load; this says it
+     has gone, which is the thing a rep is asked about on the phone.
+
+     Stored as one timestamp on the assignment (en_route_at), not as a
+     message to the rep. The rep app builds its own notification list from
+     the timestamp, so undoing this retracts the notification for free. */
+
+  // Today's departure shows a time; an older one shows the date. "14:32" on
+  // a load that left three days ago would read as if it had only just gone.
+  function enRouteWhen(ts){
+    // Caught before parsing on purpose: new Date(null) is 1 Jan 1970 rather
+    // than an invalid date, so a missing stamp would read as "01 Jan".
+    if (!ts) return '';
+    const d = new Date(ts);
+    if (isNaN(d)) return '';
+    const now = new Date();
+    const sameDay = d.getFullYear() === now.getFullYear() &&
+                    d.getMonth()    === now.getMonth() &&
+                    d.getDate()     === now.getDate();
+    return sameDay
+      ? String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0')
+      : String(d.getDate()).padStart(2,'0') + ' ' + MN[d.getMonth()];
+  }
+
+  function enRouteCell(saleId){
+    const a = ASSIGN[String(saleId)];
+    if (a && a.en_route_at) {
+      return '<div class="enroute-on" title="' +
+        (a.en_route_by ? 'Sent by ' + rigEsc(a.en_route_by) : 'On the road') + '">' +
+        '<span>&#128666; On its way &middot; ' + enRouteWhen(a.en_route_at) + '</span>' +
+        '<button class="er-undo" title="Not actually gone \u2014 undo" ' +
+          'onclick="event.stopPropagation();OverviewApp.clearEnRoute(\'' + saleId + '\')">&#8617;</button>' +
+        '</div>';
+    }
+    return '<button class="enroute-btn" ' +
+      'onclick="event.stopPropagation();OverviewApp.setEnRoute(\'' + saleId + '\')">' +
+      '&#128666; En route</button>';
+  }
+
+  async function setEnRoute(id){
+    const a = ASSIGN[String(id)];
+    // A load is on its way ON something. With no truck assigned the rep
+    // would be told their load had left with nothing to ring and no reg to
+    // look for, which is worse than being told nothing - so this opens the
+    // assign dialog instead of sending a message that cannot be acted on.
+    if (!a || !a.vehicle_id) {
+      alert('Assign a truck first.' + String.fromCharCode(10,10) +
+            'The rep gets told which truck is coming and who is driving it, so' +
+            String.fromCharCode(10) + 'there has to be a truck on the load before it can be sent.');
+      openRig(id);
+      return;
+    }
+    const sale = (allSales || []).find(x => String(x.id) === String(id));
+    const v = byId(FLEET.vehicles, a.vehicle_id);
+    if (!confirm('Tell the rep that ' + (sale ? sale.customer : 'this load') +
+                 ' is on its way' + (v ? ' on ' + v.fleet_no : '') + '?')) return;
+
+    const btns = document.querySelectorAll('#sec-overview .enroute-btn');
+    btns.forEach(b => b.disabled = true);
+    const stamp = new Date().toISOString();
+    try {
+      // .select() on purpose: row-level security refuses a write by matching
+      // NO rows and reporting no error at all, so an empty result is the
+      // only way to tell a refusal from a success.
+      const { data, error } = await sb.from('delivery_assignment')
+        .update({ en_route_at: stamp, en_route_by: myName })
+        .eq('sale_id', Number(id))
+        .select('sale_id');
+      if (error) throw error;
+      if (!data || !data.length) {
+        throw new Error('the database would not accept it \u2014 check you are signed in as ops or admin');
+      }
+      a.en_route_at = stamp; a.en_route_by = myName;
+      renderAll();
+    } catch(e) {
+      alert('Could not send it on its way: ' + ((e && e.message) || e));
+      btns.forEach(b => b.disabled = false);
+    }
+  }
+
+  async function clearEnRoute(id){
+    const sale = (allSales || []).find(x => String(x.id) === String(id));
+    if (!confirm('Take ' + (sale ? sale.customer : 'this load') + ' back off the road?' +
+                 String.fromCharCode(10,10) +
+                 'The rep will stop seeing it as on its way.')) return;
+    try {
+      const { data, error } = await sb.from('delivery_assignment')
+        .update({ en_route_at: null, en_route_by: null })
+        .eq('sale_id', Number(id))
+        .select('sale_id');
+      if (error) throw error;
+      if (!data || !data.length) throw new Error('the database would not accept it');
+      const a = ASSIGN[String(id)];
+      if (a) { a.en_route_at = null; a.en_route_by = null; }
+      renderAll();
+    } catch(e) {
+      alert('Could not change it back: ' + ((e && e.message) || e));
+    }
+  }
   /* Put a delivery back. The office uses this when a rep ticked the wrong
      row; the rep has the same thing in their own app.
 
@@ -3401,6 +3515,10 @@ const OverviewApp = (() => {
 
     const btn = document.getElementById('rig-save');
     btn.disabled = true; btn.textContent = 'Saving…';
+    // If this load is already on the road, swapping its truck means it is not
+    // on its way with the truck the rep was told about. Cleared separately,
+    // below, so it can never fail the save itself.
+    const wasEnRoute = !!(ASSIGN[rigSaleId] && ASSIGN[rigSaleId].en_route_at);
     // Re-assigning is a change the rep should see again, so clear the seen stamp.
     const row = { sale_id: Number(rigSaleId), vehicle_id, trailer_id, driver_id,
                   assigned_at: new Date().toISOString(), assigned_by: myName, seen_by_rep_at: null };
@@ -3411,6 +3529,12 @@ const OverviewApp = (() => {
       const { error } = await sb.from('delivery_assignment').upsert(row, { onConflict: 'sale_id' });
       if (error) throw error;
       ASSIGN[rigSaleId] = row;
+      if (wasEnRoute) {
+        sb.from('delivery_assignment')
+          .update({ en_route_at: null, en_route_by: null })
+          .eq('sale_id', Number(rigSaleId))
+          .then(({ error }) => { if (error) console.log('en route not cleared:', error.message); });
+      }
       closeRig();
       renderAll();
     } catch(e) {
@@ -3529,7 +3653,7 @@ const OverviewApp = (() => {
           </div>
           <div class="ord-rig">${rigBadge(s.id)}</div>
           <div class="order-litres ord-lit">${(s.litres||0).toLocaleString()} L</div>
-          <div class="ord-del"><button class="deliver-btn" onclick="OverviewApp.markDelivered('${s.id}')">✓ Mark delivered</button></div>
+          <div class="ord-del">${enRouteCell(s.id)}<button class="deliver-btn" onclick="OverviewApp.markDelivered('${s.id}')">✓ Mark delivered</button></div>
         </div>`;
       }).join('');
     } else {
@@ -3665,7 +3789,7 @@ const OverviewApp = (() => {
     setInterval(loadDueSoon, 30000);
   }
 
-  return { init, markDelivered, undoDelivered,
+  return { init, markDelivered, undoDelivered, setEnRoute, clearEnRoute, enRouteCell,
     openRig, closeRig, saveRig, clearRig, rigVehiclePicked,
     rigPicked, toggleRigAdvanced, copyDriverMessage,
     openDeliverySchedule, closeSchedule, copySchedule,
