@@ -211,6 +211,34 @@ test.describe('admin app — People and access', () => {
     await expect(page.locator('#pplpw-value')).toHaveValue('');
   });
 
+  test('the page scrolls, and the last person can actually be reached', async ({ page }) => {
+    await signInAdmin(page);
+    await openPeople(page);
+
+    // .admin-section.active is a flex column, so without flex-shrink:0 on the
+    // panels they are squashed to fit the screen rather than overflowing it,
+    // and overflow:hidden then clips the list with no scrollbar to recover
+    // it. Measuring is the only honest test: a screenshot of the top looks
+    // identical whether the page scrolls or not.
+    const m = await page.evaluate(() => {
+      const s = document.getElementById('sec-people');
+      return { client: s.clientHeight, scroll: s.scrollHeight };
+    });
+    expect(m.scroll, 'the content does not overflow, so nothing can scroll')
+      .toBeGreaterThan(m.client + 2);
+
+    const reached = await page.evaluate(() => {
+      const s = document.getElementById('sec-people');
+      s.scrollTop = s.scrollHeight;
+      const cards = document.querySelectorAll('.ppl-card');
+      const r = cards[cards.length - 1].getBoundingClientRect();
+      return r.top >= 0 && r.bottom <= window.innerHeight + 1;
+    });
+    expect(reached, 'the last person is still off screen at full scroll').toBe(true);
+    // The change log sits below everyone, so it is the real end of the page.
+    await expect(page.locator('#ppl-audit')).toBeVisible();
+  });
+
   test('every handler on this page carries its module prefix', async ({ page }) => {
     await signInAdmin(page);
     await openPeople(page);
