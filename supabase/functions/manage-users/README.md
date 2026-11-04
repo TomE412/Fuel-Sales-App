@@ -21,12 +21,25 @@ public to anybody who looks. So they happen here instead.
    here shows up as "Failed to send a request to the Edge Function".
 
 **3. Delete everything in the editor** and paste in the whole of
-   `supabase/functions/manage-users/index.ts` from this repository.
+   **`PASTE-THIS-INTO-SUPABASE.txt`** from this folder.
+
+   That file is the same code as `index.ts` with every comment taken out —
+   nothing but the code, so it is 212 lines instead of 263 and does not read as
+   a jumble of prose and code in Supabase's editor. `index.ts` stays the one to
+   read and to change; the .txt is generated from it, so after editing
+   `index.ts` the .txt has to be regenerated or the two will drift.
 
    Last time, the starter template was left in place by mistake and the
-   function deployed perfectly while doing nothing of the sort. If the first
-   line in the editor is not `// manage-users — sends...` then the paste did
-   not take.
+   function deployed perfectly while doing nothing of the sort. Check the very
+   first line in the editor reads:
+
+   ```
+   // manage-users — the People page's back end.
+   ```
+
+   and that the very last line is `});` on its own. If either is wrong the
+   paste did not take — and check the bottom as well as the top, because a
+   paste that got cut off halfway looks perfectly fine at the top.
 
 **4. Leave "Verify JWT" ON.**
 
