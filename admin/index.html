@@ -294,6 +294,24 @@ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #sec-accounts .retention-tabs{display:flex;gap:4px;margin-left:auto;}
 #sec-accounts .rt-tab{font-size:11px;font-weight:700;padding:4px 10px;border-radius:7px;cursor:pointer;color:var(--gray-text);background:var(--gray-light);}
 #sec-accounts .rt-tab.active{background:var(--red);color:#fff;}
+/* report mode tabs — blue, because this panel is the blue one */
+#sec-accounts .rep-tabs{display:flex;gap:4px;margin-left:auto;}
+#sec-accounts .rp-tab{font-size:11px;font-weight:700;padding:5px 12px;border-radius:7px;cursor:pointer;color:var(--gray-text);background:var(--gray-light);user-select:none;}
+#sec-accounts .rp-tab.active{background:var(--blue);color:#fff;}
+/* on-screen customer report */
+#sec-accounts .cr-head{padding:0 16px 4px;}
+#sec-accounts .cr-name{font-size:15px;font-weight:800;color:var(--text);letter-spacing:-0.01em;}
+#sec-accounts .cr-period{font-size:12px;color:var(--gray-text);margin-top:2px;}
+#sec-accounts .cr-sum{font-size:13px;font-weight:700;color:var(--blue-dark);margin-top:6px;}
+#sec-accounts .cr-note{font-size:11.5px;color:var(--amber);margin-top:3px;font-weight:600;}
+#sec-accounts .cr-foot{display:flex;justify-content:flex-end;padding:12px 16px 16px;}
+#cr-out td.num,#cr-out th.num{text-align:right;font-variant-numeric:tabular-nums;}
+/* nothing in this table sorts, so it must not behave like the tracker's does */
+#cr-out .tbl th{cursor:default;}
+#cr-out .tbl th:hover{background:var(--gray-light);}
+#cr-out tr.cr-total td{font-weight:800;border-top:2px solid var(--gray-border);background:var(--gray-light);}
+#cr-out tr.cr-total:hover td{background:var(--gray-light);}
+#cr-out td.tba{color:var(--amber);font-weight:700;}
 #sec-accounts .bk-chip{font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;cursor:pointer;color:var(--gray-text);background:#F0F0EE;border:1px solid var(--gray-light);}
 #sec-accounts .bk-chip.active{background:var(--green-dark);color:#fff;border-color:var(--green-dark);}
 #sec-accounts .ph-count{font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px;background:var(--amber-light);color:var(--amber);}
@@ -1071,24 +1089,60 @@ font-family:var(--mono);margin-bottom:5px;}
           <!-- SALES REPORT GENERATOR -->
           <div class="panel">
             <div class="ph">
-              <div class="ph-title" style="color:var(--blue-dark);">&#128196; Generate sales report (Excel)</div>
+              <div class="ph-title" style="color:var(--blue-dark);">&#128196; Generate sales report</div>
+              <div class="rep-tabs">
+                <span class="rp-tab active" data-m="rep" onclick="AccountsApp.setReportMode('rep')">By sales rep</span>
+                <span class="rp-tab" data-m="cust" onclick="AccountsApp.setReportMode('cust')">By customer</span>
+              </div>
             </div>
-            <div class="report-controls">
-              <div class="field">
-                <label>Sales rep</label>
-                <select id="rep-select"></select>
+
+            <!-- by rep: unchanged, month + year, straight to Excel -->
+            <div id="rep-mode">
+              <div class="report-controls">
+                <div class="field">
+                  <label>Sales rep</label>
+                  <select id="rep-select"></select>
+                </div>
+                <div class="field">
+                  <label>Month</label>
+                  <select id="month-select"></select>
+                </div>
+                <div class="field">
+                  <label>Year</label>
+                  <select id="year-select"></select>
+                </div>
+                <button class="gen-btn" id="gen-btn" onclick="AccountsApp.generateSalesReport()">Download Excel</button>
               </div>
-              <div class="field">
-                <label>Month</label>
-                <select id="month-select"></select>
-              </div>
-              <div class="field">
-                <label>Year</label>
-                <select id="year-select"></select>
-              </div>
-              <button class="gen-btn" id="gen-btn" onclick="AccountsApp.generateSalesReport()">Download Excel</button>
+              <div style="padding:0 16px 14px;font-size:12px;color:var(--gray-text);" id="report-status"></div>
             </div>
-            <div style="padding:0 16px 14px;font-size:12px;color:var(--gray-text);" id="report-status"></div>
+
+            <!-- by customer: shows on screen first, Excel second -->
+            <div id="cust-mode" style="display:none;">
+              <div class="report-controls">
+                <div class="field" style="min-width:240px;">
+                  <label>Customer</label>
+                  <input type="text" id="cr-customer" list="cr-list" placeholder="Type to search&hellip;" autocomplete="off">
+                  <datalist id="cr-list"></datalist>
+                </div>
+                <!-- month and year kept in one field each, so a narrow screen
+                     never leaves the From label stranded above the To boxes -->
+                <div class="field" style="min-width:170px;">
+                  <label>From</label>
+                  <div style="display:flex;gap:6px;">
+                    <select id="cr-fromM"></select><select id="cr-fromY"></select>
+                  </div>
+                </div>
+                <div class="field" style="min-width:170px;">
+                  <label>To</label>
+                  <div style="display:flex;gap:6px;">
+                    <select id="cr-toM"></select><select id="cr-toY"></select>
+                  </div>
+                </div>
+                <button class="gen-btn" id="cr-btn" onclick="AccountsApp.generateCustomerReport()">Generate</button>
+              </div>
+              <div style="padding:0 16px 14px;font-size:12px;color:var(--gray-text);" id="cr-status"></div>
+              <div id="cr-out"></div>
+            </div>
           </div>
         </div><!-- /view-tracker -->
 
@@ -4100,6 +4154,18 @@ function money2(v){ return '$' + Number(v).toFixed(3); }
     const yr = document.getElementById('year-select');
     const y = now.getFullYear();
     yr.innerHTML = [y,y-1,y+1].map(v=>'<option>'+v+'</option>').join('');
+
+    // The customer report's From / To. Both start on the month we are in, so
+    // the first Generate shows this month and widening it is two clicks.
+    ['cr-fromM','cr-toM'].forEach(id=>{
+      document.getElementById(id).innerHTML = MN.map((m,i)=>
+        '<option value="'+i+'"'+(i===now.getMonth()?' selected':'')+'>'+m+'</option>').join('');
+    });
+    ['cr-fromY','cr-toY'].forEach(id=>{
+      document.getElementById(id).innerHTML = [y-1,y,y+1].map(v=>
+        '<option value="'+v+'"'+(v===y?' selected':'')+'>'+v+'</option>').join('');
+    });
+
     const rep = document.getElementById('rep-select');
     try{
       const { data: reps } = await sb.from('profiles').select('full_name').in('role',['rep','admin']).order('full_name');
@@ -4175,6 +4241,232 @@ function money2(v){ return '$' + Number(v).toFixed(3); }
     XLSX.utils.book_append_sheet(wb,ws,'Sales');
     const safe = repLabel.replace(/[^a-z0-9]/gi,'_');
     XLSX.writeFile(wb,'Sales_'+safe+'_'+monthLabel.replace(' ','_')+'.xlsx');
+  }
+
+
+  // ===== CUSTOMER SALES REPORT =====
+  // The other half of the same panel. The rep report answers "what did Carrie
+  // sell in October". This one answers "what has this customer actually been
+  // sold", which is the question you ask with their statement in your hand.
+  //
+  // It shows on screen first and offers Excel second, on purpose: most of the
+  // time one look settles the query and nothing needs downloading.
+
+  let CR_ENTRIES = null;   // the picker list, built once on first use
+  let CR_ROWS = [];        // the sales currently on screen
+  let CR_META = null;      // {label, period} for the heading and the filename
+
+  function crEsc(s){
+    return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  // Reps type customer names freely, so every comparison in here goes through
+  // this. Without it "Zuva  Mabvuku" and "zuva mabvuku" are two customers.
+  function crNorm(s){ return String(s==null?'':s).trim().toLowerCase().replace(/\s+/g,' '); }
+
+  function setReportMode(m){
+    [...document.querySelectorAll('#sec-accounts .rp-tab')].forEach(t=>t.classList.toggle('active',t.dataset.m===m));
+    document.getElementById('rep-mode').style.display  = m==='rep'  ? '' : 'none';
+    document.getElementById('cust-mode').style.display = m==='cust' ? '' : 'none';
+    // Loaded on first use rather than at sign-in, because it reads every sale
+    // to find the names and there is no point paying for that until asked.
+    if(m==='cust' && !CR_ENTRIES) crLoadCustomers();
+  }
+
+  async function crLoadCustomers(){
+    const status = document.getElementById('cr-status');
+    status.textContent = 'Loading the customer list…';
+    try{
+      // Two sources on purpose. customer_locations is the proper list. The
+      // typed names out of sales are here so that a sale saved under a spelling
+      // nobody has tidied up yet is still reachable from this box — otherwise
+      // it would be in the database and invisible from this screen.
+      const [cl,sc] = await Promise.all([
+        perfFetchAll(()=>sb.from('customer_locations').select('id,invoice_name,app_name').order('id')),
+        perfFetchAll(()=>sb.from('sales').select('customer,customer_id').neq('status','cancelled').order('id'))
+      ]);
+
+      const entries=[], byName=new Map(), byId=new Map();
+      (cl||[]).forEach(c=>{
+        const label=(c.invoice_name||'').trim();
+        if(!label) return;
+        const e={label,id:c.id,names:new Set()};
+        [c.invoice_name,c.app_name].forEach(n=>{ const k=crNorm(n); if(k) e.names.add(k); });
+        entries.push(e); byId.set(c.id,e);
+        e.names.forEach(k=>{ if(!byName.has(k)) byName.set(k,e); });
+      });
+      entries.sort((a,b)=>a.label.localeCompare(b.label));
+
+      // Anything typed that no proper customer claims, by name or by link.
+      const orphans=new Map();
+      (sc||[]).forEach(s=>{
+        const k=crNorm(s.customer);
+        if(!k || byName.has(k)) return;
+        if(s.customer_id!=null && byId.has(s.customer_id)) return;
+        if(!orphans.has(k)) orphans.set(k,(s.customer||'').trim());
+      });
+      [...orphans.values()].sort((a,b)=>a.localeCompare(b)).forEach(raw=>{
+        entries.push({label:raw+'  (as typed)',id:null,names:new Set([crNorm(raw)])});
+      });
+
+      CR_ENTRIES = entries;
+      document.getElementById('cr-list').innerHTML =
+        entries.map(e=>'<option value="'+crEsc(e.label)+'"></option>').join('');
+      status.textContent = entries.length+' customers to choose from'+
+        (orphans.size?', '+orphans.size+' of them still only a typed name':'')+'.';
+    }catch(err){
+      status.textContent = 'Could not load the customer list: '+(err.message||err);
+    }
+  }
+
+  async function generateCustomerReport(){
+    const btn = document.getElementById('cr-btn');
+    const status = document.getElementById('cr-status');
+    const out = document.getElementById('cr-out');
+    const typed = document.getElementById('cr-customer').value.trim();
+
+    out.innerHTML=''; CR_ROWS=[]; CR_META=null;
+    if(!typed){ status.textContent='Pick a customer first.'; return; }
+    if(!CR_ENTRIES){ status.textContent='The customer list is still loading — try again in a moment.'; crLoadCustomers(); return; }
+
+    const entry = CR_ENTRIES.find(e=>crNorm(e.label)===crNorm(typed))
+               || CR_ENTRIES.find(e=>e.names.has(crNorm(typed)));
+    if(!entry){
+      status.textContent='Nothing called "'+typed+'" in the list. Start typing and pick one of the suggestions.';
+      return;
+    }
+
+    const fM=parseInt(document.getElementById('cr-fromM').value);
+    const fY=parseInt(document.getElementById('cr-fromY').value);
+    const tM=parseInt(document.getElementById('cr-toM').value);
+    const tY=parseInt(document.getElementById('cr-toY').value);
+    if(fY*12+fM > tY*12+tM){ status.textContent='The From month is later than the To month — swap them round.'; return; }
+
+    // First day of the From month, up to the first day of the month AFTER To,
+    // so the last month is whole whether it has 28 days or 31.
+    const start=fY+'-'+String(fM+1).padStart(2,'0')+'-01';
+    const eM=tM===11?0:tM+1, eY=tM===11?tY+1:tY;
+    const endEx=eY+'-'+String(eM+1).padStart(2,'0')+'-01';
+    const period=(fM===tM&&fY===tY) ? MONTHS[fM]+' '+fY
+                                    : MONTHS[fM]+' '+fY+' – '+MONTHS[tM]+' '+tY;
+
+    btn.disabled=true; btn.textContent='Working…'; status.textContent='';
+    try{
+      const rows = await perfFetchAll(()=>sb.from('sales')
+        .select('id,sale_date,delivery_date,fuel_type,litres,price_per_litre,price_tba,payment_term,payment_due,customer,customer_id')
+        .gte('sale_date',start).lt('sale_date',endEx)
+        .neq('status','cancelled')
+        .order('id'));
+
+      // Matched here rather than in the query. One customer can sit in the
+      // table under the proper name, the rep's alias and a couple of typos at
+      // once, and a WHERE on any single one of those would quietly lose sales.
+      const mine=(rows||[]).filter(s=>
+        (entry.id!=null && s.customer_id===entry.id) || entry.names.has(crNorm(s.customer))
+      ).sort((a,b)=>String(a.sale_date||'').localeCompare(String(b.sale_date||'')));
+
+      if(!mine.length){
+        status.textContent='No sales recorded for '+entry.label+' in '+period+'.';
+        btn.disabled=false; btn.textContent='Generate'; return;
+      }
+
+      let totL=0, totV=0, tbaN=0, tbaL=0;
+      mine.forEach(s=>{
+        const l=parseFloat(s.litres)||0, p=parseFloat(s.price_per_litre)||0;
+        // A zero price is never a real price here — the valid_price rule only
+        // allows it when the sale is TBA. So a 0 is treated as TBA either way,
+        // because showing $0.00 would understate the customer's account.
+        const tba=!!s.price_tba||p===0;
+        totL+=l;
+        if(tba){ tbaN++; tbaL+=l; } else { totV+=l*p; }
+      });
+
+      CR_ROWS=mine; CR_META={label:entry.label,period};
+
+      out.innerHTML=
+        '<div class="cr-head">'+
+          '<div class="cr-name">'+crEsc(entry.label)+'</div>'+
+          '<div class="cr-period">'+period+'</div>'+
+          '<div class="cr-sum">'+mine.length+' sale'+(mine.length===1?'':'s')+
+            ' · '+totL.toLocaleString()+' L · '+money(totV)+'</div>'+
+          (tbaN?'<div class="cr-note">'+tbaN+' sale'+(tbaN===1?'':'s')+' priced TBA ('+
+            tbaL.toLocaleString()+' L) — in the litres, left out of the value because '+
+            'no price has been agreed yet.</div>':'')+
+        '</div>'+
+        '<div style="overflow-x:auto;padding:10px 0 0;"><table class="tbl"><thead><tr>'+
+          '<th>Date</th><th>Delivered</th>'+
+          '<th>Fuel</th><th class="num">Litres</th>'+
+          '<th class="num">Price/L</th><th class="num">Value</th>'+
+          '<th>Terms</th><th>Due</th>'+
+        '</tr></thead><tbody>'+
+        mine.map(s=>{
+          const l=parseFloat(s.litres)||0, p=parseFloat(s.price_per_litre)||0;
+          const tba=!!s.price_tba||p===0;
+          return '<tr>'+
+            '<td>'+fmtDate((s.sale_date||'').split('T')[0])+'</td>'+
+            '<td>'+fmtDate((s.delivery_date||'').split('T')[0])+'</td>'+
+            '<td>'+crEsc(s.fuel_type||'')+'</td>'+
+            '<td class="num">'+l.toLocaleString()+'</td>'+
+            (tba ? '<td class="num tba">TBA</td><td class="num tba">—</td>'
+                 : '<td class="num">'+money2(p)+'</td><td class="num">'+money(l*p)+'</td>')+
+            '<td>'+crEsc(s.payment_term||'')+'</td>'+
+            '<td>'+fmtDate((s.payment_due||'').split('T')[0])+'</td>'+
+          '</tr>';
+        }).join('')+
+        // One cell per column rather than a colspan, so the totals sit exactly
+        // under the figures they add up. A colspan here let the browser lay the
+        // last row out differently from the rest and the numbers drifted.
+        '<tr class="cr-total">'+
+          '<td>TOTAL</td><td></td><td></td>'+
+          '<td class="num">'+totL.toLocaleString()+'</td>'+
+          '<td></td>'+
+          '<td class="num">'+money(totV)+'</td>'+
+          '<td></td><td></td>'+
+        '</tr></tbody></table></div>'+
+        '<div class="cr-foot"><button class="gen-btn" onclick="AccountsApp.buildCustomerExcel()">&#128229; Download Excel</button></div>';
+    }catch(e){
+      status.textContent='Error: '+(e.message||e);
+    }
+    btn.disabled=false; btn.textContent='Generate';
+  }
+
+  function buildCustomerExcel(){
+    if(!CR_ROWS.length||!CR_META) return;
+    const rows=[];
+    rows.push(['SKELSEE TRADING — CUSTOMER SALES REPORT']);
+    rows.push([CR_META.label+' · '+CR_META.period]);
+    rows.push(['Generated: '+new Date().toLocaleString()]);
+    rows.push([]);
+    rows.push(['Sale Date','Delivery Date','Fuel','Litres','Price/L','Value','Payment Term','Payment Due']);
+    let totL=0,totV=0,tbaN=0;
+    CR_ROWS.forEach(s=>{
+      const l=parseFloat(s.litres)||0, p=parseFloat(s.price_per_litre)||0;
+      const tba=!!s.price_tba||p===0;
+      totL+=l;
+      if(tba) tbaN++; else totV+=l*p;
+      rows.push([
+        (s.sale_date||'').split('T')[0],
+        (s.delivery_date||'').split('T')[0],
+        s.fuel_type||'',
+        l,
+        // The word TBA, not a 0. A spreadsheet column of zeroes gets summed by
+        // whoever opens it next and read as "charged nothing".
+        tba?'TBA':p,
+        tba?'TBA':l*p,
+        s.payment_term||'',
+        (s.payment_due||'').split('T')[0]
+      ]);
+    });
+    rows.push([]);
+    rows.push(['','','TOTALS',totL,'',totV,'','']);
+    if(tbaN) rows.push(['','',tbaN+' sale(s) priced TBA — litres counted above, value left out']);
+
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:12},{wch:13},{wch:8},{wch:10},{wch:9},{wch:13},{wch:13},{wch:12}];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'Sales');
+    const safe=CR_META.label.replace(/[^a-z0-9]/gi,'_').slice(0,40);
+    XLSX.writeFile(wb,'Sales_'+safe+'_'+CR_META.period.replace(/[^a-z0-9]/gi,'_')+'.xlsx');
   }
 
   // ===== MONTHLY VOLUME CHART =====
@@ -5520,6 +5812,7 @@ function money2(v){ return '$' + Number(v).toFixed(3); }
     switchView, setTrackFilter, sortTrack, renderTracker,
     markCostChecked, markAllCostChecked,
     generateSalesReport,
+    setReportMode, generateCustomerReport, buildCustomerExcel,
     setRetTab, sortRet, renderRetention,
     setBookFilter, sortBook, renderBook,
     setGapFilter, renderGaps,
