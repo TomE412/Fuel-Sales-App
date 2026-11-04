@@ -905,6 +905,14 @@ font-family:var(--mono);margin-bottom:5px;}
 .ppl-name{font-size:15px;font-weight:800;color:var(--text);letter-spacing:-0.01em;}
 .ppl-email{font-size:12px;color:var(--gray-text);font-family:var(--mono);}
 .ppl-seen{margin-left:auto;font-size:11px;color:var(--gray-text);white-space:nowrap;}
+.ppl-login{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px;}
+.ppl-login-lbl{font-size:10px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:.05em;}
+.ppl-login-val{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--text);
+  background:var(--gray-light);border:1px solid var(--gray-border);border-radius:6px;padding:3px 8px;}
+.ppl-copy{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--blue);
+  background:none;border:none;cursor:pointer;padding:2px 4px;font-family:var(--font);}
+.ppl-copy:hover{text-decoration:underline;}
+.ppl-login-pw{font-size:10.5px;color:var(--gray-text);font-style:italic;}
 .ppl-badge{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:99px;background:var(--blue-light);color:var(--blue-dark);}
 .ppl-badge.you{background:var(--green-light);color:var(--green-dark);}
 .ppl-badge.off{background:var(--red-light);color:var(--red);}
@@ -9627,10 +9635,21 @@ const PeopleApp = (() => {
         (off ? '<span class="ppl-badge off">switched off</span>' : '') +
         // Only claim somebody has never signed in when we can actually see
         // sign-ins. Without the function that is unknown, not "never".
-        '<span class="ppl-seen">' + esc(p.email || '') +
-          (p.email && HAVE_FUNCTION ? ' · ' : '') +
+        '<span class="ppl-seen">' +
           (HAVE_FUNCTION ? esc(fmtSeen(p.last_sign_in_at)) : '') + '</span>' +
       '</div>' +
+      // The email IS the username - there is no separate one - so it gets a
+      // line and a label of its own rather than sitting in grey at the edge
+      // where it reads as a footnote.
+      (p.email
+        ? '<div class="ppl-login"><span class="ppl-login-lbl">Username</span>' +
+            '<span class="ppl-login-val">' + esc(p.email) + '</span>' +
+            '<button class="ppl-copy" onclick="PeopleApp.copyLogin(this,\'' +
+              esc(p.email) + '\')">copy</button>' +
+            '<span class="ppl-login-pw">Password: not viewable by anyone &mdash; ' +
+              'use Set password</span>' +
+          '</div>'
+        : '') +
       '<div class="ppl-apps">' + ticks + '</div>' +
       warn +
       '<div class="ppl-row2">' +
@@ -9762,6 +9781,25 @@ const PeopleApp = (() => {
     }
   }
 
+  function copyLogin(btn, email){
+    const done = () => { btn.textContent = 'copied'; setTimeout(() => { btn.textContent = 'copy'; }, 1500); };
+    // navigator.clipboard needs a secure context and is not there on every
+    // browser, so fall back to the old textarea trick rather than silently
+    // doing nothing.
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(email).then(done, () => fallback(email, done));
+    } else {
+      fallback(email, done);
+    }
+    function fallback(text, after){
+      const t = document.createElement('textarea');
+      t.value = text; t.style.position = 'fixed'; t.style.opacity = '0';
+      document.body.appendChild(t); t.select();
+      try { document.execCommand('copy'); after(); } catch(e) { /* nothing more to try */ }
+      document.body.removeChild(t);
+    }
+  }
+
   async function setActive(id, on){
     const p = PEOPLE.find(x => x.id === id);
     if(!p) return;
@@ -9865,7 +9903,7 @@ const PeopleApp = (() => {
   return {
     init, load,
     toggleApp, setRole, setActive,
-    openPw, closePw, savePw,
+    openPw, closePw, savePw, copyLogin,
     openAdd, closeAdd, saveAdd,
     // exported for the browser tests
     _appsFor: appsFor, _defaultApps: defaultApps, _apps: APPS,
