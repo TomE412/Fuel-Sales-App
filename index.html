@@ -995,6 +995,35 @@ async function signOutFromLock() {
 }
 
 // ---- AUTH ----
+
+// ===== FRONT DOOR =====
+// Which apps a person may open is set on the People page in the admin app.
+// app_access null means "not set": fall back to exactly what their role has
+// always allowed, so nobody's access changed on the day this shipped. An
+// EMPTY array is different - it means they were deliberately given nothing.
+//
+// This is the door, not the lock. What a person can actually READ is enforced
+// by the database on every table, and that has not changed. Closing this door
+// stops them opening the app; the database is what stops them reading data.
+const APP_DEFAULTS = {
+  rep:      ['sales','admin'],
+  ops:      ['sales','ops','dashboard','admin'],
+  accounts: ['sales','accounts','admin'],
+  admin:    ['sales','accounts','ops','dashboard','admin'],
+};
+const THIS_APP = 'sales';
+function appDoorRefusal(profile){
+  if (!profile) return 'We could not read your profile. Try again in a moment.';
+  if (profile.active === false) return 'This login has been switched off. Speak to Tom.';
+  const list = Array.isArray(profile.app_access)
+    ? profile.app_access
+    : (APP_DEFAULTS[profile.role] || []);
+  if (list.indexOf(THIS_APP) === -1) {
+    return 'You have not been given access to this app. Speak to Tom.';
+  }
+  return null;
+}
+
 async function signIn() {
   const email = document.getElementById('auth-email').value.trim();
   const password = document.getElementById('auth-password').value;
@@ -1027,7 +1056,16 @@ async function signIn() {
     const { data: profile } = await withTimeout(
       sb.from('profiles').select('*').eq('id', data.user.id).single(), 8000
     );
-    if (profile) localStorage.setItem('cached_profile', JSON.stringify(profile));
+    if (profile) {
+      const refused = appDoorRefusal(profile);
+      if (refused) {
+        await sb.auth.signOut();
+        localStorage.removeItem('cached_profile');
+        errEl.textContent = refused;
+        return;
+      }
+      localStorage.setItem('cached_profile', JSON.stringify(profile));
+    }
   } catch (e) { /* carry on — loadUser handles a missing profile */ }
 
   // After email/password login, no need for PIN this session

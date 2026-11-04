@@ -7,12 +7,10 @@ const { test, expect } = require('@playwright/test');
 const EMAIL = process.env.TEST_ADMIN_EMAIL;
 const PASSWORD = process.env.TEST_ADMIN_PASSWORD;
 
-// The admin shell asks for a `delivery_plan` table that does not exist, at
-// sign-in, long before the Accounts tab opens. It is a real pre-existing fault
-// and logged here as a known one so it cannot mask a new error — anything else
-// in the console still fails these tests.
-const KNOWN_PREEXISTING = /delivery_plan|Failed to load resource/;
-const realErrors = (errors) => errors.filter(e => !KNOWN_PREEXISTING.test(e));
+// Pre-existing console faults in the admin app, listed in one shared place so
+// this spec and people-access.spec.js cannot disagree about them. Anything not
+// on that list still fails these tests.
+const { realErrors } = require('./known-noise');
 
 const FAKE_SALES = [
   { id: 1, sale_date: '2026-03-04', delivery_date: '2026-03-05', fuel_type: 'Diesel',

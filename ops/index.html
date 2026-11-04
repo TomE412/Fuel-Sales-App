@@ -660,14 +660,45 @@ async function signIn(){
   if(!email||!password){err.textContent='Enter email and password.';return;}
   const {data,error}=await sb.auth.signInWithPassword({email,password});
   if(error){err.textContent=error.message;return;}
-  const {data:p}=await sb.from('profiles').select('full_name,role').eq('id',data.user.id).single();
+  const {data:p}=await sb.from('profiles').select('full_name,role,app_access,active').eq('id',data.user.id).single();
   if(!p||!['ops','admin'].includes(p.role)){
     await sb.auth.signOut();
     err.textContent='Access denied — ops or admin only.';
     return;
   }
+  const refused=appDoorRefusal(p);
+  if(refused){ await sb.auth.signOut(); err.textContent=refused; return; }
   start(p);
 }
+
+// ===== FRONT DOOR =====
+// Which apps a person may open is set on the People page in the admin app.
+// app_access null means "not set": fall back to exactly what their role has
+// always allowed, so nobody's access changed on the day this shipped. An
+// EMPTY array is different - it means they were deliberately given nothing.
+//
+// This is the door, not the lock. What a person can actually READ is enforced
+// by the database on every table, and that has not changed. Closing this door
+// stops them opening the app; the database is what stops them reading data.
+const APP_DEFAULTS = {
+  rep:      ['sales','admin'],
+  ops:      ['sales','ops','dashboard','admin'],
+  accounts: ['sales','accounts','admin'],
+  admin:    ['sales','accounts','ops','dashboard','admin'],
+};
+const THIS_APP = 'ops';
+function appDoorRefusal(profile){
+  if (!profile) return 'We could not read your profile. Try again in a moment.';
+  if (profile.active === false) return 'This login has been switched off. Speak to Tom.';
+  const list = Array.isArray(profile.app_access)
+    ? profile.app_access
+    : (APP_DEFAULTS[profile.role] || []);
+  if (list.indexOf(THIS_APP) === -1) {
+    return 'You have not been given access to this app. Speak to Tom.';
+  }
+  return null;
+}
+
 async function signOut(){
   await sb.auth.signOut();
   document.getElementById('app').classList.remove('active');
@@ -2131,8 +2162,9 @@ document.getElementById('pw').addEventListener('keydown',e=>{if(e.key==='Enter')
 
 sb.auth.getSession().then(async ({data})=>{
   if(data.session?.user){
-    const {data:p}=await sb.from('profiles').select('full_name,role').eq('id',data.session.user.id).single();
-    if(p&&['ops','admin'].includes(p.role)) start(p);
+    const {data:p}=await sb.from('profiles').select('full_name,role,app_access,active').eq('id',data.session.user.id).single();
+    // A reload must not walk back in through a door that has since been shut.
+    if(p&&['ops','admin'].includes(p.role)&&!appDoorRefusal(p)) start(p);
   }
 }).catch(()=>{});
 

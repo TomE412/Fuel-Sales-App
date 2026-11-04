@@ -362,12 +362,14 @@ async function dashSignIn() {
   if (error) { errEl.textContent = error.message; return; }
 
   // Check role - only ops and admin can view dashboard
-  const { data: profile } = await sb.from('profiles').select('full_name,role').eq('id', data.user.id).single();
+  const { data: profile } = await sb.from('profiles').select('full_name,role,app_access,active').eq('id', data.user.id).single();
   if (!profile || !['ops','admin'].includes(profile.role)) {
     await sb.auth.signOut();
     errEl.textContent = 'Access denied. Ops or admin role required.';
     return;
   }
+  const refused = appDoorRefusal(profile);
+  if (refused) { await sb.auth.signOut(); errEl.textContent = refused; return; }
 
   DASH_WHO = profile.full_name || null;
   document.getElementById('auth-wrap').classList.add('hidden');
@@ -1388,11 +1390,41 @@ function renderAll() {
   }
 }
 
+
+// ===== FRONT DOOR =====
+// Which apps a person may open is set on the People page in the admin app.
+// app_access null means "not set": fall back to exactly what their role has
+// always allowed, so nobody's access changed on the day this shipped. An
+// EMPTY array is different - it means they were deliberately given nothing.
+//
+// This is the door, not the lock. What a person can actually READ is enforced
+// by the database on every table, and that has not changed. Closing this door
+// stops them opening the app; the database is what stops them reading data.
+const APP_DEFAULTS = {
+  rep:      ['sales','admin'],
+  ops:      ['sales','ops','dashboard','admin'],
+  accounts: ['sales','accounts','admin'],
+  admin:    ['sales','accounts','ops','dashboard','admin'],
+};
+const THIS_APP = 'dashboard';
+function appDoorRefusal(profile){
+  if (!profile) return 'We could not read your profile. Try again in a moment.';
+  if (profile.active === false) return 'This login has been switched off. Speak to Tom.';
+  const list = Array.isArray(profile.app_access)
+    ? profile.app_access
+    : (APP_DEFAULTS[profile.role] || []);
+  if (list.indexOf(THIS_APP) === -1) {
+    return 'You have not been given access to this app. Speak to Tom.';
+  }
+  return null;
+}
+
 // Check for existing session
 sb.auth.getSession().then(async ({ data }) => {
   if (data.session?.user) {
-    const { data: profile } = await sb.from('profiles').select('full_name,role').eq('id', data.session.user.id).single();
-    if (profile && ['ops','admin'].includes(profile.role)) {
+    const { data: profile } = await sb.from('profiles').select('full_name,role,app_access,active').eq('id', data.session.user.id).single();
+    // A reload must not walk back in through a door that has since been shut.
+    if (profile && ['ops','admin'].includes(profile.role) && !appDoorRefusal(profile)) {
       DASH_WHO = profile.full_name || null;
       document.getElementById('auth-wrap').classList.add('hidden');
       document.getElementById('dash-wrap').classList.add('active');

@@ -881,6 +881,63 @@ font-family:var(--mono);margin-bottom:5px;}
 @media(max-width:600px){
   #view-reports .metrics-grid{grid-template-columns:1fr;}
 }
+
+/* ===== PEOPLE AND ACCESS ===== */
+#sec-people{overflow-y:auto;padding:14px;}
+/* Every section in this file scopes its own .panel / .ph / .gen-btn - there
+   are no global ones - so without these the header renders as bare text. */
+#sec-people .panel{background:#fff;border-radius:12px;border:1px solid var(--gray-border);overflow:hidden;}
+#sec-people .ph{padding:12px 16px;border-bottom:1px solid var(--gray-border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+#sec-people .ph-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;}
+#sec-people .gen-btn{padding:9px 16px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
+#sec-people .gen-btn:disabled{opacity:0.6;cursor:not-allowed;}
+#sec-people .ppl-card:first-of-type{margin-top:12px;}
+/* A card each rather than a table row: every person carries five tick boxes,
+   a dropdown and two buttons, which a table squeezes into unreadable columns
+   and wraps badly the moment anybody opens this on a phone. */
+.ppl-card{border:1px solid var(--gray-border);border-radius:10px;padding:14px 16px;margin:0 16px 10px;background:var(--surface);}
+.ppl-card.off{background:var(--gray-light);opacity:0.75;}
+.ppl-top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
+.ppl-name{font-size:15px;font-weight:800;color:var(--text);letter-spacing:-0.01em;}
+.ppl-email{font-size:12px;color:var(--gray-text);font-family:var(--mono);}
+.ppl-seen{margin-left:auto;font-size:11px;color:var(--gray-text);white-space:nowrap;}
+.ppl-badge{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:99px;background:var(--blue-light);color:var(--blue-dark);}
+.ppl-badge.you{background:var(--green-light);color:var(--green-dark);}
+.ppl-badge.off{background:var(--red-light);color:var(--red);}
+.ppl-apps{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;}
+.ppl-app{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);
+  border:1.5px solid var(--gray-border);border-radius:8px;padding:6px 11px;cursor:pointer;user-select:none;background:var(--gray-light);}
+.ppl-app.on{border-color:var(--blue);background:var(--blue-light);color:var(--blue-dark);}
+.ppl-app input{width:14px;height:14px;accent-color:var(--blue);cursor:pointer;margin:0;}
+.ppl-row2{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;}
+.ppl-row2 label{font-size:11px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:.05em;}
+.ppl-role{padding:8px 10px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;
+  font-family:var(--font);font-size:12px;outline:none;max-width:280px;}
+.ppl-acts{margin-left:auto;display:flex;gap:8px;}
+.ppl-btn{padding:8px 13px;border:1.5px solid var(--gray-border);background:var(--surface);border-radius:8px;
+  font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;color:var(--text);white-space:nowrap;}
+.ppl-btn:hover{background:var(--gray-light);}
+.ppl-btn.danger{color:var(--red);border-color:var(--red-light);}
+.ppl-warn{margin-top:10px;font-size:11.5px;font-weight:600;color:var(--amber);line-height:1.5;
+  background:var(--amber-light);border-radius:7px;padding:8px 10px;}
+.ppl-saved{font-size:11px;font-weight:700;color:var(--green-dark);}
+/* change log */
+.aud-row{display:flex;gap:10px;align-items:baseline;padding:8px 16px;border-bottom:1px solid var(--gray-light);font-size:12px;}
+.aud-when{font-family:var(--mono);font-size:11px;color:var(--gray-text);white-space:nowrap;min-width:116px;}
+.aud-what{font-weight:700;}
+.aud-detail{color:var(--gray-text);}
+/* modals reuse the shared .lmodal/.lbox look */
+.ppl-field{margin-bottom:14px;}
+.ppl-field label{display:block;font-size:11px;font-weight:700;color:var(--gray-text);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;}
+.ppl-field input,.ppl-field select{width:100%;padding:11px 12px;background:var(--gray-light);border:1.5px solid var(--gray-border);
+  border-radius:8px;font-family:var(--font);font-size:14px;outline:none;color:var(--text);}
+.ppl-field input:focus{border-color:var(--blue);background:#fff;}
+.ppl-hint{font-size:11px;color:var(--gray-text);margin-top:4px;line-height:1.45;}
+.ppl-err{font-size:12px;font-weight:600;color:var(--red);min-height:16px;margin-bottom:10px;}
+@media(max-width:600px){
+  .ppl-card{margin:0 8px 10px;padding:12px;}
+  .ppl-acts{margin-left:0;width:100%;}
+}
 </style>
 </head>
 <body>
@@ -2262,6 +2319,86 @@ font-family:var(--mono);margin-bottom:5px;}
       </div>
     </div>
 
+    <!-- ===== PEOPLE AND ACCESS =====
+         Only ever rendered for whoever holds profiles.can_manage_users. The
+         tab itself is not built for anybody else (see renderNav), and the
+         database refuses the writes regardless (profiles_guard trigger), so
+         hiding the tab is convenience rather than the security itself. -->
+    <div class="admin-section" id="sec-people">
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="ph">
+          <div class="ph-title">&#128101; People and access</div>
+          <button class="gen-btn" onclick="PeopleApp.openAdd()" style="margin-left:auto;">+ Add person</button>
+        </div>
+        <div id="ppl-status" style="padding:12px 16px;font-size:12px;color:var(--gray-text);">Loading&hellip;</div>
+        <div id="ppl-list"></div>
+      </div>
+
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title">&#128203; Change log</div>
+          <div style="font-size:11px;color:var(--gray-text);margin-left:auto;">every password reset and access change</div>
+        </div>
+        <div id="ppl-audit"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- SET A PASSWORD -->
+<div class="lmodal" id="pplpw">
+  <div class="lbox">
+    <h2>New password</h2>
+    <div class="lsub" id="pplpw-who">&mdash;</div>
+    <div class="ppl-err" id="pplpw-err"></div>
+    <div class="ppl-field">
+      <label>Password</label>
+      <input type="text" id="pplpw-value" autocomplete="off" spellcheck="false">
+      <div class="ppl-hint">At least 8 characters. Shown as you type on purpose &mdash;
+        you have to be able to read it back to them.</div>
+    </div>
+    <div style="background:var(--amber-light);border-radius:8px;padding:10px;font-size:11.5px;
+                line-height:1.55;color:var(--amber);font-weight:600;margin-bottom:16px;">
+      They stay signed in on their phone until they sign out. Tell them the new
+      password before they do, or they are locked out until you reach them.
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="ppl-btn" style="flex:1;" onclick="PeopleApp.closePw()">Cancel</button>
+      <button class="gen-btn" style="flex:1;" id="pplpw-save" onclick="PeopleApp.savePw()">Set password</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD A PERSON -->
+<div class="lmodal" id="ppladd">
+  <div class="lbox">
+    <h2>Add a person</h2>
+    <div class="lsub">A login, and what they can reach</div>
+    <div class="ppl-err" id="ppladd-err"></div>
+    <div class="ppl-field">
+      <label>Full name</label>
+      <input type="text" id="ppladd-name" autocomplete="off">
+      <div class="ppl-hint">Exactly as it should appear on their sales.</div>
+    </div>
+    <div class="ppl-field">
+      <label>Email</label>
+      <input type="email" id="ppladd-email" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="ppl-field">
+      <label>Password</label>
+      <input type="text" id="ppladd-pw" autocomplete="off" spellcheck="false">
+      <div class="ppl-hint">At least 8 characters. Write it down before you save.</div>
+    </div>
+    <div class="ppl-field">
+      <label>What they do</label>
+      <select id="ppladd-role"></select>
+      <div class="ppl-hint">You can tick exactly which apps they open once they are added.</div>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="ppl-btn" style="flex:1;" onclick="PeopleApp.closeAdd()">Cancel</button>
+      <button class="gen-btn" style="flex:1;" id="ppladd-save" onclick="PeopleApp.saveAdd()">Add person</button>
+    </div>
   </div>
 </div>
 
@@ -2379,9 +2516,14 @@ const SECTIONS = [
   { key:'overview',   label:'📊 Overview',   roles:['admin','ops','accounts'] },
   { key:'accounts',   label:'💰 Accounts',   roles:['admin','accounts'] },
   { key:'logistics',  label:'🚛 Logistics',  roles:['admin','ops'] },
-  { key:'sales',      label:'⛽ Sales',       roles:['admin','rep'] }
+  { key:'sales',      label:'⛽ Sales',       roles:['admin','rep'] },
+  // Gated on profiles.can_manage_users, not on a role: there are three
+  // administrators and only one user administrator. `flag` is checked in
+  // renderNav alongside roles.
+  { key:'people',     label:'👥 People',      roles:['admin'], flag:'can_manage_users' }
 ];
 let myRole = null;
+let canManageUsers = false;
 let activeSection = 'overview';
 
 // Supabase calls do not time out on their own. On a weak cellular signal a
@@ -2433,15 +2575,57 @@ async function adminSignOut(){
 let currentUser = null;
 let currentProfile = null;
 
+
+// ===== FRONT DOOR =====
+// Which apps a person may open is set on the People page in the admin app.
+// app_access null means "not set": fall back to exactly what their role has
+// always allowed, so nobody's access changed on the day this shipped. An
+// EMPTY array is different - it means they were deliberately given nothing.
+//
+// This is the door, not the lock. What a person can actually READ is enforced
+// by the database on every table, and that has not changed. Closing this door
+// stops them opening the app; the database is what stops them reading data.
+const APP_DEFAULTS = {
+  rep:      ['sales','admin'],
+  ops:      ['sales','ops','dashboard','admin'],
+  accounts: ['sales','accounts','admin'],
+  admin:    ['sales','accounts','ops','dashboard','admin'],
+};
+const THIS_APP = 'admin';
+function appDoorRefusal(profile){
+  if (!profile) return 'We could not read your profile. Try again in a moment.';
+  if (profile.active === false) return 'This login has been switched off. Speak to Tom.';
+  const list = Array.isArray(profile.app_access)
+    ? profile.app_access
+    : (APP_DEFAULTS[profile.role] || []);
+  if (list.indexOf(THIS_APP) === -1) {
+    return 'You have not been given access to this app. Speak to Tom.';
+  }
+  return null;
+}
+
 // Shared by both a fresh sign-in and an existing-session restore on reload.
 let myName = null;
 async function enterWithProfile(user){
   const userId = user.id;
-  const { data: profile } = await sb.from('profiles').select('full_name,role').eq('id', userId).single();
+  // can_manage_users decides whether the People tab exists at all. Added by
+  // phase_e1; naming a column that is not there would make PostgREST reject
+  // this query outright and nobody could sign in, so it is read separately
+  // and a failure simply leaves the tab hidden.
+  const { data: profile } = await sb.from('profiles')
+    .select('full_name,role,app_access,active').eq('id', userId).single();
   if(!profile || !['admin','ops','accounts','rep'].includes(profile.role)) return false;
+  // Until now this app accepted every role, so a rep could open it and see
+  // whichever sections their role allowed. The tick box is the gate now.
+  if(appDoorRefusal(profile)) return false;
 
   myRole = profile.role;
   myName = profile.full_name || null;
+  try{
+    const { data: f } = await sb.from('profiles')
+      .select('can_manage_users').eq('id', userId).maybeSingle();
+    canManageUsers = !!(f && f.can_manage_users);
+  }catch(e){ canManageUsers = false; }
   currentUser = user;
   currentProfile = profile;
   // Cache identity for the offline-first PIN path (startupFromCache(), below)
@@ -2461,6 +2645,7 @@ async function enterWithProfile(user){
   if(SECTIONS.find(s=>s.key==='overview').roles.includes(myRole)) OverviewApp.init(sb);
   if(SECTIONS.find(s=>s.key==='accounts').roles.includes(myRole)) AccountsApp.init(sb);
   if(SECTIONS.find(s=>s.key==='logistics').roles.includes(myRole)) LogisticsApp.init(sb);
+  if(canManageUsers) PeopleApp.init(sb);
   if(SECTIONS.find(s=>s.key==='sales').roles.includes(myRole)){
     SalesApp.init(sb);
     await SalesApp.loadUser(user, false); // no PIN needed — we just authenticated live
@@ -2547,7 +2732,7 @@ function renderNav(){
   // Remove any previously-rendered tabs (keep .brand and .signout).
   nav.querySelectorAll('.admin-tab').forEach(el => el.remove());
   const signout = nav.querySelector('.signout');
-  SECTIONS.filter(s => s.roles.includes(myRole)).forEach(s => {
+  SECTIONS.filter(s => s.roles.includes(myRole) && (!s.flag || canManageUsers)).forEach(s => {
     const el = document.createElement('div');
     el.className = 'admin-tab' + (s.key==='overview' ? ' active' : '');
     el.textContent = s.label;
@@ -2736,6 +2921,7 @@ async function signOutFromLock() {
   currentUser = null;
   currentProfile = null;
   myRole = null;
+  canManageUsers = false;
   document.getElementById('lock-screen').classList.remove('active');
   document.getElementById('admin-shell').classList.remove('active');
   document.getElementById('auth-wrap').classList.remove('hidden');
@@ -9236,6 +9422,449 @@ const SalesApp = (() => {
     calcDelivery, changePin, changePassword,
     removeGoneQuietCustomer,
     runReport, runCommissionReport, runPerformanceReport, closePerfReport, setupReportCard,
+  };
+})();
+
+/* ================= PEOPLE AND ACCESS (admin only) =================
+   Same IIFE-namespacing pattern as the other sections, so every inline
+   handler in the markup above must carry the PeopleApp. prefix or it
+   silently does nothing.
+
+   WHAT LIVES WHERE, AND WHY
+   The tick boxes, the role and the on/off switch are ordinary columns on
+   profiles, written straight from this browser. Emails, last-seen and
+   passwords are not: those need the project's secret key, which can never
+   be in a file this repository publishes, so they go through the
+   manage-users Edge Function. If that function is not deployed, this page
+   still lists everyone and still changes access - it just cannot show an
+   email or set a password, and says so rather than looking broken. */
+const PeopleApp = (() => {
+  let sb = null;
+  let PEOPLE = [];
+  let AUDIT = [];
+  let HAVE_COLUMNS = true;    // app_access / active exist (phase_e2 has been run)
+  let HAVE_FUNCTION = true;   // manage-users is deployed
+  let pwTarget = null;
+
+  // Which apps exist, and which roles the DATABASE will actually serve data
+  // to in each one. A tick box opens the door; this is whether there is
+  // anything behind it. The two are separate and both have to be right.
+  const APPS = [
+    { key:'sales',     label:'Sales app',    needs:['rep','ops','accounts','admin'] },
+    { key:'accounts',  label:'Accounts',     needs:['accounts','admin'] },
+    { key:'ops',       label:'Ops planner',  needs:['ops','admin'] },
+    { key:'dashboard', label:'TV dashboard', needs:['ops','admin'] },
+    { key:'admin',     label:'Admin app',    needs:['rep','ops','accounts','admin'] },
+  ];
+
+  const ROLES = [
+    { key:'rep',      label:'Sales rep — their own sales only' },
+    { key:'ops',      label:'Operations — loads, trucks and routes' },
+    { key:'accounts', label:'Accounts — money, costs and invoicing' },
+    { key:'admin',    label:'Full administrator — everything' },
+  ];
+  const roleLabel = r => (ROLES.find(x => x.key === r) || {}).label || 'no role set';
+
+  // What a role can open when nothing has been ticked. Deliberately identical
+  // to what each app allows today, so somebody with no ticks behaves exactly
+  // as they did before any of this existed.
+  const defaultApps = role => APPS.filter(a => a.needs.includes(role)).map(a => a.key);
+  // null means "not set, carry on as before". An empty array is different: it
+  // means Tom has deliberately ticked nothing, and that person opens nothing.
+  const appsFor = p => (Array.isArray(p.app_access) ? p.app_access : defaultApps(p.role));
+
+  function esc(s){
+    return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // Never toISOString here: it converts to UTC first, which in Harare reads
+  // back as the previous day for anything before 02:00.
+  function fmtSeen(ts){
+    if(!ts) return 'never signed in';
+    const d = new Date(ts);
+    if(isNaN(d)) return '';
+    const now = new Date();
+    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const days = Math.floor((midnight - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+    if(days <= 0) return 'seen today';
+    if(days === 1) return 'seen yesterday';
+    if(days < 30) return 'seen ' + days + ' days ago';
+    return 'seen ' + String(d.getDate()).padStart(2,'0') + '/' +
+           String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+  }
+
+  function fmtWhen(ts){
+    const d = new Date(ts);
+    if(isNaN(d)) return '';
+    return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') +
+      ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+
+  async function init(client){
+    sb = client;
+    await load();
+  }
+
+  async function load(){
+    const status = document.getElementById('ppl-status');
+    status.textContent = 'Loading…';
+
+    // The function is the better source - it is the only one that knows
+    // emails and last-seen - so it is tried first and the direct read is the
+    // fallback, not the other way round.
+    let people = null;
+    try{
+      const { data, error } = await sb.functions.invoke('manage-users', { body:{ action:'list' } });
+      if(error) throw error;
+      if(data && data.error) throw new Error(data.error);
+      people = (data && data.people) || [];
+      HAVE_FUNCTION = true;
+    }catch(e){
+      HAVE_FUNCTION = false;
+      people = await loadFromProfiles();
+      if(people === null){
+        status.innerHTML = '<span style="color:var(--red);font-weight:700;">Could not load anybody: ' +
+          esc(e.message || e) + '</span>';
+        return;
+      }
+    }
+
+    PEOPLE = people.sort((a,b) => String(a.full_name||'~').localeCompare(String(b.full_name||'~')));
+    await loadAudit();
+    render();
+  }
+
+  // Direct read, used when manage-users is not deployed yet. No emails and no
+  // last-seen, because neither is readable without the secret key.
+  async function loadFromProfiles(){
+    let r = await sb.from('profiles')
+      .select('id, full_name, role, app_access, active, can_manage_users, created_at');
+    if(r.error){
+      // PostgREST rejects the whole query when it names a column that does
+      // not exist, so a missing phase_e2 looks exactly like a broken page.
+      // Retry without the new columns and say which SQL is outstanding.
+      HAVE_COLUMNS = false;
+      r = await sb.from('profiles').select('id, full_name, role, can_manage_users, created_at');
+      if(r.error) return null;
+    }
+    return (r.data || []).map(p => ({
+      ...p,
+      app_access: HAVE_COLUMNS ? p.app_access : null,
+      active: HAVE_COLUMNS ? p.active : true,
+      email: null, last_sign_in_at: null, banned: false,
+    }));
+  }
+
+  async function loadAudit(){
+    try{
+      const { data, error } = await sb.from('admin_audit')
+        .select('at, actor_name, action, target_name, detail')
+        .order('at', { ascending:false }).limit(50);
+      if(error) throw error;
+      AUDIT = data || [];
+    }catch(e){ AUDIT = null; }   // table not there yet; the panel says so
+  }
+
+  function render(){
+    const status = document.getElementById('ppl-status');
+    const notes = [];
+    notes.push(PEOPLE.length + ' people with a login');
+    if(!HAVE_COLUMNS){
+      notes.push('<span style="color:var(--amber);font-weight:700;">tick boxes are off until ' +
+        'phase_e2_user_admin.sql has been run</span>');
+    }
+    if(!HAVE_FUNCTION){
+      notes.push('<span style="color:var(--amber);font-weight:700;">emails, last-seen and passwords ' +
+        'need the manage-users function deployed</span>');
+    }
+    status.innerHTML = notes.join(' · ');
+
+    document.getElementById('ppl-list').innerHTML = PEOPLE.map(card).join('');
+    renderAudit();
+  }
+
+  function card(p){
+    const mine = currentUser && p.id === currentUser.id;
+    const apps = appsFor(p);
+    const off = p.active === false || p.banned;
+
+    const ticks = APPS.map(a => {
+      const on = apps.indexOf(a.key) !== -1;
+      return '<label class="ppl-app' + (on ? ' on' : '') + '">' +
+        '<input type="checkbox"' + (on ? ' checked' : '') + (HAVE_COLUMNS ? '' : ' disabled') +
+        ' onchange="PeopleApp.toggleApp(\'' + p.id + '\',\'' + a.key + '\',this.checked)">' +
+        esc(a.label) + '</label>';
+    }).join('');
+
+    // Say plainly when a tick cannot work. A door that opens onto an empty
+    // room is worse than a locked one, because it looks like a bug in the app
+    // rather than a permission that was never granted.
+    const dead = APPS.filter(a => apps.indexOf(a.key) !== -1 && !a.needs.includes(p.role));
+    let warn = '';
+    if(dead.length){
+      warn = '<div class="ppl-warn">Ticked but will show nothing: <b>' +
+        dead.map(a => esc(a.label)).join(', ') + '</b>. ' +
+        'The database only serves that to ' +
+        [...new Set(dead.flatMap(a => a.needs))].filter(r => r !== 'rep').join(' or ') +
+        '. Change what they do below, or untick it.</div>';
+    } else if(Array.isArray(p.app_access) && !p.app_access.length){
+      warn = '<div class="ppl-warn">Nothing ticked — this person cannot open any app at all.</div>';
+    } else if(!p.role){
+      warn = '<div class="ppl-warn">No role on this login, so no app will let them in. ' +
+        'Pick what they do below.</div>';
+    }
+
+    return '<div class="ppl-card' + (off ? ' off' : '') + '" id="ppl-' + p.id + '">' +
+      '<div class="ppl-top">' +
+        '<span class="ppl-name">' + esc(p.full_name || '(no name on this login)') + '</span>' +
+        (p.can_manage_users ? '<span class="ppl-badge">user admin</span>' : '') +
+        (mine ? '<span class="ppl-badge you">you</span>' : '') +
+        (off ? '<span class="ppl-badge off">switched off</span>' : '') +
+        // Only claim somebody has never signed in when we can actually see
+        // sign-ins. Without the function that is unknown, not "never".
+        '<span class="ppl-seen">' + esc(p.email || '') +
+          (p.email && HAVE_FUNCTION ? ' · ' : '') +
+          (HAVE_FUNCTION ? esc(fmtSeen(p.last_sign_in_at)) : '') + '</span>' +
+      '</div>' +
+      '<div class="ppl-apps">' + ticks + '</div>' +
+      warn +
+      '<div class="ppl-row2">' +
+        '<label>What they do</label>' +
+        '<select class="ppl-role" onchange="PeopleApp.setRole(\'' + p.id + '\',this.value)">' +
+          ROLES.map(r => '<option value="' + r.key + '"' + (r.key === p.role ? ' selected' : '') + '>' +
+            esc(r.label) + '</option>').join('') +
+        '</select>' +
+        '<span class="ppl-saved" id="ppl-saved-' + p.id + '"></span>' +
+        '<span class="ppl-acts">' +
+          '<button class="ppl-btn" onclick="PeopleApp.openPw(\'' + p.id + '\')"' +
+            (HAVE_FUNCTION ? '' : ' disabled title="needs the manage-users function"') +
+            '>Set password</button>' +
+          (mine ? '' :
+            '<button class="ppl-btn' + (off ? '' : ' danger') + '" onclick="PeopleApp.setActive(\'' +
+            p.id + '\',' + (off ? 'true' : 'false') + ')"' +
+            (HAVE_FUNCTION ? '' : ' disabled title="needs the manage-users function"') + '>' +
+            (off ? 'Switch back on' : 'Switch off') + '</button>') +
+        '</span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderAudit(){
+    const el = document.getElementById('ppl-audit');
+    if(AUDIT === null){
+      el.innerHTML = '<div style="padding:14px 16px;font-size:12px;color:var(--amber);font-weight:600;">' +
+        'The change log table is not there yet — run phase_e2_user_admin.sql.</div>';
+      return;
+    }
+    if(!AUDIT.length){
+      el.innerHTML = '<div style="padding:14px 16px;font-size:12px;color:var(--gray-text);">' +
+        'Nothing changed yet. Every password reset and access change will appear here.</div>';
+      return;
+    }
+    const WORDS = {
+      password_set:   'set a new password for',
+      access_changed: 'changed access for',
+      role_changed:   'changed what',
+      person_added:   'added',
+      switched_off:   'switched off',
+      switched_on:    'switched back on',
+    };
+    el.innerHTML = AUDIT.map(a =>
+      '<div class="aud-row">' +
+        '<span class="aud-when">' + esc(fmtWhen(a.at)) + '</span>' +
+        '<span><span class="aud-what">' + esc(a.actor_name || 'someone') + '</span> ' +
+          esc(WORDS[a.action] || a.action) + ' ' +
+          '<span class="aud-what">' + esc(a.target_name || '') + '</span>' +
+          (a.detail ? ' <span class="aud-detail">— ' + esc(a.detail) + '</span>' : '') +
+        '</span>' +
+      '</div>').join('');
+  }
+
+  // ---- saving ----------------------------------------------------------
+  // Row-level security refuses an UPDATE by matching ZERO rows and reporting
+  // no error at all. So every write here asks for the row back and treats an
+  // empty answer as the failure it is, rather than reporting a cheerful
+  // success that changed nothing.
+  async function saveProfile(id, patch){
+    const { data, error } = await sb.from('profiles').update(patch).eq('id', id).select('id');
+    if(error) throw error;
+    if(!data || !data.length){
+      throw new Error('the database would not accept it — only a user administrator can change this');
+    }
+  }
+
+  async function audit(action, target, detail){
+    try{
+      await sb.from('admin_audit').insert({
+        actor_id: currentUser ? currentUser.id : null,
+        actor_name: myName || null,
+        action, target_id: target.id, target_name: target.full_name || null, detail,
+      });
+    }catch(e){ /* the change still happened; a missing log entry must not undo it */ }
+  }
+
+  function flash(id, text, bad){
+    const el = document.getElementById('ppl-saved-' + id);
+    if(!el) return;
+    el.textContent = text;
+    el.style.color = bad ? 'var(--red)' : 'var(--green-dark)';
+    if(!bad) setTimeout(() => { if(el) el.textContent = ''; }, 2500);
+  }
+
+  async function toggleApp(id, key, on){
+    const p = PEOPLE.find(x => x.id === id);
+    if(!p) return;
+    const before = appsFor(p);
+    const after = on ? [...new Set([...before, key])] : before.filter(k => k !== key);
+    try{
+      await saveProfile(id, { app_access: after });
+      p.app_access = after;
+      await audit('access_changed', p,
+        (on ? 'can now open ' : 'can no longer open ') + (APPS.find(a => a.key === key) || {}).label);
+      // Render BEFORE flashing. render() rebuilds the whole list, so a message
+      // written first is wiped a millisecond later and every save looks as
+      // though it did nothing.
+      render();
+      flash(id, 'saved');
+    }catch(e){
+      render();   // put the tick back where it really is
+      flash(id, e.message || String(e), true);
+    }
+  }
+
+  async function setRole(id, role){
+    const p = PEOPLE.find(x => x.id === id);
+    if(!p) return;
+    if(role === p.role) return;
+    // Making somebody a full administrator hands them every sale, cost price
+    // and margin in the business. Worth one deliberate click.
+    if(role === 'admin' && !confirm(
+        (p.full_name || 'This person') + ' would become a full administrator and see ' +
+        'every sale, cost price and customer in the business.\n\nGo ahead?')){
+      render();
+      return;
+    }
+    const was = p.role;
+    try{
+      await saveProfile(id, { role });
+      p.role = role;
+      await audit('role_changed', p, 'from ' + (was || 'none') + ' to ' + role);
+      render();
+      flash(id, 'saved');
+    }catch(e){
+      render();
+      flash(id, e.message || String(e), true);
+    }
+  }
+
+  async function setActive(id, on){
+    const p = PEOPLE.find(x => x.id === id);
+    if(!p) return;
+    if(!on && !confirm((p.full_name || 'This person') +
+        ' will be signed out and blocked from signing in anywhere.\n\n' +
+        'Their past sales are untouched and you can switch them back on at any time.\n\nGo ahead?')) return;
+    flash(id, on ? 'switching on…' : 'switching off…');
+    try{
+      const { data, error } = await sb.functions.invoke('manage-users',
+        { body:{ action:'set_active', user_id:id, active:on } });
+      if(error) throw error;
+      if(data && data.error) throw new Error(data.error);
+      await load();
+    }catch(e){
+      flash(id, e.message || String(e), true);
+    }
+  }
+
+  // ---- password --------------------------------------------------------
+  function openPw(id){
+    const p = PEOPLE.find(x => x.id === id);
+    if(!p) return;
+    pwTarget = p;
+    document.getElementById('pplpw-who').textContent =
+      (p.full_name || 'this login') + (p.email ? ' · ' + p.email : '');
+    document.getElementById('pplpw-value').value = '';
+    document.getElementById('pplpw-err').textContent = '';
+    document.getElementById('pplpw').classList.add('on');
+    setTimeout(() => document.getElementById('pplpw-value').focus(), 50);
+  }
+  function closePw(){
+    document.getElementById('pplpw').classList.remove('on');
+    // Not left sitting in the DOM for the next person who opens this screen.
+    document.getElementById('pplpw-value').value = '';
+    pwTarget = null;
+  }
+  async function savePw(){
+    if(!pwTarget) return;
+    const err = document.getElementById('pplpw-err');
+    const btn = document.getElementById('pplpw-save');
+    const pw = document.getElementById('pplpw-value').value;
+    if(pw.length < 8){ err.textContent = 'At least 8 characters.'; return; }
+    err.textContent = '';
+    btn.disabled = true; btn.textContent = 'Setting…';
+    try{
+      const { data, error } = await sb.functions.invoke('manage-users',
+        { body:{ action:'set_password', user_id:pwTarget.id, password:pw } });
+      if(error) throw error;
+      if(data && data.error) throw new Error(data.error);
+      const who = pwTarget.full_name || 'they';
+      closePw();
+      alert('Done. Tell ' + who + ' their new password now — it cannot be read back later.');
+      await load();
+    }catch(e){
+      err.textContent = e.message || String(e);
+    }
+    btn.disabled = false; btn.textContent = 'Set password';
+  }
+
+  // ---- add a person ----------------------------------------------------
+  function openAdd(){
+    document.getElementById('ppladd-role').innerHTML =
+      ROLES.map(r => '<option value="' + r.key + '"' + (r.key === 'rep' ? ' selected' : '') + '>' +
+        esc(r.label) + '</option>').join('');
+    ['ppladd-name','ppladd-email','ppladd-pw'].forEach(i => document.getElementById(i).value = '');
+    document.getElementById('ppladd-err').textContent = '';
+    document.getElementById('ppladd').classList.add('on');
+    setTimeout(() => document.getElementById('ppladd-name').focus(), 50);
+  }
+  function closeAdd(){
+    document.getElementById('ppladd').classList.remove('on');
+    document.getElementById('ppladd-pw').value = '';
+  }
+  async function saveAdd(){
+    const err = document.getElementById('ppladd-err');
+    const btn = document.getElementById('ppladd-save');
+    const name = document.getElementById('ppladd-name').value.trim();
+    const email = document.getElementById('ppladd-email').value.trim();
+    const pw = document.getElementById('ppladd-pw').value;
+    const role = document.getElementById('ppladd-role').value;
+    if(name.length < 2){ err.textContent = 'A name is needed.'; return; }
+    if(!email.includes('@')){ err.textContent = 'A real email address is needed.'; return; }
+    if(pw.length < 8){ err.textContent = 'The password needs at least 8 characters.'; return; }
+    err.textContent = '';
+    btn.disabled = true; btn.textContent = 'Adding…';
+    try{
+      const { data, error } = await sb.functions.invoke('manage-users',
+        { body:{ action:'create_person', full_name:name, email, password:pw, role } });
+      if(error) throw error;
+      if(data && data.error) throw new Error(data.error);
+      closeAdd();
+      alert(name + ' can now sign in with ' + email + '.\n\nTell them the password now — ' +
+        'it cannot be read back later.');
+      await load();
+    }catch(e){
+      err.textContent = e.message || String(e);
+    }
+    btn.disabled = false; btn.textContent = 'Add person';
+  }
+
+  return {
+    init, load,
+    toggleApp, setRole, setActive,
+    openPw, closePw, savePw,
+    openAdd, closeAdd, saveAdd,
+    // exported for the browser tests
+    _appsFor: appsFor, _defaultApps: defaultApps, _apps: APPS,
   };
 })();
 
