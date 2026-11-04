@@ -15,13 +15,10 @@ const KNOWN_NOISE = [
   // named rather than left to luck.
   /Cannot set properties of null/,
   /n-ripe|ripe-list/,
-  // The manage-users Edge Function. Until it is deployed, every call fails the
-  // CORS preflight, which the browser reports in three different ways. The
-  // People page handles this and says so on screen; these lines can come out
-  // of this list once the function is live.
-  /manage-users/,
-  /CORS policy/,
-  /ERR_FAILED/,
+  // manage-users was deployed on 4 Nov 2026, so its CORS-preflight failures
+  // are no longer expected and are no longer tolerated here. If they come
+  // back, the function has stopped answering and the tests should say so.
+  //
   // The generic companion to all of the above. Deliberately last, and
   // deliberately broad: a bare "failed to load resource" carries no detail to
   // match on, so it can only ever be tolerated wholesale.
