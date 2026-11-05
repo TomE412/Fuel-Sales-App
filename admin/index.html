@@ -6203,6 +6203,8 @@ const LogisticsApp = (() => {
     if(!confirm('Mark '+s.customer+' as delivered?')) return;
     const {error}=await sb.from('sales').update({status:'delivered',delivered_at:new Date().toISOString()}).eq('id',id);
     if(error){ alert('Could not update: '+error.message); return; }
+    // Ops mark most deliveries from this screen, and it never told the rep.
+    notifyRep(id,'delivered');
     await loadSales();
   }
 

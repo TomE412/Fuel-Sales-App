@@ -826,6 +826,26 @@ function haversine(a,b,c,d){
   return 2*R*Math.asin(Math.sqrt(h));
 }
 
+/* Ask the server to buzz the rep's phone about one of their loads.
+
+   FIRE AND FORGET, on purpose. The rep's in-app bell is worked out from the
+   data itself and owes nothing to this call, so a push that fails - or a
+   notify-rep function that is having a bad day - must never block or undo the
+   thing the office just did. Logged, never shown: there is nothing useful the
+   person at this screen could do about it.
+
+   stage is 'assigned' or 'delivered'. */
+function notifyRep(saleId, stage){
+  try {
+    sb.functions.invoke('notify-rep', { body: { sale_id: Number(saleId), stage: stage } })
+      .then(r => {
+        if (r && r.error) console.log('push not sent:', r.error.message || r.error);
+        else if (r && r.data && r.data.skipped) console.log('push skipped:', r.data.skipped);
+      })
+      .catch(e => console.log('push not sent:', (e && e.message) || e));
+  } catch(e) { console.log('push not sent:', (e && e.message) || e); }
+}
+
 /* ============ DELIVERIES ============ */
 async function markDelivered(id){
   const s=SALES.find(x=>x.id===id);
@@ -833,6 +853,7 @@ async function markDelivered(id){
   if(!confirm('Mark '+s.customer+' as delivered?')) return;
   const {error}=await sb.from('sales').update({status:'delivered',delivered_at:new Date().toISOString()}).eq('id',id);
   if(error){ alert('Could not update: '+error.message); return; }
+  notifyRep(id,'delivered');
   await loadSales();
 }
 
@@ -1020,6 +1041,10 @@ async function planDrop(e, el){
                 updated_at: new Date().toISOString(), updated_by: planWho() },
               { onConflict: 'sale_id' });
     if (error) throw error;
+    // Only once the move is actually saved. Dropping the same load on a
+    // second truck re-notifies, but notify-rep tags by sale, so the newer
+    // one replaces the older on the lock screen rather than stacking.
+    notifyRep(id, 'assigned');
   }catch(err){
     alert('Could not save that move:\n\n' + ((err && err.message) || err) +
           '\n\nThe board has been reloaded from the server.');
