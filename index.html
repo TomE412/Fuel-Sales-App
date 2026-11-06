@@ -45,6 +45,23 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .tba-box.on{background:var(--amber,#e8a13a);border-color:var(--amber,#e8a13a);}
 .tba-box.on::after{content:'✓';color:#fff;font-size:13px;font-weight:800;}
 .tba-txt{font-size:12px;color:var(--text2);font-weight:600;}
+/* Round-trip route link. The tick box is an audit marker now, not just a
+   note: the distance the app charges comes from the LOCATION the rep names,
+   so the route they actually worked from is the only way to check it. */
+.rt-state{font-size:11.5px;margin-top:6px;margin-left:28px;line-height:1.5;}
+.rt-state a{color:var(--blue,#2F6F8F);font-weight:700;text-decoration:underline;cursor:pointer;}
+.rt-ok{color:var(--green,#4A7C59);font-weight:700;}
+.rt-warn{color:var(--amber,#E8A13A);font-weight:700;}
+.rtl-in{width:100%;padding:12px;border:1px solid var(--border,#E0E0DE);border-radius:10px;
+font-family:inherit;font-size:14px;outline:none;box-sizing:border-box;}
+.rtl-in:focus{border-color:var(--amber,#E8A13A);}
+.rtl-err{font-size:12px;color:var(--red,#C0504D);font-weight:700;margin-top:8px;}
+.rtl-note{font-size:11.5px;color:var(--text3,#847F76);line-height:1.5;margin-top:10px;}
+.rtl-btns{display:flex;gap:10px;margin-top:18px;}
+.rtl-btns button{flex:1;padding:13px;border:none;border-radius:10px;font-family:inherit;
+font-size:14px;font-weight:700;cursor:pointer;}
+.rtl-skip{background:var(--gray,#F4F4F2);color:var(--text2,#55514B);}
+.rtl-save{background:var(--amber,#E8A13A);color:#fff;}
 #s-price.tba-off{opacity:0.45;pointer-events:none;background:var(--gray);}
 .field input:focus{border-color:var(--red);background:#fff;}
 .field select{width:100%;padding:13px 14px;background:var(--gray);border:1.5px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);font-size:15px;outline:none;}
@@ -497,7 +514,8 @@ border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:poi
           <span class="tba-box" id="rt-box"></span>
           <span class="tba-txt">Round trip</span>
         </label>
-        <div style="font-size:11px;color:var(--text3);margin-top:6px;margin-left:28px;line-height:1.45;">Reference only &mdash; it changes no price. Tick it when the load went right round rather than straight out and back. It shows on the Commission report.</div>
+        <div class="rt-state" id="rt-link-state" style="display:none;"></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px;margin-left:28px;line-height:1.45;">Reference only &mdash; it changes no price. Tick it when the load went right round rather than straight out and back, then paste the Maps route you worked the distance from. It shows on the Commission report.</div>
       </div>
       <div class="field">
         <label>Payment terms</label>
@@ -786,7 +804,7 @@ let allSales = [];
 // Bump this on every release. It shows in the More tab, so when a rep
 // reports a problem you can ask what it says and know instantly whether
 // they are on the current build or a stale cached one.
-const APP_VERSION = 'v19 — 6 Nov 2026';
+const APP_VERSION = 'v20 — 6 Nov 2026';
 
 let curFuel = 'Diesel';
 let curTerm = 'COD';
@@ -816,14 +834,84 @@ function withTimeout(promise, ms = 8000) {
 // it deliberately feeds no price, no transport cost and no commission. The
 // report still charges two legs on every sale, exactly as it always has.
 let roundTrip = false;
+// The route the rep worked the distance out from. The app never asks anyone
+// to type a distance - it derives one from the LOCATION they name - so this
+// link is the only way accounts can check that the named place matches the
+// journey that actually happened.
+let routeUrl = '';
+
 function toggleRoundTrip(e){
   if(e) e.preventDefault();
-  setRoundTrip(!roundTrip);
+  if (roundTrip) {
+    if (routeUrl && !confirm('Turn off Round trip? The route link on this sale will be removed.')) return;
+    setRoundTrip(false);
+    return;
+  }
+  setRoundTrip(true);
+  openRouteLink();
 }
+
 function setRoundTrip(on){
   roundTrip = (on === true);
+  // The link belongs to the round trip. Untick and it goes with it, rather
+  // than lingering invisibly and saving against a sale that is not one.
+  if (!roundTrip) routeUrl = '';
   const box = document.getElementById('rt-box');
   if (box) box.classList.toggle('on', roundTrip);
+  renderRouteState();
+}
+
+function renderRouteState(){
+  const el = document.getElementById('rt-link-state');
+  if (!el) return;
+  if (!roundTrip) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'block';
+  el.innerHTML = routeUrl
+    ? '<span class="rt-ok">&#128205; Route attached</span> &middot; ' +
+      '<a onclick="openRouteLink(event)">change</a> &middot; ' +
+      '<a onclick="clearRouteLink(event)">remove</a>'
+    : '<span class="rt-warn">&#9888; No route link yet</span> &middot; ' +
+      '<a onclick="openRouteLink(event)">tap to add</a>';
+}
+
+function openRouteLink(e){
+  if (e) e.preventDefault();
+  const v = document.getElementById('rtlink-value');
+  if (v) v.value = routeUrl || '';
+  const err = document.getElementById('rtlink-err');
+  if (err) err.textContent = '';
+  const m = document.getElementById('rtlink');
+  if (m) m.classList.add('on');
+  // Deliberately NOT focused straight away: on a phone the keyboard springing
+  // up covers the sheet before the rep has read what it is asking for.
+}
+
+function closeRouteLink(e){
+  if (e) e.preventDefault();
+  const m = document.getElementById('rtlink');
+  if (m) m.classList.remove('on');
+}
+
+function saveRouteLink(e){
+  if (e) e.preventDefault();
+  const v = ((document.getElementById('rtlink-value') || {}).value || '').trim();
+  const err = document.getElementById('rtlink-err');
+  // A nudge, not a refusal. A rep standing at a mine with one bar should
+  // never be blocked from logging the sale over the shape of a link.
+  if (v && !/^https?:\/\/\S+$/i.test(v)) {
+    if (err) err.textContent = 'That does not look like a web link \u2014 it should start with http:// or https://';
+    return;
+  }
+  routeUrl = v;
+  closeRouteLink();
+  renderRouteState();
+}
+
+function clearRouteLink(e){
+  if (e) e.preventDefault();
+  if (routeUrl && !confirm('Remove the route link from this sale?')) return;
+  routeUrl = '';
+  renderRouteState();
 }
 
 // How many legs the CALCULATOR charges. This one does change the arithmetic,
@@ -1729,6 +1817,8 @@ function fillSaleForm(sale) {
   setPaymentTerm(sale.payment_term || 'COD');
   document.getElementById('s-notes').value = sale.notes || '';
   setRoundTrip(sale.round_trip);
+  // setRoundTrip clears the link, so the saved one goes back AFTER it.
+  if (roundTrip) { routeUrl = sale.route_url || ''; renderRouteState(); }
 }
 
 function openSaleForEdit(idOrLocalId) {
@@ -1886,6 +1976,14 @@ async function recordSale() {
     paid: curTerm === 'COD',
     notes,
     round_trip: roundTrip,
+    // Who attached the route and when, so a link swapped after the fact is
+    // visible rather than silent. Same shape as cost_check_at/cost_check_by.
+    route_url: (roundTrip && routeUrl) ? routeUrl : null,
+    route_url_at: (roundTrip && routeUrl) ? new Date().toISOString() : null,
+    route_url_by: (roundTrip && routeUrl)
+      ? ((currentProfile && currentProfile.full_name) ||
+         (currentUser && currentUser.email) || null)
+      : null,
     status: 'pending'
   };
 
@@ -1915,7 +2013,13 @@ async function recordSale() {
           payment_due: paymentDue,
           paid: curTerm === 'COD',
           notes,
-          round_trip: roundTrip
+          round_trip: roundTrip,
+          route_url: (roundTrip && routeUrl) ? routeUrl : null,
+          route_url_at: (roundTrip && routeUrl) ? new Date().toISOString() : null,
+          route_url_by: (roundTrip && routeUrl)
+            ? ((currentProfile && currentProfile.full_name) ||
+               (currentUser && currentUser.email) || null)
+            : null
         }).eq('id', editingSaleId).select('id'),
         8000
       );
@@ -4482,6 +4586,21 @@ setInterval(refreshFromOffice, 120000);
     <div class="sub2" id="rigd-who">&mdash;</div>
     <div id="rigd-body"></div>
     <button class="rigdclose" onclick="closeRepRig()">Close</button>
+  </div>
+</div>
+<div class="rigdm" id="rtlink" onclick="if(event.target===this)closeRouteLink()">
+  <div class="rigdbox">
+    <h2>&#128279; Route used for this round trip</h2>
+    <div class="sub2">Paste the Google Maps route you worked the distance out from.</div>
+    <input type="url" class="rtl-in" id="rtlink-value" inputmode="url"
+      autocomplete="off" autocapitalize="off" spellcheck="false"
+      placeholder="https://maps.app.goo.gl/&hellip;">
+    <div class="rtl-err" id="rtlink-err"></div>
+    <div class="rtl-note">Accounts opens this to check the route behind the distance. You can add it later if you have not got it yet.</div>
+    <div class="rtl-btns">
+      <button type="button" class="rtl-skip" onclick="closeRouteLink(event)">Skip for now</button>
+      <button type="button" class="rtl-save" onclick="saveRouteLink(event)">Save link</button>
+    </div>
   </div>
 </div>
 </body>

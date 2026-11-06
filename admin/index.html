@@ -724,6 +724,26 @@ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #sec-sales .tba-box.on{background:var(--amber);border-color:var(--amber);}
 #sec-sales .tba-box.on::after{content:'✓';color:#fff;font-size:13px;font-weight:800;}
 #sec-sales .tba-txt{font-size:12px;color:#5a5a57;font-weight:600;}
+/* Round-trip route link. The tick box is an audit marker now, not just a
+   note: the distance the app charges comes from the LOCATION the rep names,
+   so the route they actually worked from is the only way to check it. */
+#sec-sales .rt-state{font-size:11.5px;margin-top:6px;margin-left:28px;line-height:1.5;}
+#sec-sales .rt-state a{color:var(--blue);font-weight:700;text-decoration:underline;cursor:pointer;}
+#sec-sales .rt-ok{color:var(--green);font-weight:700;}
+#sec-sales .rt-warn{color:var(--amber);font-weight:700;}
+#sec-sales .rtlm{position:fixed;inset:0;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;z-index:8000;padding:16px;}
+#sec-sales .rtlm.on{display:flex;}
+#sec-sales .rtlbox{background:#fff;border-radius:14px;padding:22px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;}
+#sec-sales .rtlbox h2{font-size:16px;font-weight:700;margin-bottom:3px;}
+#sec-sales .rtlbox .rtl-sub{font-size:12.5px;color:var(--gray-text);margin-bottom:16px;line-height:1.5;}
+#sec-sales .rtl-in{width:100%;padding:12px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:14px;outline:none;box-sizing:border-box;}
+#sec-sales .rtl-in:focus{border-color:var(--amber);background:#fff;}
+#sec-sales .rtl-err{font-size:12px;color:var(--red);font-weight:700;margin-top:8px;}
+#sec-sales .rtl-note{font-size:11.5px;color:var(--gray-text);line-height:1.5;margin-top:10px;}
+#sec-sales .rtl-btns{display:flex;gap:10px;margin-top:18px;}
+#sec-sales .rtl-btns button{flex:1;padding:12px;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;}
+#sec-sales .rtl-skip{background:var(--gray-light);color:var(--text2);border:1.5px solid var(--gray-border);}
+#sec-sales .rtl-save{background:var(--amber);color:#fff;}
 #sec-sales #s-price.tba-off{opacity:0.45;pointer-events:none;background:var(--gray-light);}
 #sec-sales .field input:focus{border-color:var(--red);background:#fff;}
 #sec-sales .field select{width:100%;padding:13px 14px;background:var(--gray-light);border:1.5px solid var(--gray-border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:15px;outline:none;}
@@ -2141,7 +2161,8 @@ font-family:var(--mono);margin-bottom:5px;}
                 <span class="tba-box" id="rt-box"></span>
                 <span class="tba-txt">Round trip</span>
               </label>
-              <div style="font-size:11px;color:var(--gray-text);margin-top:6px;margin-left:28px;line-height:1.45;">Reference only &mdash; it changes no price. Tick it when the load went right round rather than straight out and back. It shows on the Commission report.</div>
+              <div class="rt-state" id="rt-link-state" style="display:none;"></div>
+              <div style="font-size:11px;color:var(--gray-text);margin-top:6px;margin-left:28px;line-height:1.45;">Reference only &mdash; it changes no price. Tick it when the load went right round rather than straight out and back, then paste the Maps route you worked the distance from. It shows on the Commission report.</div>
             </div>
             <div class="field">
               <label>Payment terms</label>
@@ -2383,6 +2404,24 @@ font-family:var(--mono);margin-bottom:5px;}
           </div>
 
           <button class="logout-btn" onclick="adminSignOut()">Sign out</button>
+        </div>
+      </div>
+
+      <!-- Route link for a round trip. Lives inside #sec-sales because every
+           rule that styles it is scoped to this section. -->
+      <div class="rtlm" id="rtlink" onclick="if(event.target===this)SalesApp.closeRouteLink()">
+        <div class="rtlbox">
+          <h2>&#128279; Route used for this round trip</h2>
+          <div class="rtl-sub">Paste the Google Maps route you worked the distance out from.</div>
+          <input type="url" class="rtl-in" id="rtlink-value" inputmode="url"
+            autocomplete="off" autocapitalize="off" spellcheck="false"
+            placeholder="https://maps.app.goo.gl/&hellip;">
+          <div class="rtl-err" id="rtlink-err"></div>
+          <div class="rtl-note">Accounts opens this to check the route behind the distance. You can add it later if you have not got it yet.</div>
+          <div class="rtl-btns">
+            <button type="button" class="rtl-skip" onclick="SalesApp.closeRouteLink(event)">Skip for now</button>
+            <button type="button" class="rtl-save" onclick="SalesApp.saveRouteLink(event)">Save link</button>
+          </div>
         </div>
       </div>
     </div>
@@ -4169,7 +4208,7 @@ const AccountsApp = (() => {
       const fromDate = new Date();
       fromDate.setDate(fromDate.getDate()-daysBack);
       const { data, error } = await sb.from('sales')
-        .select('id,sale_date,delivery_date,payment_due,payment_term,customer,location,litres,price_per_litre,cost_price,price_tba,fuel_type,rep_name,status,paid,notes,delivered_at,cost_check_at,cost_check_by')
+        .select('id,sale_date,delivery_date,payment_due,payment_term,customer,location,litres,price_per_litre,cost_price,price_tba,fuel_type,rep_name,status,paid,notes,delivered_at,cost_check_at,cost_check_by,round_trip,route_url,route_url_at,route_url_by,distance_km')
         .gte('sale_date',fromDate.toISOString().split('T')[0])
         .order('payment_due',{ascending:true});
       if(error) throw error;
@@ -4188,6 +4227,10 @@ const AccountsApp = (() => {
       cost:(s.cost_price===null||s.cost_price===undefined||s.cost_price==='')?null:parseFloat(s.cost_price),
       costCheckAt:s.cost_check_at||null,
       costCheckBy:s.cost_check_by||null,
+      roundTrip:s.round_trip===true,
+      routeUrl:s.route_url||'',
+      routeBy:s.route_url_by||'',
+      distanceKm:(s.distance_km==null?null:parseFloat(s.distance_km)),
         value:(parseFloat(s.litres)||0)*(parseFloat(s.price_per_litre)||0),
         fuelType:s.fuel_type||'',
         rep:s.rep_name||'',
@@ -4390,6 +4433,22 @@ function money2(v){ return '$' + Number(v).toFixed(3); }
     const valueCell = s.priceTba
         ? '<span style="color:var(--amber);">&mdash;</span>'
         : money(s.value||0);
+      // A round trip's route link, with the distance the app actually charged
+      // sitting next to it. The comparison IS the check - the rep never types a
+      // distance, the app derives it from the location they named, so the route
+      // they worked from is the only way to see whether that location was right.
+      // noteHtml does the escaping and turns a Maps link into "Open in Maps".
+      const routePill = !s.roundTrip ? '' :
+        '<div style="font-size:10px;margin-top:3px;">' +
+          '<span class="tpill" style="background:var(--gray-light);color:var(--gray-text);">' +
+            '&#8634; Round trip' +
+            (s.distanceKm != null ? ' &middot; ' + (Math.round(s.distanceKm * 10) / 10) + ' km' : '') +
+          '</span> ' +
+          (s.routeUrl
+            ? noteHtml(s.routeUrl) +
+              (s.routeBy ? ' <span style="color:var(--gray-text);">added by ' + noteHtml(s.routeBy) + '</span>' : '')
+            : '<span style="color:var(--amber);font-weight:700;">&#9888; no route link</span>') +
+        '</div>';
       const notes = s.notes
         ? '<div style="font-size:10px;color:var(--amber);background:var(--amber-light);padding:2px 6px;border-radius:4px;display:inline-block;margin-top:3px;">&#128221; '+noteHtml(s.notes)+'</div>'
         : '';
@@ -4402,6 +4461,7 @@ function money2(v){ return '$' + Number(v).toFixed(3); }
         '<td><div style="font-weight:700;">'+s.customer+'</div>'+
           '<div style="font-size:10px;color:var(--gray-text);">'+(s.location||'&mdash;')+' &middot; '+(s.rep||'&mdash;')+'</div>'+
         lossPill+
+        routePill+
           notes+'</td>'+
         '<td>'+statusPill+'</td>'+
         '<td>'+fuelPill+'</td>'+
@@ -7850,14 +7910,99 @@ const SalesApp = (() => {
   // followed, and it deliberately feeds no price, no transport cost and no
   // commission. The report still charges two legs on every sale.
   let roundTrip = false;
+  // The route the rep worked the distance out from. The app never asks anyone
+  // to type a distance - it derives one from the LOCATION they name - so this
+  // link is the only way accounts can check that the named place matches the
+  // journey that actually happened.
+  let routeUrl = '';
+
   function toggleRoundTrip(e){
     if(e) e.preventDefault();
-    setRoundTrip(!roundTrip);
+    if (roundTrip) {
+      if (routeUrl && !confirm('Turn off Round trip? The route link on this sale will be removed.')) return;
+      setRoundTrip(false);
+      return;
+    }
+    setRoundTrip(true);
+    openRouteLink();
   }
+
   function setRoundTrip(on){
     roundTrip = (on === true);
+    // The link belongs to the round trip. Untick and it goes with it, rather
+    // than lingering invisibly and saving against a sale that is not one.
+    if (!roundTrip) routeUrl = '';
     const box = document.getElementById('rt-box');
     if (box) box.classList.toggle('on', roundTrip);
+    renderRouteState();
+  }
+
+  function renderRouteState(){
+    const el = document.getElementById('rt-link-state');
+    if (!el) return;
+    if (!roundTrip) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = 'block';
+    el.innerHTML = routeUrl
+      ? '<span class="rt-ok">&#128205; Route attached</span> &middot; ' +
+        '<a onclick="SalesApp.openRouteLink(event)">change</a> &middot; ' +
+        '<a onclick="SalesApp.clearRouteLink(event)">remove</a>'
+      : '<span class="rt-warn">&#9888; No route link yet</span> &middot; ' +
+        '<a onclick="SalesApp.openRouteLink(event)">tap to add</a>';
+  }
+
+  function openRouteLink(e){
+    if (e) e.preventDefault();
+    const v = document.getElementById('rtlink-value');
+    if (v) v.value = routeUrl || '';
+    const err = document.getElementById('rtlink-err');
+    if (err) err.textContent = '';
+    const m = document.getElementById('rtlink');
+    if (m) m.classList.add('on');
+    // Deliberately NOT focused straight away: on a phone the keyboard springing
+    // up covers the sheet before the rep has read what it is asking for.
+  }
+
+  function closeRouteLink(e){
+    if (e) e.preventDefault();
+    const m = document.getElementById('rtlink');
+    if (m) m.classList.remove('on');
+  }
+
+  function saveRouteLink(e){
+    if (e) e.preventDefault();
+    const v = ((document.getElementById('rtlink-value') || {}).value || '').trim();
+    const err = document.getElementById('rtlink-err');
+    // A nudge, not a refusal. A rep standing at a mine with one bar should
+    // never be blocked from logging the sale over the shape of a link.
+    if (v && !/^https?:\/\/\S+$/i.test(v)) {
+      if (err) err.textContent = 'That does not look like a web link \u2014 it should start with http:// or https://';
+      return;
+    }
+    routeUrl = v;
+    closeRouteLink();
+    renderRouteState();
+  }
+
+  function clearRouteLink(e){
+    if (e) e.preventDefault();
+    if (routeUrl && !confirm('Remove the route link from this sale?')) return;
+    routeUrl = '';
+    renderRouteState();
+  }
+
+  // Insert, edit, and edit-while-still-queued all need the same three fields.
+  // They are built in one place because three hand-copied payloads is exactly
+  // how customer_id came to be missing from the edit path.
+  function routeFields(){
+    const on = roundTrip && !!routeUrl;
+    return {
+      route_url: on ? routeUrl : null,
+      route_url_at: on ? new Date().toISOString() : null,
+      route_url_by: on
+        ? ((currentProfile && currentProfile.full_name) ||
+           (currentUser && currentUser.email) || null)
+        : null
+    };
   }
 
   // How many legs the CALCULATOR charges. This does change the arithmetic,
@@ -8356,6 +8501,8 @@ const SalesApp = (() => {
     setPaymentTerm(sale.payment_term || 'COD');
     document.getElementById('s-notes').value = sale.notes || '';
     setRoundTrip(sale.round_trip);
+    // setRoundTrip clears the link, so the saved one goes back AFTER it.
+    if (roundTrip) { routeUrl = sale.route_url || ''; renderRouteState(); }
   }
 
   function openSaleForEdit(idOrLocalId) {
@@ -8498,6 +8645,7 @@ const SalesApp = (() => {
       paid: curTerm === 'COD',
       notes,
       round_trip: roundTrip,
+      ...routeFields(),
       status: 'pending',
       distance_km: distanceKm
     };
@@ -8518,7 +8666,7 @@ const SalesApp = (() => {
             sale_date: date, location, fuel_type: curFuel, litres,
             price_per_litre: priceTBA ? 0 : price, cost_price: costPrice, price_tba: priceTBA,
             delivery_date: delivery || null, payment_term: termLabel, payment_due: paymentDue,
-            paid: curTerm === 'COD', notes, round_trip: roundTrip, distance_km: distanceKm
+            paid: curTerm === 'COD', notes, round_trip: roundTrip, ...routeFields(), distance_km: distanceKm
           }).eq('id', editingSaleId).select('id'),
           8000
         );
@@ -8544,7 +8692,7 @@ const SalesApp = (() => {
           ...item.payload, sale_date: date, customer, customer_id: selectedCustomerId, location,
           fuel_type: curFuel, litres, price_per_litre: priceTBA ? 0 : price, cost_price: costPrice,
           price_tba: priceTBA, delivery_date: delivery || null, payment_term: termLabel,
-          payment_due: paymentDue, paid: curTerm === 'COD', notes, round_trip: roundTrip,
+          payment_due: paymentDue, paid: curTerm === 'COD', notes, round_trip: roundTrip, ...routeFields(),
           distance_km: distanceKm
         };
         saveQueue(q);
@@ -9238,7 +9386,7 @@ const SalesApp = (() => {
       "Carrie Value Cent1","Company GP Cent2 (75%)","Company Value Cent2","Carrie GP Cent2 (25%)",
       "Carrie Value Cent2","Company GP Cent3 (50%)","Company Value Cent3","Carrie GP Cent3 (50%)",
       "Carrie Value Cent3","Total Company GP Value","Total Carrie Commission","Paid?",
-      "Round trip (reference only)"];
+      "Round trip (reference only)","Route link (the rep's workings)"];
     const HR = 5;
     headers.forEach((h,i)=> set(HR,i+1,S(h)));
 
@@ -9276,6 +9424,9 @@ const SalesApp = (() => {
       // the tick box, which is not the same as the rep answering "no".
       set(r,25,S(sale.round_trip === true  ? "Yes"
                : sale.round_trip === false ? "No" : "—"));
+      // The route the rep worked the distance from. Blank is meaningful: a
+      // round trip with no link has no workings to check.
+      set(r,26,S(sale.route_url || ""));
     });
 
     const last = r0 + sales.length - 1, tr = last+1;
@@ -9287,8 +9438,8 @@ const SalesApp = (() => {
     set(sm+1,2,S("Plus monthly retainer:"));                     set(sm+1,7,F("$H$3",money));
     set(sm+2,2,S("TOTAL PAYABLE TO "+repName.toUpperCase()+":")); set(sm+2,7,F("G"+sm+"+G"+(sm+1),money));
 
-    ws["!ref"] = "A1:"+addr(sm+2,25);
-    ws["!cols"] = [9,18,10,11,9,10,11,11,10,11,12,11,12,11,12,11,12,11,12,11,12,13,14,7,22].map(w=>({wch:w}));
+    ws["!ref"] = "A1:"+addr(sm+2,26);
+    ws["!cols"] = [9,18,10,11,9,10,11,11,10,11,12,11,12,11,12,11,12,11,12,11,12,13,14,7,22,46].map(w=>({wch:w}));
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "New contract");
@@ -9323,7 +9474,7 @@ const SalesApp = (() => {
     try {
       if (typeof XLSX === "undefined") { alert("Spreadsheet library still loading — check your connection and try again."); return; }
       const { data: sales, error } = await sb.from("sales")
-        .select("sale_date, customer, location, litres, price_per_litre, cost_price, paid, status, distance_km, round_trip")
+        .select("sale_date, customer, location, litres, price_per_litre, cost_price, paid, status, distance_km, round_trip, route_url")
         .eq("rep_name", repName).gte("sale_date", start).lt("sale_date", endEx)
         .neq("status", "cancelled").order("sale_date", { ascending: true });
       if (error) throw error;
@@ -9660,7 +9811,7 @@ const SalesApp = (() => {
     toggleTBA, clearCustomerMatch, clearLocationMatch,
     acPick, acPickNew, locAcPick, locAcPickNew,
     selectFuel, checkCostVsPrice, selTerm, recordSale, cancelEdit, openSaleForEdit, markDelivered, cancelSale,
-    toggleRoundTrip, setCalcLegs,
+    toggleRoundTrip, openRouteLink, closeRouteLink, saveRouteLink, clearRouteLink, setCalcLegs,
     showTab, calNav, showCalDay,
     calcDelivery, changePin, changePassword,
     removeGoneQuietCustomer,

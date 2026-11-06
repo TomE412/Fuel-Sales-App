@@ -872,7 +872,7 @@ async function fetchData(){
     const fromDate=new Date();
     fromDate.setDate(fromDate.getDate()-daysBack);
     const {data,error}=await sb.from('sales')
-      .select('id,sale_date,delivery_date,payment_due,payment_term,customer,location,litres,price_per_litre,cost_price,price_tba,fuel_type,rep_name,status,paid,invoiced,notes,delivered_at,cost_check_at,cost_check_by')
+      .select('id,sale_date,delivery_date,payment_due,payment_term,customer,location,litres,price_per_litre,cost_price,price_tba,fuel_type,rep_name,status,paid,invoiced,notes,delivered_at,cost_check_at,cost_check_by,round_trip,route_url,route_url_at,route_url_by,distance_km')
       .gte('sale_date',fromDate.toISOString().split('T')[0])
       .order('payment_due',{ascending:true});
     if(error)throw error;
@@ -891,6 +891,10 @@ async function fetchData(){
       cost:(s.cost_price===null||s.cost_price===undefined||s.cost_price==='')?null:parseFloat(s.cost_price),
       costCheckAt:s.cost_check_at||null,
       costCheckBy:s.cost_check_by||null,
+      roundTrip:s.round_trip===true,
+      routeUrl:s.route_url||'',
+      routeBy:s.route_url_by||'',
+      distanceKm:(s.distance_km==null?null:parseFloat(s.distance_km)),
       value:(parseFloat(s.litres)||0)*(parseFloat(s.price_per_litre)||0),
       fuelType:s.fuel_type||'',
       rep:s.rep_name||'',
@@ -1122,6 +1126,22 @@ function renderTracker(){
     const valueCell = s.priceTba
       ? '<span style="color:var(--amber);">&mdash;</span>'
       : money(s.value||0);
+    // A round trip's route link, with the distance the app actually charged
+    // sitting next to it. The comparison IS the check - the rep never types a
+    // distance, the app derives it from the location they named, so the route
+    // they worked from is the only way to see whether that location was right.
+    // noteHtml does the escaping and turns a Maps link into "Open in Maps".
+    const routePill = !s.roundTrip ? '' :
+      '<div style="font-size:10px;margin-top:3px;">' +
+        '<span class="tpill" style="background:var(--gray-light);color:var(--gray-text);">' +
+          '&#8634; Round trip' +
+          (s.distanceKm != null ? ' &middot; ' + (Math.round(s.distanceKm * 10) / 10) + ' km' : '') +
+        '</span> ' +
+        (s.routeUrl
+          ? noteHtml(s.routeUrl) +
+            (s.routeBy ? ' <span style="color:var(--gray-text);">added by ' + noteHtml(s.routeBy) + '</span>' : '')
+          : '<span style="color:var(--amber);font-weight:700;">&#9888; no route link</span>') +
+      '</div>';
     const notes = s.notes
       ? '<div style="font-size:10px;color:var(--amber);background:var(--amber-light);padding:2px 6px;border-radius:4px;display:inline-block;margin-top:3px;">&#128221; '+noteHtml(s.notes)+'</div>'
       : '';
@@ -1135,6 +1155,7 @@ function renderTracker(){
       '<td><div style="font-weight:700;">'+s.customer+'</div>'+
         '<div style="font-size:10px;color:var(--gray-text);">'+(s.location||'&mdash;')+' &middot; '+(s.rep||'&mdash;')+'</div>'+
         lossPill+
+        routePill+
         notes+'</td>'+
       '<td>'+statusPill+'</td>'+
       '<td>'+fuelPill+'</td>'+
