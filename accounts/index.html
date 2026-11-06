@@ -341,17 +341,17 @@ font-family:var(--mono);margin-bottom:5px;}
           <table class="tbl">
             <thead>
               <tr>
-                <th onclick="sortTrack('date')">Ordered</th>
-                <th onclick="sortTrack('deliveryDate')">Delivery</th>
-                <th onclick="sortTrack('customer')">Customer</th>
-                <th onclick="sortTrack('status')">Status</th>
-                <th onclick="sortTrack('fuelType')">Product</th>
-                <th onclick="sortTrack('litres')" style="text-align:right;">Litres</th>
-                <th onclick="sortTrack('price')" style="text-align:right;">Price/L</th>
-                <th onclick="sortTrack('cost')" style="text-align:right;">Cost/L</th>
-                <th onclick="sortTrack('value')" style="text-align:right;">Value</th>
-                <th onclick="sortTrack('paymentTerm')">Terms</th>
-                <th onclick="sortTrack('invoiced')" style="text-align:center;">Invoiced</th>
+                <th data-k="date" onclick="sortTrack('date')">Ordered</th>
+                <th data-k="deliveryDate" onclick="sortTrack('deliveryDate')">Delivery</th>
+                <th data-k="customer" onclick="sortTrack('customer')">Customer</th>
+                <th data-k="status" onclick="sortTrack('status')">Status</th>
+                <th data-k="fuelType" onclick="sortTrack('fuelType')">Product</th>
+                <th data-k="litres" onclick="sortTrack('litres')" style="text-align:right;">Litres</th>
+                <th data-k="price" onclick="sortTrack('price')" style="text-align:right;">Price/L</th>
+                <th data-k="cost" onclick="sortTrack('cost')" style="text-align:right;">Cost/L</th>
+                <th data-k="value" onclick="sortTrack('value')" style="text-align:right;">Value</th>
+                <th data-k="paymentTerm" onclick="sortTrack('paymentTerm')">Terms</th>
+                <th data-k="invoiced" onclick="sortTrack('invoiced')" style="text-align:center;">Invoiced</th>
               </tr>
             </thead>
             <tbody id="track-body">
@@ -1043,10 +1043,24 @@ function renderTracker(){
   const k = trackSort.key, dir = trackSort.dir;
   rows.sort((a,b)=>{
     let av=a[k], bv=b[k];
-    if(k==='value'||k==='litres'||k==='price') return ((av||0)-(bv||0))*dir;
+    if(k==='value'||k==='litres'||k==='price'||k==='cost') return ((av||0)-(bv||0))*dir;
     av=(av||'')+''; bv=(bv||'')+'';
     return av<bv?-dir:av>bv?dir:0;
   });
+
+  // Show which column the table is sorted by, and which way. Without this,
+  // clicking a heading rearranges the rows and nothing on screen says what
+  // just happened - and because the table already loads sorted by Ordered
+  // (newest first), the first click on Ordered FLIPS it to oldest first,
+  // which reads as the list being jumbled rather than re-sorted.
+  const sortHead = document.getElementById('track-body');
+  if (sortHead && sortHead.parentElement) {
+    sortHead.parentElement.querySelectorAll('th[data-k]').forEach(th => {
+      if (th.dataset.label === undefined) th.dataset.label = th.textContent;
+      th.textContent = th.dataset.label +
+        (th.dataset.k === k ? (dir === 1 ? ' \u25B2' : ' \u25BC') : '');
+    });
+  }
 
   const flagged = allSales.filter(needsCostCheck);
   const alarm = document.getElementById('cost-alarm');
