@@ -1007,7 +1007,7 @@ function openRig(saleId){
 function setRigAdvanced(show){
   document.getElementById('rig-adv').style.display = show ? '' : 'none';
   document.getElementById('rig-adv-btn').textContent =
-    show ? 'Hide truck and trailer' : 'Swap truck or trailer';
+    show ? 'Hide truck, trailer and driver' : 'Swap truck, trailer or driver';
 }
 function toggleRigAdvanced(){
   setRigAdvanced(document.getElementById('rig-adv').style.display === 'none');
@@ -1453,7 +1453,7 @@ if ('serviceWorker' in navigator) {
       <label>Pumping unit <span style="font-weight:400;text-transform:none;">&mdash; leave blank and add it later if you do not know yet</span></label>
       <select id="rig-pump"></select></div>
     <div style="text-align:right;margin:-6px 0 10px;">
-      <button type="button" class="riglink" id="rig-adv-btn" onclick="toggleRigAdvanced()">Swap truck or trailer</button>
+      <button type="button" class="riglink" id="rig-adv-btn" onclick="toggleRigAdvanced()">Swap truck, trailer or driver</button>
     </div>
     <div id="rig-adv" style="display:none;">
     <div class="rigfld"><label>Truck</label>
