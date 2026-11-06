@@ -786,7 +786,7 @@ let allSales = [];
 // Bump this on every release. It shows in the More tab, so when a rep
 // reports a problem you can ask what it says and know instantly whether
 // they are on the current build or a stale cached one.
-const APP_VERSION = 'v17 — 29 Jul 2026';
+const APP_VERSION = 'v19 — 6 Nov 2026';
 
 let curFuel = 'Diesel';
 let curTerm = 'COD';
@@ -2727,6 +2727,7 @@ async function pushButtonTapped(){
     }, { onConflict: 'endpoint' }).select('id');
     if (error) throw error;
     if (!data || !data.length) throw new Error('the database would not store it');
+    pushSetOptedOut(false);
 
     await renderPushCard();
   } catch(e) {
@@ -2737,6 +2738,7 @@ async function pushButtonTapped(){
 
 async function disablePush(){
   if (!confirm('Stop this phone being notified about your loads?')) return;
+  pushSetOptedOut(true);
   try {
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
@@ -2752,6 +2754,79 @@ async function disablePush(){
   await renderPushCard();
 }
 
+
+/* ============ KEEPING NOTIFICATIONS ON ============
+
+   Once a rep has said yes, it stays yes. The browser is allowed to drop a
+   push subscription on its own - Chrome retires ones it decides are unused,
+   and anything that clears site data takes it too - and the card used to
+   just report "Off" and wait to be noticed. That is no good for the one
+   feature whose whole job is to work while nobody is looking at it.
+
+   Putting it back needs NO tap. A tap is only ever required to ASK for
+   permission; once permission is granted, subscribing again is something the
+   page may do by itself. So that is what this does.
+
+   The opt-out flag is what stops this fighting the rep. Without it, turning
+   notifications off would simply turn them back on two minutes later. Off
+   means off, per phone and per person, until they turn it on again. */
+function pushOptOutKey(){
+  return 'push_off_' + ((typeof currentUser !== 'undefined' && currentUser && currentUser.id) || 'x');
+}
+function pushOptedOut(){
+  try { return localStorage.getItem(pushOptOutKey()) === '1'; } catch(e) { return false; }
+}
+function pushSetOptedOut(off){
+  try {
+    if (off) localStorage.setItem(pushOptOutKey(), '1');
+    else localStorage.removeItem(pushOptOutKey());
+  } catch(e) {}
+}
+
+// The endpoint we have already told the office about. Stops the every-two-
+// minutes check from writing to the database when nothing has changed.
+let pushLastSynced = '';
+
+async function pushSelfHeal(){
+  try {
+    if (typeof currentUser === 'undefined' || !currentUser || !currentUser.id) return;
+    if (!pushSupported() || pushOptedOut()) return;
+    // 'default' means never asked, 'denied' means blocked - neither can be
+    // resolved without the rep, so leave the card to explain it.
+    if (Notification.permission !== 'granted') return;
+    if (pushIsIOS() && !pushInstalled()) return;
+
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidKeyBytes(VAPID_PUBLIC_KEY),
+      });
+    }
+    const j = sub.toJSON();
+    if (j.endpoint === pushLastSynced) return;
+
+    const { data, error } = await sb.from('push_subscriptions').upsert({
+      user_id: currentUser.id,
+      endpoint: j.endpoint,
+      p256dh: j.keys.p256dh,
+      auth: j.keys.auth,
+      device_label: pushDeviceLabel(),
+      expired_at: null,
+      last_error: null,
+    }, { onConflict: 'endpoint' }).select('id');
+    if (error) throw error;
+    if (!data || !data.length) throw new Error('the database would not store it');
+
+    pushLastSynced = j.endpoint;
+    renderPushCard();
+  } catch(e) {
+    // Silent on purpose. This runs in the background on a timer, and the
+    // card still tells the rep the truth next time they look at it.
+    console.log('push self-heal:', (e && e.message) || e);
+  }
+}
 // Proves the whole chain - phone, keys, the function that does the sending -
 // before a real delivery depends on it.
 async function sendTestPush(){
@@ -2770,9 +2845,29 @@ async function sendTestPush(){
                 ? JSON.stringify(data.details[0]) : 'No reason given.')));
     }
   } catch(e) {
-    alert('Could not send a test: ' + (e.message || e) + String.fromCharCode(10,10) +
-          'If this says the function was not found, notify-rep has not been ' +
-          'deployed to Supabase yet.');
+    // supabase-js throws the function's own reply away: e.message is only
+    // ever "Edge Function returned a non-2xx status code", which tells the
+    // rep nothing and tells Tom less. notify-rep is careful to answer with
+    // the real reason, and that answer is sitting unread on e.context, so
+    // dig it out. The old message guessed "not deployed", which sent us
+    // looking in the wrong place.
+    let status = '', detail = '';
+    try {
+      if (e && e.context) {
+        if (e.context.status) status = String(e.context.status);
+        if (typeof e.context.json === 'function') {
+          const b = await e.context.clone().json();
+          if (b) detail = [b.error, b.hint].filter(Boolean).join(String.fromCharCode(10,10));
+        }
+        if (!detail && typeof e.context.text === 'function') {
+          detail = (await e.context.clone().text() || '').slice(0, 300);
+        }
+      }
+    } catch(e2) { /* body already read, or not JSON - fall back below */ }
+    alert('Could not send a test.' + String.fromCharCode(10,10) +
+          (status ? 'Error ' + status + String.fromCharCode(10,10) : '') +
+          (detail || (e && e.message) || String(e)) + String.fromCharCode(10,10) +
+          'Show this screen to Tom.');
   }
   if (btn) { btn.disabled = false; btn.textContent = 'Send me a test'; }
 }
@@ -4368,6 +4463,7 @@ function refreshFromOffice(){
   if (!navigator.onLine) return;
   if (typeof currentUser === 'undefined' || !currentUser) return;
   loadSales();
+  pushSelfHeal();
 }
 document.addEventListener('visibilitychange', refreshFromOffice);
 setInterval(refreshFromOffice, 120000);
