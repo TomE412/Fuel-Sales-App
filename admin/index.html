@@ -636,6 +636,17 @@ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #sec-logistics .pop-btn{width:100%;margin-top:8px;padding:6px;background:var(--green);color:#fff;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;}
 #sec-logistics .pop-btn:hover{background:var(--green-dark);}
 #sec-logistics .pop-btn.rm{background:var(--red);}
+/* ---- Drivers and rigs: the standing driver/trailer for each truck ---- */
+#sec-logistics .drv{border:1px solid var(--line);border-radius:10px;padding:13px 14px;margin-bottom:10px;}
+#sec-logistics .drv-name{font-size:14px;font-weight:700;color:var(--blue);margin-bottom:10px;}
+#sec-logistics .drv-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:10px;}
+#sec-logistics .drv-f label{font-size:10px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;}
+#sec-logistics .drv-f input,#sec-logistics .drv-f select{width:100%;padding:8px 10px;background:#F4F4F2;border:1.5px solid var(--line);border-radius:7px;font-family:var(--font);font-size:13px;outline:none;}
+#sec-logistics .drv-f input:focus,#sec-logistics .drv-f select:focus{border-color:var(--red);background:#fff;}
+#sec-logistics .drv-ro{padding:9px 0;font-size:12px;color:var(--muted);}
+#sec-logistics .drv-warn{font-size:11px;color:#8A5A00;background:#FFF8E6;border:1px solid #F3DFA8;border-radius:7px;padding:7px 9px;margin-top:9px;line-height:1.5;}
+#sec-logistics .drv-add{margin-left:10px;padding:7px 13px;background:var(--green);color:#fff;border:none;border-radius:7px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;}
+#sec-logistics .drv-add:hover{background:var(--green-dark);}
 
 /* ================= SHARED PIN-LOCK + PERFORMANCE-REPORT OVERLAYS ================= */
 /* Shell-level, not scoped to #sec-sales — #lock-screen has to be able to
@@ -1726,6 +1737,7 @@ font-family:var(--mono);margin-bottom:5px;}
         <div class="mtab"        data-p="map"    onclick="LogisticsApp.go('map')">🗺️ Map</div>
         <div class="mtab"        data-p="book"   onclick="LogisticsApp.go('book')">📒 Book</div>
         <div class="mtab"        data-p="set"    onclick="LogisticsApp.go('set')">⚙️ Settings</div>
+        <div class="mtab"        data-p="drivers" onclick="LogisticsApp.go('drivers')">🚚 Drivers</div>
       </div>
 
       <!-- ================= TODAY ================= -->
@@ -1978,6 +1990,50 @@ font-family:var(--mono);margin-bottom:5px;}
             <button class="btn" style="background:var(--green);" onclick="LogisticsApp.saveCustomer()">Save pin</button>
           </div>
           <div class="err" id="a-err"></div>
+        </div>
+      </div>
+
+      <!-- ================= DRIVERS ================= -->
+      <div class="page" id="p-drivers">
+        <div class="scroll">
+          <div class="panel">
+            <div class="ph">
+              <h2 style="color:var(--blue);">&#128666; Drivers and rigs</h2>
+              <span class="saved" id="sv-drv">Saved</span>
+              <button class="drv-add" onclick="LogisticsApp.openAddDriver()">+ Add a driver</button>
+            </div>
+            <div class="note">The standing allocation &mdash; who normally drives what, and which trailer goes with that truck. Swapping a driver, truck or trailer while assigning one load is just for that load and never changes anything here.</div>
+            <div style="padding:14px;" id="drv-list"><div class="empty">Loading&hellip;</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADD DRIVER MODAL -->
+      <div class="modal" id="drvadd">
+        <div class="mbox">
+          <h2>Add a driver</h2>
+          <div class="msub">Their name and number show on every rep's load card, so both matter.</div>
+          <div class="fld">
+            <label>Full name</label>
+            <input type="text" id="nd-name" autocomplete="off" placeholder="As it appears on the register">
+          </div>
+          <div class="fld">
+            <label>Phone</label>
+            <input type="tel" id="nd-phone" placeholder="077...">
+          </div>
+          <div class="fld">
+            <label>ID number</label>
+            <input type="text" id="nd-id" placeholder="63-...">
+          </div>
+          <div class="fld">
+            <label>Truck</label>
+            <select id="nd-truck"></select>
+          </div>
+          <div class="mrow">
+            <button class="btn ghost" onclick="LogisticsApp.closeAddDriver()">Cancel</button>
+            <button class="btn" style="background:var(--green);" onclick="LogisticsApp.saveNewDriver()">Add driver</button>
+          </div>
+          <div class="err" id="nd-err"></div>
         </div>
       </div>
     </div>
@@ -6090,6 +6146,7 @@ const LogisticsApp = (() => {
     [...document.querySelectorAll('#sec-logistics .mtab')].forEach(x=>x.classList.toggle('active',x.dataset.p===p));
     [...document.querySelectorAll('#sec-logistics .page')].forEach(x=>x.classList.remove('active'));
     document.getElementById('p-'+p).classList.add('active');
+    if(p==='drivers') loadFleet();
     if(p==='map'){ initMap(); setTimeout(()=>{ if(map) map.invalidateSize(); },80); }
     if(p==='routes' && !curRoute && ROUTES.length) pickRoute(ROUTES[0].route_key);
   }
@@ -7572,7 +7629,165 @@ const LogisticsApp = (() => {
     loadChase(); loadBook(); loadBoard();
   }
 
+
+  /* ============ DRIVERS AND RIGS ============
+     The STANDING allocation: which driver and which trailer normally go with
+     which truck. It lives on the vehicle - vehicles.default_driver_id and
+     vehicles.default_trailer_id - because a trailer belongs to a truck, not
+     to a person.
+
+     A swap made while assigning one load is written to delivery_assignment,
+     keyed by sale_id, and never touches any of this. That is the whole point:
+     this screen is the ONLY place the standing version changes. */
+  let DRIVERS=[], VEHICLES=[], TRAILERS=[];
+
+  async function loadFleet(){
+    try{
+      const [d,v,t]=await Promise.all([
+        sb.from('drivers').select('id,full_name,id_number,phone').eq('active',true).order('full_name'),
+        sb.from('vehicles').select('id,fleet_no,reg_no,default_driver_id,default_trailer_id').eq('active',true).order('fleet_no'),
+        sb.from('trailers').select('id,trailer_no,reg_no').eq('active',true).order('trailer_no')
+      ]);
+      DRIVERS=d.data||[]; VEHICLES=v.data||[]; TRAILERS=t.data||[];
+      renderDrivers();
+    }catch(e){
+      const el=document.getElementById('drv-list');
+      if(el) el.innerHTML='<div class="empty">Could not load the fleet: '+esc((e&&e.message)||e)+'</div>';
+    }
+  }
+
+  function vLabel(v){ return v.fleet_no+(v.reg_no?' \u2014 '+v.reg_no:''); }
+  function tLabel(t){ return t.trailer_no+(t.reg_no?' \u2014 '+t.reg_no:''); }
+
+  // Proves the write. Row-level security refuses by matching zero rows and
+  // reporting NO error, so an empty result is the only way to tell a refusal
+  // from a success - without this the screen would cheerfully report "Saved"
+  // for a change the database threw away.
+  async function fleetSave(table,id,patch){
+    const {data,error}=await sb.from(table).update(patch).eq('id',id).select('id');
+    if(error) throw error;
+    if(!data||!data.length) throw new Error('the database would not accept it \u2014 only ops or an administrator can change a standing allocation');
+  }
+
+  function renderDrivers(){
+    const el=document.getElementById('drv-list');
+    if(!el) return;
+    if(!DRIVERS.length){ el.innerHTML='<div class="empty">No drivers on file yet.</div>'; return; }
+
+    el.innerHTML=DRIVERS.map(d=>{
+      const all=VEHICLES.filter(v=>String(v.default_driver_id)===String(d.id));
+      const mine=all[0]||null;
+      const trailer=mine?TRAILERS.find(t=>String(t.id)===String(mine.default_trailer_id)):null;
+
+      const warn=[];
+      if(all.length>1) warn.push('Standing on '+all.length+' trucks at once ('+all.map(v=>esc(v.fleet_no)).join(', ')+'). Pick the right one below.');
+      if(!mine) warn.push('No truck allocated.');
+      if(mine&&!trailer) warn.push(esc(mine.fleet_no)+' has no standing trailer.');
+      if(!String(d.phone||'').trim()) warn.push('No phone number \u2014 reps cannot ring them about an offload.');
+
+      const truckOpts='<option value="">\u2014 not allocated \u2014</option>'+
+        VEHICLES.map(v=>'<option value="'+v.id+'"'+(mine&&String(mine.id)===String(v.id)?' selected':'')+'>'+esc(vLabel(v))+'</option>').join('');
+      const trailerCell = mine
+        ? '<select onchange="LogisticsApp.setTruckTrailer(\''+mine.id+'\',this.value)">'+
+            '<option value="">\u2014 none \u2014</option>'+
+            TRAILERS.map(t=>'<option value="'+t.id+'"'+(trailer&&String(trailer.id)===String(t.id)?' selected':'')+'>'+esc(tLabel(t))+'</option>').join('')+
+          '</select>'
+        : '<div class="drv-ro">Allocate a truck first</div>';
+
+      return '<div class="drv">'+
+        '<div class="drv-name">'+esc(d.full_name)+'</div>'+
+        '<div class="drv-g">'+
+          '<div class="drv-f"><label>Phone</label>'+
+            '<input type="tel" value="'+esc(d.phone||'')+'" placeholder="077..." '+
+              'onchange="LogisticsApp.saveDriver(\''+d.id+'\',\'phone\',this.value)"></div>'+
+          '<div class="drv-f"><label>ID number</label>'+
+            '<input type="text" value="'+esc(d.id_number||'')+'" placeholder="63-..." '+
+              'onchange="LogisticsApp.saveDriver(\''+d.id+'\',\'id_number\',this.value)"></div>'+
+          '<div class="drv-f"><label>Truck</label>'+
+            '<select onchange="LogisticsApp.setDriverTruck(\''+d.id+'\',this.value)">'+truckOpts+'</select></div>'+
+          '<div class="drv-f"><label>Trailer</label>'+trailerCell+'</div>'+
+        '</div>'+
+        (warn.length?'<div class="drv-warn">'+warn.join('<br>')+'</div>':'')+
+      '</div>';
+    }).join('');
+  }
+
+  async function saveDriver(id,field,value){
+    const v=String(value||'').trim();
+    try{
+      await fleetSave('drivers',id,{[field]:v||null});
+      const d=DRIVERS.find(x=>String(x.id)===String(id)); if(d) d[field]=v||null;
+      flash('sv-drv'); renderDrivers();
+    }catch(e){ alert('Could not save that:\n\n'+((e&&e.message)||e)); renderDrivers(); }
+  }
+
+  async function setTruckTrailer(vehicleId,trailerId){
+    try{
+      await fleetSave('vehicles',vehicleId,{default_trailer_id:trailerId||null});
+      const v=VEHICLES.find(x=>String(x.id)===String(vehicleId));
+      if(v) v.default_trailer_id=trailerId||null;
+      flash('sv-drv'); renderDrivers();
+    }catch(e){ alert('Could not save that:\n\n'+((e&&e.message)||e)); renderDrivers(); }
+  }
+
+  async function setDriverTruck(driverId,vehicleId){
+    const drv=DRIVERS.find(d=>String(d.id)===String(driverId));
+    if(!drv) return;
+    const was=VEHICLES.filter(v=>String(v.default_driver_id)===String(driverId));
+    const now=vehicleId?VEHICLES.find(v=>String(v.id)===String(vehicleId)):null;
+
+    // Taking a truck off somebody else is a real decision, so it gets asked
+    // rather than done quietly behind a dropdown.
+    if(now&&now.default_driver_id&&String(now.default_driver_id)!==String(driverId)){
+      const other=DRIVERS.find(d=>String(d.id)===String(now.default_driver_id));
+      const who=(other&&other.full_name)||'Someone else';
+      if(!confirm(now.fleet_no+' is '+who+'\u2019s truck.\n\nMove it to '+drv.full_name+'?\n\n'+
+                  who+' will be left with no truck until you give them another.')){
+        renderDrivers(); return;
+      }
+    }
+    try{
+      for(const v of was){ if(!now||String(v.id)!==String(now.id)) await fleetSave('vehicles',v.id,{default_driver_id:null}); }
+      if(now) await fleetSave('vehicles',now.id,{default_driver_id:driverId});
+      await loadFleet(); flash('sv-drv');
+    }catch(e){ alert('Could not save that:\n\n'+((e&&e.message)||e)); await loadFleet(); }
+  }
+
+  function openAddDriver(){
+    document.getElementById('nd-name').value='';
+    document.getElementById('nd-phone').value='';
+    document.getElementById('nd-id').value='';
+    document.getElementById('nd-err').textContent='';
+    document.getElementById('nd-truck').innerHTML='<option value="">\u2014 not allocated \u2014</option>'+
+      VEHICLES.map(v=>'<option value="'+v.id+'">'+esc(vLabel(v))+(v.default_driver_id?' (taken)':'')+'</option>').join('');
+    document.getElementById('drvadd').classList.add('on');
+  }
+  function closeAddDriver(){ document.getElementById('drvadd').classList.remove('on'); }
+
+  async function saveNewDriver(){
+    const err=document.getElementById('nd-err');
+    const name=document.getElementById('nd-name').value.trim();
+    if(name.length<3){ err.textContent='Give their full name.'; return; }
+    err.textContent='Saving\u2026';
+    try{
+      const {data,error}=await sb.from('drivers').insert({
+        full_name:name,
+        phone:document.getElementById('nd-phone').value.trim()||null,
+        id_number:document.getElementById('nd-id').value.trim()||null
+      }).select('id');
+      if(error) throw error;
+      if(!data||!data.length) throw new Error('the database would not accept it \u2014 only ops or an administrator can add a driver');
+      const truck=document.getElementById('nd-truck').value;
+      if(truck) await fleetSave('vehicles',truck,{default_driver_id:data[0].id});
+      closeAddDriver(); await loadFleet(); flash('sv-drv');
+    }catch(e){
+      const m=((e&&e.message)||String(e));
+      err.textContent=/duplicate|unique/i.test(m) ? 'There is already a driver by that name.' : m;
+    }
+  }
   return {
+    loadFleet, renderDrivers, saveDriver, setDriverTruck, setTruckTrailer,
+    openAddDriver, closeAddDriver, saveNewDriver,
     init, onShow, onLostSaleSaved,
     go, markDelivered,
     pickRoute, flipRoute,
