@@ -3270,6 +3270,19 @@ function renderRetention(){
   rows.sort((a,b)=>{
     let av=a[k], bv=b[k];
     if(k==='customer'){ av=(av||'').toLowerCase(); bv=(bv||'').toLowerCase(); return av<bv?-dir:av>bv?dir:0; }
+    if(k==='last_order'){
+      // "Last order" is a date STRING (YYYY-MM-DD), not a number. Subtracting
+      // two of them gives NaN, and a comparator that returns NaN leaves every
+      // row exactly where it was - so this column appeared to sort into no
+      // order at all, and clicking it a second time changed nothing. A
+      // YYYY-MM-DD date sorts correctly as text, which is how the customer
+      // book has always handled this same field. Customers with no last order
+      // go to the bottom whichever way round it is, rather than ahead of every
+      // real date.
+      av = av || ''; bv = bv || '';
+      if(!av || !bv) return (!av && !bv) ? 0 : (!av ? 1 : -1);
+      return av<bv?-dir:av>bv?dir:0;
+    }
     return ((av||0)-(bv||0))*dir;
   });
   const body=document.getElementById('retention-body');
