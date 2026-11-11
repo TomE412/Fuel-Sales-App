@@ -9387,6 +9387,23 @@ const SalesApp = (() => {
     const S = v => ({ t:"s", v:String(v) });
     const N = (v,z) => ({ t:"n", v:v, ...(z?{z}:{}) });
     const F = (f,z) => ({ t:"n", f:f, ...(z?{z}:{}) });
+    // A route link Excel will actually open. SheetJS writes the hyperlink
+    // from the cell's "l" key, but it does NOT apply Excel's blue-underline
+    // Hyperlink style, so the text stays black while the cell is clickable.
+    // Only a real http(s) link becomes one. A half-typed or mistyped value
+    // left as a hyperlink makes Excel show a "repair" prompt when the file is
+    // opened, which would wreck the whole report over one bad cell - so
+    // anything else stays plain text, still visible and still checkable by
+    // hand. 2000 characters is just under Excel's own 2079 ceiling; a long
+    // pasted directions URL can get close.
+    const Link = v => {
+      const u = String(v || "").trim();
+      const cell = S(u);
+      if (/^https?:\/\/\S+$/i.test(u) && u.length <= 2000) {
+        cell.l = { Target: u, Tooltip: "Open the route this distance was worked from" };
+      }
+      return cell;
+    };
 
     set(1,1,S(repName.toUpperCase()+" — MONTHLY COMMISSION  |  Niel's structure (eff. 1 June 2026)  |  "+monthLabel));
     set(2,1,S("From Supabase. Niel fills ONLY the yellow Cost Price. Loss or break-even deals auto-pay the half-cent floor. All sales included (paid or not)."));
@@ -9439,7 +9456,7 @@ const SalesApp = (() => {
                : sale.round_trip === false ? "No" : "—"));
       // The route the rep worked the distance from. Blank is meaningful: a
       // round trip with no link has no workings to check.
-      set(r,26,S(sale.route_url || ""));
+      set(r,26,Link(sale.route_url));
     });
 
     const last = r0 + sales.length - 1, tr = last+1;
