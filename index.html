@@ -57,6 +57,15 @@ font-family:inherit;font-size:14px;outline:none;box-sizing:border-box;}
 .rtl-in:focus{border-color:var(--amber,#E8A13A);}
 .rtl-err{font-size:12px;color:var(--red,#C0504D);font-weight:700;margin-top:8px;}
 .rtl-note{font-size:11.5px;color:var(--text3,#847F76);line-height:1.5;margin-top:10px;}
+/* Search box on the Sales tab. Sized for a thumb, not a mouse: the clear
+   button is a 32px target rather than the 11px glyph it draws. */
+.ssearch{position:relative;margin-bottom:10px;}
+.ssearch input{width:100%;padding:12px 40px 12px 14px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--font);font-size:15px;outline:none;-webkit-appearance:none;}
+.ssearch input:focus{border-color:var(--text2);}
+.ssearch input::-webkit-search-cancel-button{-webkit-appearance:none;display:none;}
+.ssearch button{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:0;background:transparent;color:var(--text3);font-size:22px;line-height:1;cursor:pointer;display:none;padding:0;}
+.ssearch button.on{display:block;}
+#sales-count{font-size:11.5px;color:var(--text3);margin:-2px 0 8px 2px;}
 .rtl-btns{display:flex;gap:10px;margin-top:18px;}
 .rtl-btns button{flex:1;padding:13px;border:none;border-radius:10px;font-family:inherit;
 font-size:14px;font-weight:700;cursor:pointer;}
@@ -543,6 +552,12 @@ border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:poi
 
   <!-- SALES TAB -->
   <div class="tab-content" id="tab-sales">
+    <div class="ssearch">
+      <input id="sales-search" type="search" autocomplete="off" autocapitalize="none"
+             placeholder="Search customer or place…" oninput="renderSales()">
+      <button id="sales-search-clear" onclick="clearSalesSearch()" aria-label="Clear search">&times;</button>
+    </div>
+    <div id="sales-count"></div>
     <div id="sales-list"><div class="empty"><div class="empty-icon">📋</div><p>No sales yet</p></div></div>
   </div>
 
@@ -2448,11 +2463,45 @@ function salePriceHtml(litres, price, tba) {
           <div class="sale-unit">$${p.toFixed(3)}/L</div>`;
 }
 
+// The Sales tab is the rep's own record of every load they have logged, and
+// by the end of a month it is hundreds of cards long. Customer and place are
+// what a rep actually remembers when they go looking - "that Blazeworks
+// load", "the one out to Mazowe" - so those are the two fields it matches.
+// Queued sales are searched too: a load saved offline is still a sale the
+// rep may be hunting for, and leaving it out would make it look lost.
+function salesQuery(){
+  const el = document.getElementById('sales-search');
+  return el ? el.value.trim().toLowerCase() : '';
+}
+function saleMatches(q, customer, location){
+  if (!q) return true;
+  return ((customer || '') + ' ' + (location || '')).toLowerCase().indexOf(q) !== -1;
+}
+function clearSalesSearch(){
+  const el = document.getElementById('sales-search');
+  if (el) el.value = '';
+  renderSales();
+  if (el) el.focus();
+}
+// The typed term is echoed back in the "no match" message, so it is escaped
+// on the way in. It is the rep's own text, but it still reaches innerHTML.
+function escSearch(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[c]));
+}
+
 function renderSales() {
   const el = document.getElementById('sales-list');
 
+  const q = salesQuery();
+  const clearBtn = document.getElementById('sales-search-clear');
+  if (clearBtn) clearBtn.classList.toggle('on', !!q);
+
   // Build display list: queued (unsynced) sales first, then synced sales
-  const queued = getQueue();
+  const allQueued = getQueue();
+  const queued = allQueued.filter(item => saleMatches(q,
+    item.payload && item.payload.customer, item.payload && item.payload.location));
   const queuedRows = queued.map(item => {
     const p = item.payload;
     const fuelPill = p.fuel_type ? `<span class="pill ${fuelPillClass(p.fuel_type)}">${p.fuel_type}</span>` : '';
@@ -2473,11 +2522,25 @@ function renderSales() {
     </div>`;
   }).join('');
 
-  if (!allSales.length && !queued.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><p>No sales recorded yet</p></div>';
+  const shown = allSales.filter(s => saleMatches(q, s.customer, s.location));
+
+  const countEl = document.getElementById('sales-count');
+  if (countEl) countEl.textContent = q
+    ? (queued.length + shown.length) + ' of ' + (allQueued.length + allSales.length) + ' sales'
+    : '';
+
+  if (!shown.length && !queued.length) {
+    el.innerHTML = q
+      ? '<div class="empty"><div class="empty-icon">🔍</div><p>No sale matches “' + escSearch(q) + '”</p></div>'
+      : '<div class="empty"><div class="empty-icon">📋</div><p>No sales recorded yet</p></div>';
+    // The badge is drawn on every path out of this function. Before the search
+    // existed this return was only hit by a brand-new rep; now any term that
+    // matches nothing lands here, and a rep's notifications must not vanish
+    // because they typed a customer name that did not match.
+    renderNotifBadge();
     return;
   }
-  el.innerHTML = queuedRows + allSales.map(s => {
+  el.innerHTML = queuedRows + shown.map(s => {
     const delivered = s.status === 'delivered';
     const fuelPill = s.fuel_type ? `<span class="pill ${fuelPillClass(s.fuel_type)}">${s.fuel_type}</span>` : '';
     const delPill = delivered ? `<span class="pill p-del">✓ Delivered</span>` : '';
