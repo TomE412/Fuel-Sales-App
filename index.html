@@ -840,6 +840,33 @@ let roundTrip = false;
 // journey that actually happened.
 let routeUrl = '';
 
+// The route link is ALSO written into the notes, because notes is the one
+// field that travels: the ops board, the TV dashboard and the driver's
+// WhatsApp message all show it, and not one of them reads route_url.
+//
+// Reps already paste their own links into notes - a gate code, a site photo,
+// a pin for the turn-off - and there can easily be three on one sale. So this
+// must never disturb what is already there. It manages exactly ONE line, the
+// one it wrote, found by the marker below. Every save strips that line and
+// re-adds it only if the sale is still a round trip with a link, so editing a
+// sale cannot stack up copies and un-ticking round trip cannot leave a stale
+// route behind. Every other line, including the rep's own links, is returned
+// untouched and in its original order.
+//
+// route_url stays the authoritative record. Notes is free text a rep can
+// edit, so the commission report still reads the column, never this line.
+const ROUTE_NOTE_TAG = '\uD83D\uDCCD Route: ';
+function noteWithRoute(raw){
+  const kept = String(raw == null ? '' : raw)
+    .split(/\r?\n/)
+    .filter(line => line.trim().indexOf(ROUTE_NOTE_TAG.trim()) !== 0)
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  if (!(roundTrip && routeUrl)) return kept;
+  return (kept ? kept + '\n\n' : '') + ROUTE_NOTE_TAG + routeUrl;
+}
+
 function toggleRoundTrip(e){
   if(e) e.preventDefault();
   if (roundTrip) {
@@ -1897,7 +1924,7 @@ async function recordSale() {
   const litres = parseFloat(document.getElementById('s-litres').value);
   const price = parseFloat(document.getElementById('s-price').value);
   const delivery = document.getElementById('s-delivery').value;
-  const notes = document.getElementById('s-notes').value.trim();
+  const notes = noteWithRoute(document.getElementById('s-notes').value.trim());
 
   // Optional cost price. Blank stays blank (null) — it is never required and
   // never blocks a sale. If they typed something, keep it; otherwise null.
