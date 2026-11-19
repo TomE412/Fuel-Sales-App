@@ -47,10 +47,10 @@ test('the pump field shows for a tanker and hides for a rigid', async ({ page })
     const clearedOnRigid = document.getElementById('rig-pump').value;
 
     sel.value = 'v-tank';  rigPumpVisibility();
-    return {
-      onTanker, onRigid, clearedOnRigid,
-      options: [...document.getElementById('rig-pump').options].map(o => o.textContent.trim()),
-    };
+    const options = [...document.getElementById('rig-pump').options].map(o => o.textContent.trim());
+    rigPumpOptions('p3');   // SP03 is the one already on this load
+    const whenChosen = [...document.getElementById('rig-pump').options].map(o => o.textContent.trim());
+    return { onTanker, onRigid, clearedOnRigid, options, whenChosen };
   }, FIXTURE);
   console.log(JSON.stringify(out, null, 1));
 
@@ -58,12 +58,18 @@ test('the pump field shows for a tanker and hides for a rigid', async ({ page })
   expect(out.onRigid).toBe('none');        // SR02 has its own pump
   expect(out.clearedOnRigid).toBe('');     // and must not carry a stale choice
 
-  // Ours are named by their driver; a hired unit says so instead of looking
-  // like a unit with a missing driver.
+  // Ours are named by their driver.
   expect(out.options.join(' | ')).toContain('SP01');
   expect(out.options.join(' | ')).toContain('Bernard');
-  expect(out.options.join(' | ')).toContain('SP03');
-  expect(out.options.join(' | ')).toContain('hired in');
+
+  // SP03 was the stand-in for "hired in, details on the day". Since
+  // phase_e4 a hired pump belongs to a named transporter and carries a real
+  // reg and driver, so the stand-in is no longer offered — but it is kept
+  // on screen while it is the pump already chosen for a load, or saving
+  // that load would silently drop it. See hire-truck.spec.js.
+  expect(out.options.join(' | ')).not.toContain('SP03');
+  expect(out.whenChosen.join(' | ')).toContain('SP03');
+  expect(out.whenChosen.join(' | ')).toContain('hired in');
 
   expect(errs).toEqual([]);
 });

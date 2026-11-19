@@ -200,8 +200,11 @@ for (const app of ['/dashboard/', '/admin/']) {
     }, [isAdmin, FLEET_FIXTURE]);
     console.log(app + ' ' + JSON.stringify(out, null, 1));
 
-    // one entry per truck, driver named first, both of Phillip's shown
-    expect(out.labels.length).toBe(4);                       // placeholder + 3
+    // one entry per truck, driver named first, both of Phillip's shown.
+    // The last line is "Hire in a truck…", which is not a rig; hire-truck.spec.js
+    // covers it.
+    expect(out.labels.length).toBe(5);                       // placeholder + 3 + hire
+    expect(out.labels[4]).toContain('Hire in a truck');
     expect(out.labels[1]).toContain('Masden');
     expect(out.labels[1]).toContain('SH03 (AFJ 2570)');
     expect(out.labels[1]).toContain('ST03 (AFJ 2731)');

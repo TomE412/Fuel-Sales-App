@@ -19,11 +19,18 @@ const FLEET = {
     { id: 'd1', full_name: 'Pachavo Chitsa', phone: '00263772913225' },
     { id: 'd2', full_name: 'Dennis Chitara', phone: '00263772885979' },
     { id: 'dp', full_name: 'Bernard',        phone: '00263773259308' },
+    { id: 'dz', full_name: 'Lovemore Sibanda', phone: '00263771987654', contractor_id: 'c1' },
   ],
   pumps: [
     { id: 'p1', unit_no: 'SP01', reg_no: 'AFU 6092', driver_id: 'dp', is_hired: false },
+    // The old stand-in for "hired in, details on the day". Since phase_e4 a
+    // hired pump belongs to a named transporter instead, so this one is kept
+    // in the fixture only to prove it is no longer offered.
     { id: 'p3', unit_no: 'SP03', reg_no: null, driver_id: null, is_hired: true },
+    { id: 'p9', unit_no: 'ZIMP1', reg_no: 'AFX 2222', driver_id: 'dz',
+      is_hired: true, contractor_id: 'c1' },
   ],
+  contractors: [{ id: 'c1', name: 'Zimgo Transport', code: 'ZIM', active: true }],
 };
 
 const SALES = [
@@ -106,10 +113,20 @@ test('a rigid shows no trailer or pump, a tanker without one says so', async ({ 
   const noPump = await build(page, 3451, { vehicle: 'v-tank', pump: '' });
   expect(noPump).toContain('*Pump unit:* TO BE CONFIRMED');
 
-  // A hired unit says so, and carries no driver we do not have.
-  const hired = await build(page, 3451, { vehicle: 'v-tank', pump: 'p3' });
-  expect(hired).toContain('SP03');
-  expect(hired).toContain('hired in');
+  // A pump hired in with a truck carries its transporter's own reg and
+  // driver, so the driver of the tanker knows who is meeting him and the rep
+  // has somebody to ring.
+  const hired = await build(page, 3451, { vehicle: 'v-tank', pump: 'p9' });
+  console.log('\n--- HIRED PUMP ---\n' + hired + '\n');
+  expect(hired).toContain('ZIMP1');
+  expect(hired).toContain('AFX 2222');
+  expect(hired).toContain('Lovemore Sibanda');
+  expect(hired).toContain('00263771987654');
+
+  // SP03, the old stand-in, is no longer on offer at all.
+  const sp03 = await page.evaluate(() =>
+    [...document.querySelectorAll('#rig-pump option')].map(o => o.value).includes('p3'));
+  expect(sp03).toBe(false);
 });
 
 test('reopening the panel does not leave the last job in the box', async ({ page }) => {

@@ -150,6 +150,24 @@ font-size:13px;font-weight:700;cursor:pointer;}
 .rigrow .sec{background:var(--gray-light);color:var(--text);}
 .rigrow .dgr{background:#fff;color:var(--red);border:1px solid var(--red);}
 .rigrow .wha{background:var(--green);color:#fff;}
+/* Hiring in a truck. Purple rather than the app's blue, so it is plain at
+   a glance that this block is about somebody else's vehicle. */
+.hirep{border:1.5px solid #6B4FA0;background:#F8F6FC;border-radius:10px;
+padding:14px 15px 2px;margin-bottom:12px;}
+.hirep .ph{font-size:12px;font-weight:800;color:#6B4FA0;text-transform:uppercase;
+letter-spacing:.06em;margin:0 0 12px;}
+.hirep .two{display:flex;gap:9px;}
+.hirep .two>*{flex:1;min-width:0;}
+.rigfld input[type=text],.rigfld input[type=tel]{width:100%;padding:10px 11px;
+background:#fff;border:1.5px solid var(--gray-border);border-radius:8px;
+font-family:var(--font);font-size:13px;outline:none;box-sizing:border-box;color:var(--text);}
+.rigfld input[type=text]:focus,.rigfld input[type=tel]:focus{border-color:var(--blue);}
+.rigfld .req{color:var(--red);}
+.rigfld .soft{font-weight:400;text-transform:none;letter-spacing:0;}
+.hirechk{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;line-height:1.45;
+margin:2px 0 12px;cursor:pointer;color:var(--text);}
+.hirechk input{margin:1px 0 0;flex:0 0 auto;width:15px;height:15px;}
+.rignote{font-size:12px;color:var(--green);font-weight:700;margin-bottom:6px;}
 #sec-overview .sched-btn{padding:4px 10px;border:1px solid var(--red);background:#fff;color:var(--red);
 border-radius:99px;font-family:var(--font);font-size:10px;font-weight:700;cursor:pointer;
 white-space:nowrap;text-transform:uppercase;letter-spacing:.05em;}
@@ -3503,15 +3521,15 @@ const OverviewApp = (() => {
     function rigEsc(x){ return String(x == null ? '' : x)
     .replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-  let FLEET = { vehicles: [], trailers: [], drivers: [], pumps: [] };
+  let FLEET = { vehicles: [], trailers: [], drivers: [], pumps: [], contractors: [] };
   let ASSIGN = {};            // sale_id -> assignment row
   let BOARD = [];              // the deliveries panel, as rendered
   let rigSaleId = null;       // the sale the modal is open on
 
-  async function loadFleet(){
-    if (FLEET.vehicles.length) return;            // static data, fetch once
+  async function loadFleet(force){
+    if (FLEET.vehicles.length && !force) return;   // fetched once, and again when a truck is hired in
     try {
-      const [v, t, d, p] = await Promise.all([
+      const [v, t, d, p, c] = await Promise.all([
         sb.from('vehicles').select('*').eq('active', true).order('fleet_no'),
         sb.from('trailers').select('id,trailer_no,reg_no,make,model,active').eq('active', true).order('trailer_no'),
         sb.from('drivers').select('id,full_name,id_number,phone,active').eq('active', true).order('full_name'),
@@ -3519,9 +3537,14 @@ const OverviewApp = (() => {
         // pump field simply does not appear and everything else still works.
         sb.from('pump_units').select('id,unit_no,reg_no,model,driver_id,is_hired,active')
           .eq('active', true).order('unit_no'),
+        // The transporters a truck has been hired from before. Absent until
+        // phase_e4 runs, and swallowed the same way: with no contractors the
+        // picker shows the Skelsee fleet exactly as it always did.
+        sb.from('contractors').select('id,name,code,phone,contact_name,active')
+          .eq('active', true).order('name'),
       ]);
       FLEET = { vehicles: v.data || [], trailers: t.data || [], drivers: d.data || [],
-                pumps: p.data || [] };
+                pumps: p.data || [], contractors: c.data || [] };
     } catch(e) { console.warn('fleet', e); }
   }
 
@@ -3536,6 +3559,319 @@ const OverviewApp = (() => {
   }
 
   const byId = (arr, id) => arr.find(x => String(x.id) === String(id)) || null;
+
+  /* ---------------------------------------------------------------- */
+  /* HIRING IN A TRUCK.
+
+     A contracted truck is a row in `vehicles` like any other, tagged with
+     the transporter that owns it. Everything downstream that reads a rig -
+     the delivery board, the rep's app, the driver's WhatsApp job, the
+     notification - is untouched, because none of it asks who owns the
+     truck. The same goes for the driver, the trailer and the pump unit.
+
+     Nothing here runs until phase_e4 has been run. Without it there are no
+     contractors, so there are no groups and the picker behaves exactly as
+     it did before.                                                     */
+
+  const conOf = x => (x && x.contractor_id)
+    ? byId(FLEET.contractors || [], x.contractor_id) : null;
+
+  // The transporter's name sits on the heading above the options, not on
+  // every line under it, so a hired rig reads no longer than one of ours.
+  function rigLabel(v){
+    const d = byId(FLEET.drivers, v.default_driver_id);
+    const t = byId(FLEET.trailers, v.default_trailer_id);
+    return (d ? d.full_name : (v.driver_optional ? 'Any driver' : '(no driver)')) +
+      '  \u2014  ' + v.fleet_no +
+      (v.reg_no ? ' (' + v.reg_no + ')' : '') +
+      (t ? '  +  ' + t.trailer_no + (t.reg_no ? ' (' + t.reg_no + ')' : '') : '') +
+      (v.capacity_litres ? '  \u00b7  ' + v.capacity_litres.toLocaleString() + ' L' : '');
+  }
+
+  /* Options for a rig select, under one heading per owner. With nothing
+     ever hired in there are no headings at all - a plain list, as before. */
+  function ownerGrouped(rows, mk){
+    const groups = (FLEET.contractors || [])
+      .map(c => ({ c: c, rows: rows.filter(x => String(x.contractor_id) === String(c.id)) }))
+      .filter(g => g.rows.length);
+    if (!groups.length) return rows.map(mk).join('');
+    return '<optgroup label="Skelsee fleet">' +
+      rows.filter(x => !x.contractor_id).map(mk).join('') + '</optgroup>' +
+      groups.map(g => '<optgroup label="' + rigEsc(g.c.name) + '">' +
+        g.rows.map(mk).join('') + '</optgroup>').join('');
+  }
+
+  /* Fills all four rig selects from FLEET with the given assignment chosen.
+     Lifted out of openRig so that hiring a truck in can refill them without
+     closing and reopening the box over the top of the load being assigned. */
+  function rigFillSelects(a){
+    a = a || {};
+    const o = (id, label, cur) => '<option value="' + id + '"' +
+      (String(cur) === String(id) ? ' selected' : '') + '>' + rigEsc(label) + '</option>';
+
+    document.getElementById('rig-rig').innerHTML =
+      '<option value="">\u2014 pick a driver \u2014</option>' +
+      ownerGrouped(FLEET.vehicles, v => o(v.id, rigLabel(v), a.vehicle_id)) +
+      '<option value="__hire__">\u2795  Hire in a truck\u2026</option>';
+
+    document.getElementById('rig-vehicle').innerHTML =
+      '<option value="">\u2014 pick a truck \u2014</option>' +
+      ownerGrouped(FLEET.vehicles, v => o(v.id,
+        v.fleet_no + '  ' + (v.reg_no || '') + '  ' + (v.model || ''), a.vehicle_id));
+
+    document.getElementById('rig-trailer').innerHTML =
+      '<option value="">\u2014 none \u2014</option>' +
+      ownerGrouped(FLEET.trailers, t => o(t.id,
+        t.trailer_no + '  ' + (t.reg_no || ''), a.trailer_id));
+
+    document.getElementById('rig-driver').innerHTML =
+      '<option value="">\u2014 pick a driver \u2014</option>' +
+      ownerGrouped(FLEET.drivers, d => o(d.id, d.full_name, a.driver_id));
+
+    rigPumpOptions(a.pump_unit_id);
+  }
+
+  /* ---- the hire-in form ---- */
+
+  const hv = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+
+  // Which parts of the box are put away while the form is open, and what
+  // their display was, so closing the form restores exactly what was there
+  // rather than guessing.
+  const HIRE_HIDES = ['rig-pump-wrap','rig-advrow','rig-adv','rig-mainrow','rig-warow','rig-clear'];
+  let hirePrev = null;
+
+  function hireShow(on){
+    const panel = document.getElementById('rig-new');
+    if (!panel) return;
+    if (on) {
+      if (!hirePrev) {
+        hirePrev = {};
+        HIRE_HIDES.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) { hirePrev[id] = el.style.display; el.style.display = 'none'; }
+        });
+      }
+      panel.style.display = '';
+      hireConOptions();
+    } else {
+      panel.style.display = 'none';
+      if (hirePrev) {
+        Object.keys(hirePrev).forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.style.display = hirePrev[id];
+        });
+        hirePrev = null;
+      }
+    }
+  }
+
+  function hireReset(){
+    ['hire-con-new','hire-reg','hire-trailer','hire-driver','hire-phone','hire-id',
+     'hire-pump-reg','hire-pump-driver','hire-pump-phone'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    const cap = document.getElementById('hire-cap'); if (cap) cap.value = '';
+    const chk = document.getElementById('hire-pump'); if (chk) chk.checked = false;
+    const pw = document.getElementById('hire-pump-wrap'); if (pw) pw.style.display = 'none';
+    const e = document.getElementById('hire-err'); if (e) e.textContent = '';
+    const n = document.getElementById('rig-note'); if (n) n.textContent = '';
+  }
+
+  function openHire(){ document.getElementById('rig-rig').value = ''; hireShow(true); }
+  function cancelHire(){ hireShow(false); hireReset(); }
+
+  function hireConOptions(){
+    const el = document.getElementById('hire-con');
+    if (!el) return;
+    const keep = el.value;
+    el.innerHTML = '<option value="">\u2014 pick a transporter \u2014</option>' +
+      (FLEET.contractors || []).map(c =>
+        '<option value="' + c.id + '">' + rigEsc(c.name) + '</option>').join('') +
+      '<option value="__new__">\u2795  a company not on the list\u2026</option>';
+    el.value = keep && el.querySelector('option[value="' + keep + '"]') ? keep : '';
+    hireConChanged();
+  }
+
+  function hireConChanged(){
+    const wrap = document.getElementById('hire-con-new-wrap');
+    if (wrap) wrap.style.display =
+      document.getElementById('hire-con').value === '__new__' ? '' : 'none';
+  }
+
+  function hirePumpToggle(){
+    const wrap = document.getElementById('hire-pump-wrap');
+    if (wrap) wrap.style.display =
+      document.getElementById('hire-pump').checked ? '' : 'none';
+  }
+
+  // A short code for the transporter, which is what builds its unit numbers:
+  // "Zimgo Transport" -> ZIM -> ZIM1, ZIM2, and ZIMP1 for its pump.
+  function conCode(name){
+    return String(name).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) || 'CON';
+  }
+
+  /* Inserts a row, trying each candidate for the unique column in turn.
+
+     Two transporters can each employ a John Moyo, and drivers.full_name is
+     unique across the whole table, so the second is stored as
+     "John Moyo (ZIM)" rather than refused. Fleet numbers work the same way:
+     if ZIM1 has gone since the page loaded, ZIM2 is taken instead.
+
+     Anything that is not a duplicate - a row-level security refusal above
+     all - is thrown straight out, because retrying it would only hide it. */
+  async function insertUnique(table, col, candidates, row){
+    let last = null;
+    for (let i = 0; i < candidates.length; i++) {
+      const r = Object.assign({}, row); r[col] = candidates[i];
+      const { data, error } = await sb.from(table).insert(r).select('*').single();
+      if (!error) return data;
+      last = error;
+      if (!(error.code === '23505' || /duplicate key|already exists/i.test(error.message || ''))) throw error;
+    }
+    throw last || new Error('No free ' + col + ' for ' + table);
+  }
+
+  const seq = (prefix, used, n) => {
+    const out = [];
+    for (let i = used + 1; i <= used + n; i++) out.push(prefix + i);
+    return out;
+  };
+
+  /* Records the hired rig and selects it. It does NOT assign the load - the
+     Save button below still does that, so the pump can be added first and
+     so nothing is written to the delivery until the office says so. */
+  async function saveHiredTruck(){
+    const err = document.getElementById('hire-err');
+    const btn = document.getElementById('hire-save');
+    const conSel   = hv('hire-con');
+    const conName  = conSel === '__new__' ? hv('hire-con-new') : '';
+    const reg      = hv('hire-reg');
+    const trReg    = hv('hire-trailer');
+    const cap      = hv('hire-cap');
+    const dName    = hv('hire-driver');
+    const dPhone   = hv('hire-phone');
+    const dId      = hv('hire-id');
+    const wantPump = !!document.getElementById('hire-pump').checked;
+    const pReg     = hv('hire-pump-reg');
+    const pDriver  = hv('hire-pump-driver');
+    const pPhone   = hv('hire-pump-phone');
+
+    if (!conSel) { err.textContent = 'Which transporter is it?'; return; }
+    if (conSel === '__new__' && conName.length < 2) {
+      err.textContent = 'Type the transporter\u2019s name.'; return; }
+    if (!reg) { err.textContent = 'The truck\u2019s registration, please \u2014 it is what the depot and the customer will see.'; return; }
+    if (!dName) { err.textContent = 'Who is driving?'; return; }
+    if (!dPhone) { err.textContent = 'A phone number for the driver \u2014 without one the rep cannot ring them.'; return; }
+
+    err.textContent = '';
+    btn.disabled = true; btn.textContent = 'Saving\u2026';
+    try {
+      // 1. the transporter
+      let con = conSel === '__new__' ? null : byId(FLEET.contractors || [], conSel);
+      if (!con) {
+        const base = conCode(conName);
+        try {
+          con = await insertUnique('contractors', 'code',
+            [base, base + '1', base + '2', base + '3', base + '4'],
+            { name: conName, created_by: myName });
+        } catch (dup) {
+          // Already on file - most likely one that was marked inactive.
+          const r = await sb.from('contractors').select('*').ilike('name', conName).limit(1);
+          if (!r.data || !r.data.length) throw dup;
+          con = r.data[0];
+          await sb.from('contractors').update({ active: true }).eq('id', con.id);
+        }
+      }
+
+      // 2. the driver. Used this transporter's driver before? Reuse the row
+      //    and top up whatever was missing, so a phone number typed today
+      //    fixes every future load rather than making a second John Moyo.
+      const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+      const findDrv = nm => (FLEET.drivers || []).find(d =>
+        String(d.contractor_id) === String(con.id) && same(d.full_name, nm));
+
+      let drv = findDrv(dName);
+      if (drv) {
+        const patch = {};
+        if (dPhone && dPhone !== drv.phone) patch.phone = dPhone;
+        if (dId && dId !== drv.id_number) patch.id_number = dId;
+        if (Object.keys(patch).length) {
+          const u = await sb.from('drivers').update(patch).eq('id', drv.id).select('id');
+          if (u.error) throw u.error;
+        }
+      } else {
+        drv = await insertUnique('drivers', 'full_name',
+          [dName, dName + ' (' + con.code + ')', dName + ' (' + con.code + ' 2)',
+           dName + ' (' + con.code + ' 3)'],
+          { phone: dPhone, id_number: dId || null, contractor_id: con.id });
+      }
+
+      // 3. the trailer, if it pulls one
+      let trl = null;
+      if (trReg) {
+        trl = (FLEET.trailers || []).find(x => same(x.trailer_no, trReg) || same(x.reg_no, trReg));
+        if (!trl) trl = await insertUnique('trailers', 'trailer_no',
+          [trReg, trReg + ' (' + con.code + ')', trReg + ' (' + con.code + ' 2)'],
+          { reg_no: trReg, contractor_id: con.id });
+      }
+
+      // 4. the pumping unit, if one was named. Ticking the box without
+      //    filling anything in is allowed on purpose: the truck is recorded
+      //    as needing a pump and the board shows its amber warning until one
+      //    is added, which is the same way our own tankers behave.
+      let pump = null;
+      if (wantPump && (pReg || pDriver)) {
+        let pd = null;
+        if (pDriver) {
+          pd = findDrv(pDriver);
+          if (!pd) {
+            pd = await insertUnique('drivers', 'full_name',
+              [pDriver, pDriver + ' (' + con.code + ')', pDriver + ' (' + con.code + ' 2)'],
+              { phone: pPhone || null, contractor_id: con.id });
+          } else if (pPhone && pPhone !== pd.phone) {
+            await sb.from('drivers').update({ phone: pPhone }).eq('id', pd.id);
+          }
+        }
+        const usedP = (FLEET.pumps || []).filter(x => String(x.contractor_id) === String(con.id)).length;
+        pump = await insertUnique('pump_units', 'unit_no', seq(con.code + 'P', usedP, 12),
+          { reg_no: pReg || null, driver_id: pd ? pd.id : null,
+            is_hired: true, contractor_id: con.id });
+      }
+
+      // 5. the truck itself
+      const usedV = (FLEET.vehicles || []).filter(x => String(x.contractor_id) === String(con.id)).length;
+      const veh = await insertUnique('vehicles', 'fleet_no', seq(con.code, usedV, 20), {
+        reg_no: reg,
+        default_driver_name: drv.full_name,
+        default_driver_id: drv.id,
+        default_trailer_id: trl ? trl.id : null,
+        default_trip_type: 'delivery',
+        needs_pump: wantPump,
+        capacity_litres: cap ? Number(cap) : null,
+        driver_optional: false,
+        contractor_id: con.id,
+        active: true
+      });
+
+      // Back to the picker with the new rig chosen, over the same load.
+      await loadFleet(true);
+      const cur = ASSIGN[rigSaleId] || {};
+      hireShow(false);
+      hireReset();
+      rigFillSelects({ vehicle_id: veh.id, driver_id: drv.id,
+        trailer_id: trl ? trl.id : null,
+        pump_unit_id: pump ? pump.id : cur.pump_unit_id });
+      rigPumpVisibility();
+      const note = document.getElementById('rig-note');
+      if (note) note.textContent = veh.fleet_no + ' \u2014 ' + drv.full_name +
+        ' added under ' + con.name + '. Press Save to put this load on it.';
+    } catch(e) {
+      err.textContent = 'Could not save: ' + ((e && e.message) || e);
+    }
+    btn.disabled = false; btn.textContent = 'Save this truck';
+  }
+
 
   /* The badge on a delivery row: what is assigned, or an invitation to assign. */
   /* The week's promises, as one WhatsApp message.
@@ -3661,22 +3997,28 @@ const OverviewApp = (() => {
       (wantsPump ? '&#9888;' : '&#128666;') + ' ' + rigEsc(label) + '</button>';
   }
 
-  // SP01 and SP02 are ours and have a named driver. SP03 stands for a unit
-  // hired in from another company, so it carries no reg and no driver - the
-  // office messages the customer with those on the day.
+  // SP01 and SP02 are ours and have a named driver. A pump hired in with a
+  // truck belongs to that transporter and is listed under its name.
   function rigPumpOptions(sel){
     const el = document.getElementById('rig-pump');
     if (!el) return;
-    el.innerHTML = '<option value="">\u2014 none yet \u2014</option>' +
-      (FLEET.pumps || []).map(p => {
+    // SP03 was the old "hired in, details on the day" stand-in. A hired pump
+    // now belongs to a named transporter, so SP03 stops being offered - but
+    // never while it is the one already on the load, or saving would quietly
+    // drop it.
+    const pumps = (FLEET.pumps || []).filter(p =>
+        !!p.contractor_id || !p.is_hired || String(sel) === String(p.id));
+      el.innerHTML = '<option value="">\u2014 none yet \u2014</option>' +
+      ownerGrouped(pumps, p => {
         const d = byId(FLEET.drivers, p.driver_id);
         const label = p.unit_no +
-          (p.is_hired ? '  (hired in)' : (d ? '  \u2014  ' + d.full_name : '')) +
+          (d ? '  \u2014  ' + d.full_name
+             : (p.is_hired && !p.contractor_id ? '  (hired in)' : '')) +
           (p.reg_no ? '  (' + p.reg_no + ')' : '');
         return '<option value="' + p.id + '"' +
           (String(sel) === String(p.id) ? ' selected' : '') + '>' +
           rigEsc(label) + '</option>';
-      }).join('');
+      });
   }
 
   // Only a horse and tanker needs a pump alongside it. A rigid has one
@@ -3693,6 +4035,7 @@ const OverviewApp = (() => {
   }
   function openRig(saleId){
     rigSaleId = String(saleId);
+    hireShow(false); hireReset();
     // The last job's message must not be sitting there when the next
     // one is opened - that is how the wrong job gets sent.
     const waBox = document.getElementById('rig-wa-text');
@@ -3700,48 +4043,11 @@ const OverviewApp = (() => {
     const a = ASSIGN[rigSaleId] || {};
     const sale = (allSales || []).find(s => String(s.id) === rigSaleId);
 
-    const opt = (list, val, label, sel) => '<option value="' + val(list) + '"' +
-      (String(sel) === String(val(list)) ? ' selected' : '') + '>' + rigEsc(label(list)) + '</option>';
-
     document.getElementById('rig-who').textContent = sale
       ? sale.customer + '  ·  ' + (sale.litres || 0).toLocaleString() + ' L'
       : 'Delivery';
 
-    document.getElementById('rig-vehicle').innerHTML =
-      '<option value="">— pick a truck —</option>' +
-      FLEET.vehicles.map(v => opt(v, x => x.id,
-        x => x.fleet_no + '  ' + (x.reg_no || '') + '  ' + (x.model || ''), a.vehicle_id)).join('');
-
-    document.getElementById('rig-trailer').innerHTML =
-      '<option value="">— none —</option>' +
-      FLEET.trailers.map(t => opt(t, x => x.id,
-        x => x.trailer_no + '  ' + (x.reg_no || ''), a.trailer_id)).join('');
-
-    document.getElementById('rig-driver').innerHTML =
-      '<option value="">— pick a driver —</option>' +
-      FLEET.drivers.map(d => opt(d, x => x.id, x => x.full_name, a.driver_id)).join('');
-
-    // One entry per TRUCK, named by its driver. (The old note here said some
-    // drivers ran two trucks each - that came from the guessed seed data and
-    // the register shows one truck per driver.) SR01 has no fixed driver at
-    // all, so it is labelled by what it is. Capacity rides on the label so a
-    // 40,000 L load is not put on the 3,500 L runabout.
-    document.getElementById('rig-rig').innerHTML =
-      '<option value="">\u2014 pick a driver \u2014</option>' +
-      FLEET.vehicles.map(v => {
-        const d = byId(FLEET.drivers, v.default_driver_id);
-        const t = byId(FLEET.trailers, v.default_trailer_id);
-        const label = (d ? d.full_name : (v.driver_optional ? 'Any driver' : '(no driver)')) +
-          '  \u2014  ' + v.fleet_no +
-          (v.reg_no ? ' (' + v.reg_no + ')' : '') +
-          (t ? '  +  ' + t.trailer_no + (t.reg_no ? ' (' + t.reg_no + ')' : '') : '') +
-          (v.capacity_litres ? '  \u00b7  ' + v.capacity_litres.toLocaleString() + ' L' : '');
-        return '<option value="' + v.id + '"' +
-          (String(a.vehicle_id) === String(v.id) ? ' selected' : '') + '>' +
-          rigEsc(label) + '</option>';
-      }).join('');
-
-    rigPumpOptions(a.pump_unit_id);
+    rigFillSelects(a);
     rigPumpVisibility();
     // Open the detail fields only when this assignment is NOT the usual rig —
     // otherwise the one-click case stays one click.
@@ -3768,7 +4074,10 @@ const OverviewApp = (() => {
   // The picker is a shortcut, not a second source of truth: it fills the three
   // fields below and saving still reads only those. One place to be wrong.
   function rigPicked(){
-    const v = byId(FLEET.vehicles, document.getElementById('rig-rig').value);
+    const pick = document.getElementById('rig-rig').value;
+    if (pick === '__hire__') { openHire(); return; }
+    hireShow(false);
+    const v = byId(FLEET.vehicles, pick);
     document.getElementById('rig-vehicle').value = v ? v.id : '';
     document.getElementById('rig-trailer').value = (v && v.default_trailer_id) || '';
     document.getElementById('rig-driver').value  = (v && v.default_driver_id)  || '';
@@ -3822,7 +4131,7 @@ const OverviewApp = (() => {
       bold('Date', fmtDate(sale.deliveryDate)),
       bold('Load', litres),
       '',
-      bold('Truck', unit(v)),
+            bold('Truck', v ? unit(v) + (conOf(v) ? '  (' + conOf(v).name + ')' : '') : null),
       bold('Trailer', unit(t)),
       bold('Driver', d ? d.full_name + (d.phone ? '  ' + d.phone : '') : null),
       bold('Pump unit', pumpLine),
@@ -4173,8 +4482,11 @@ const OverviewApp = (() => {
   return { init, markDelivered, undoDelivered, setEnRoute, clearEnRoute, enRouteCell,
     openRig, closeRig, saveRig, clearRig, rigVehiclePicked,
     rigPicked, toggleRigAdvanced, copyDriverMessage,
+    hireConChanged, hirePumpToggle, saveHiredTruck, cancelHire,
     openDeliverySchedule, closeSchedule, copySchedule,
-    __seed(o){ if(o.FLEET)FLEET=o.FLEET; if(o.ASSIGN)ASSIGN=o.ASSIGN; if(o.allSales)allSales=o.allSales; } };
+    // Test hook. `sb` is normally set by init() at sign-in, so a test that
+    // drives this module without signing in has to hand it one.
+    __seed(o){ if(o.FLEET)FLEET=o.FLEET; if(o.ASSIGN)ASSIGN=o.ASSIGN; if(o.allSales)allSales=o.allSales; if(o.sb)sb=o.sb; } };
 })();
 
 /* ================= ACCOUNTS APP (ported from accounts/index.html) ================= */
@@ -7742,9 +8054,9 @@ const LogisticsApp = (() => {
   async function loadFleet(){
     try{
       const [d,v,t]=await Promise.all([
-        sb.from('drivers').select('id,full_name,id_number,phone').eq('active',true).order('full_name'),
-        sb.from('vehicles').select('id,fleet_no,reg_no,default_driver_id,default_trailer_id').eq('active',true).order('fleet_no'),
-        sb.from('trailers').select('id,trailer_no,reg_no').eq('active',true).order('trailer_no')
+        sb.from('drivers').select('id,full_name,id_number,phone').eq('active',true).is('contractor_id',null).order('full_name'),
+        sb.from('vehicles').select('id,fleet_no,reg_no,default_driver_id,default_trailer_id').eq('active',true).is('contractor_id',null).order('fleet_no'),
+        sb.from('trailers').select('id,trailer_no,reg_no').eq('active',true).is('contractor_id',null).order('trailer_no')
       ]);
       DRIVERS=d.data||[]; VEHICLES=v.data||[]; TRAILERS=t.data||[];
       renderDrivers();
@@ -11715,10 +12027,63 @@ async function exportToCSV() {
     <div class="sub" id="rig-who">&mdash;</div>
     <div class="rigfld"><label>Driver &amp; rig</label>
       <select id="rig-rig" onchange="OverviewApp.rigPicked()"></select></div>
+    <!-- Hiring in a truck from another transporter. Everything saved here
+         becomes an ordinary truck, driver and pump unit owned by that
+         company, so the second load with them is a single tap. -->
+    <div class="hirep" id="rig-new" style="display:none;">
+      <p class="ph">&#10133; Hire in a truck</p>
+      <div class="rigfld"><label>Transporter <span class="req">*</span></label>
+        <select id="hire-con" onchange="OverviewApp.hireConChanged()"></select></div>
+      <div class="rigfld" id="hire-con-new-wrap" style="display:none;">
+        <label>Company name <span class="soft">&mdash; as it is on their invoice</span></label>
+        <input type="text" id="hire-con-new" placeholder="Zimgo Transport"></div>
+      <div class="two">
+        <div class="rigfld"><label>Truck reg <span class="req">*</span></label>
+          <input type="text" id="hire-reg" placeholder="ACZ 1234"></div>
+        <div class="rigfld"><label>Trailer reg <span class="soft">&mdash; if any</span></label>
+          <input type="text" id="hire-trailer" placeholder="ACZ 1235"></div>
+      </div>
+      <div class="rigfld"><label>Carries</label>
+        <select id="hire-cap">
+          <option value="">&mdash; not known &mdash;</option>
+          <option value="3500">3,500 L</option>
+          <option value="10000">10,000 L</option>
+          <option value="18000">18,000 L</option>
+          <option value="30000">30,000 L</option>
+          <option value="36000">36,000 L</option>
+          <option value="40000">40,000 L</option>
+        </select></div>
+      <div class="two">
+        <div class="rigfld"><label>Driver <span class="req">*</span></label>
+          <input type="text" id="hire-driver" placeholder="Tapiwa Moyo"></div>
+        <div class="rigfld"><label>Phone <span class="req">*</span></label>
+          <input type="tel" id="hire-phone" placeholder="0772 123 456"></div>
+      </div>
+      <div class="rigfld"><label>Driver ID no <span class="soft">&mdash; optional</span></label>
+        <input type="text" id="hire-id" placeholder="63-1482377M48"></div>
+      <label class="hirechk">
+        <input type="checkbox" id="hire-pump" onchange="OverviewApp.hirePumpToggle()">
+        <span>This truck needs a pumping unit alongside it</span></label>
+      <div id="hire-pump-wrap" style="display:none;">
+        <div class="two">
+          <div class="rigfld"><label>Pump reg</label>
+            <input type="text" id="hire-pump-reg" placeholder="AFX 1111"></div>
+          <div class="rigfld"><label>Pump driver</label>
+            <input type="text" id="hire-pump-driver" placeholder="Lovemore"></div>
+        </div>
+        <div class="rigfld"><label>Pump driver&rsquo;s phone</label>
+          <input type="tel" id="hire-pump-phone" placeholder="0771 987 654"></div>
+      </div>
+      <div class="rigerr" id="hire-err"></div>
+      <div class="rigrow" style="margin-bottom:12px;">
+        <button class="pri" id="hire-save" onclick="OverviewApp.saveHiredTruck()">Save this truck</button>
+        <button class="sec" onclick="OverviewApp.cancelHire()">Back</button>
+      </div>
+    </div>
     <div class="rigfld" id="rig-pump-wrap" style="display:none;">
       <label>Pumping unit <span style="font-weight:400;text-transform:none;">&mdash; leave blank and add it later if you do not know yet</span></label>
       <select id="rig-pump"></select></div>
-    <div style="text-align:right;margin:-6px 0 10px;">
+    <div style="text-align:right;margin:-6px 0 10px;" id="rig-advrow">
       <button type="button" class="riglink" id="rig-adv-btn" onclick="OverviewApp.toggleRigAdvanced()">Swap truck, trailer or driver</button>
     </div>
     <div id="rig-adv" style="display:none;">
@@ -11729,12 +12094,13 @@ async function exportToCSV() {
     <div class="rigfld"><label>Driver</label>
       <select id="rig-driver"></select></div>
     </div>
+    <div class="rignote" id="rig-note"></div>
     <div class="rigerr" id="rig-err"></div>
-    <div class="rigrow">
+    <div class="rigrow" id="rig-mainrow">
       <button class="pri" id="rig-save" onclick="OverviewApp.saveRig()">Save</button>
       <button class="sec" onclick="OverviewApp.closeRig()">Cancel</button>
     </div>
-    <div class="rigrow" style="margin-top:9px;">
+    <div class="rigrow" style="margin-top:9px;" id="rig-warow">
       <button class="wha" id="rig-wa-btn" onclick="OverviewApp.copyDriverMessage()">&#128203; Copy job for the driver</button>
     </div>
     <textarea class="rigwa" id="rig-wa-text" readonly style="display:none;"></textarea>

@@ -3,7 +3,7 @@
 // Adapted from ops/sw.js — same cache-first strategy with an
 // offline-navigate fallback.
 // ============================================================
-const CACHE = 'admin-v29';
+const CACHE = 'admin-v30';
 const CORE = [
   './',
   'index.html',
