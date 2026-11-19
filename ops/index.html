@@ -593,6 +593,17 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
 </div>
 
 <script>
+// ---- escHtml: the one way user text reaches the page ----
+// Customer names, places and notes are typed freely by reps. Written
+// straight into innerHTML they are markup, not text, so a name like
+// <img src=x onerror=...> runs as code in every app that lists sales -
+// including an administrator's, where the session can manage users.
+// Every interpolation of a free-text column goes through this.
+function escHtml(v){
+  return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
 const SUPABASE_URL='https://lkaotuavapyvqfuuyzft.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYW90dWF2YXB5dnFmdXV5emZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MzU4NzcsImV4cCI6MjA5NzQxMTg3N30.he7Ah-TVyzZZAMiCHglIzP-UbdnxDw-CW4V9mYYJBDU';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);

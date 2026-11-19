@@ -1,0 +1,23 @@
+# Anything committed here is published by GitHub Pages, so keep the
+# repository to the things that are meant to be served.
+
+# Installed test dependencies. Thousands of files, none of them ours.
+node_modules/
+tests/node_modules/
+
+# Playwright output: screenshots, traces and videos of test runs.
+test-results/
+tests/test-results/
+playwright-report/
+
+# Windows and macOS folder junk.
+desktop.ini
+Thumbs.db
+.DS_Store
+
+# Local environment files. A key belongs in Supabase's own secret store,
+# never in a file in this repository.
+.env
+.env.*
+*.key
+*.pem

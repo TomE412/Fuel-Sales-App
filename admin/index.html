@@ -2607,6 +2607,17 @@ font-family:var(--mono);margin-bottom:5px;}
 
 <script>
 
+// ---- escHtml: the one way user text reaches the page ----
+// Customer names, places and notes are typed freely by reps. Written
+// straight into innerHTML they are markup, not text, so a name like
+// <img src=x onerror=...> runs as code in every app that lists sales -
+// including an administrator's, where the session can manage users.
+// Every interpolation of a free-text column goes through this.
+function escHtml(v){
+  return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
 const SUPABASE_URL = 'https://lkaotuavapyvqfuuyzft.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYW90dWF2YXB5dnFmdXV5emZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MzU4NzcsImV4cCI6MjA5NzQxMTg3N30.he7Ah-TVyzZZAMiCHglIzP-UbdnxDw-CW4V9mYYJBDU';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -3213,7 +3224,7 @@ const OverviewApp = (() => {
             <div style="font-size:9px;color:var(--gray-text);">${fmtWk(r.next_due_date)}</div>
           </div>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:12px;font-weight:700;">${r.customer}</div>
+            <div style="font-size:12px;font-weight:700;">${escHtml(r.customer)}</div>
             <div style="font-size:10px;color:var(--gray-text);">every ${r.avg_cycle_days||'?'}d · last ${r.days_since_last||0}d ago</div>
           </div>
           <div style="font-size:11px;font-weight:700;font-family:var(--mono);color:${col(r.ripeness_pct)};">${r.avg_litres?Math.round(r.avg_litres).toLocaleString()+' L':'—'}</div>
@@ -4017,8 +4028,8 @@ const OverviewApp = (() => {
             <div class="date-mon" style="color:${box[2]};">${d?MN[d.getMonth()]:'TBC'}</div>
           </div>
           <div class="ord-mid">
-            <div class="order-name">${s.customer}${np}${fp}</div>
-            <div class="order-meta">${s.location||'—'} · ${s.rep}${urg}</div>
+            <div class="order-name">${escHtml(s.customer)}${np}${fp}</div>
+            <div class="order-meta">${escHtml(s.location || '—')} · ${escHtml(s.rep)}${urg}</div>
             ${s.notes?`<div style="font-size:11px;color:var(--text2);margin-top:3px;background:var(--gray-light);padding:4px 6px;border-radius:4px;border-left:2px solid var(--amber);">📝 ${noteHtml(s.notes)}</div>`:''}
           </div>
           <div class="ord-rig">${rigBadge(s.id)}</div>
@@ -4042,8 +4053,8 @@ const OverviewApp = (() => {
             <div class="date-mon" style="color:var(--green-dark);">${d?MN[d.getMonth()]:''}</div>
           </div>
           <div style="flex:1;min-width:0;">
-            <div class="order-name delivered">${s.customer}${fp}</div>
-            <div class="order-meta">${s.location||'—'} · ${s.rep}</div>
+            <div class="order-name delivered">${escHtml(s.customer)}${fp}</div>
+            <div class="order-meta">${escHtml(s.location || '—')} · ${escHtml(s.rep)}</div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;">
             <div class="order-litres" style="color:var(--gray-text);">${(s.litres||0).toLocaleString()} L</div>
@@ -4113,7 +4124,7 @@ const OverviewApp = (() => {
     // TICKER — only upcoming (not delivered)
     const tickerSales = activeSales.filter(s => !s.delivered).slice(0,12);
     const items = tickerSales.map(s =>
-      `<span class="ticker-item">🛢 ${s.rep} → ${s.customer} · ${(s.litres||0).toLocaleString()} L · ${s.location||'—'} · Del: ${fmtDate(s.deliveryDate)}</span><span style="color:rgba(255,255,255,0.4);font-size:14px;"> | </span>`
+      `<span class="ticker-item">🛢 ${escHtml(s.rep)} → ${escHtml(s.customer)} · ${(s.litres||0).toLocaleString()} L · ${escHtml(s.location || '—')} · Del: ${fmtDate(s.deliveryDate)}</span><span style="color:rgba(255,255,255,0.4);font-size:14px;"> | </span>`
     ).join('');
     const track = document.getElementById('ticker-track');
     if (items) track.innerHTML = items + items;
@@ -4458,7 +4469,7 @@ function money2(v){ return '$' + Number(v).toFixed(3); }
       return '<tr'+(needsCheck?' style="background:var(--red-light);"':'')+'>'+
         '<td class="mono" style="white-space:nowrap;">'+fmtDate(s.date)+'</td>'+
         '<td class="mono" style="white-space:nowrap;">'+(s.deliveryDate?fmtDate(s.deliveryDate):'<span style="color:var(--gray-text);">&mdash;</span>')+'</td>'+
-        '<td><div style="font-weight:700;">'+s.customer+'</div>'+
+        '<td><div style="font-weight:700;">'+escHtml(s.customer)+'</div>'+
           '<div style="font-size:10px;color:var(--gray-text);">'+(s.location||'&mdash;')+' &middot; '+(s.rep||'&mdash;')+'</div>'+
         lossPill+
         routePill+
@@ -4891,7 +4902,7 @@ function money2(v){ return '$' + Number(v).toFixed(3); }
       const pctCol = r.status==='gone_quiet'?'var(--red)':r.status==='overdue'?'var(--amber)':r.status==='due_now'?'var(--green-dark)':'var(--gray-text)';
       const cyc = r.avg_cycle_days ? r.avg_cycle_days+'d' : '—';
       return '<tr>'+
-        '<td style="font-weight:700;">'+r.customer+
+        '<td style="font-weight:700;">'+escHtml(r.customer)+
           '<div style="font-size:10px;font-weight:600;color:'+(patCol[r.buying_pattern]||'var(--gray-text)')+';">'+(patLabel[r.buying_pattern]||'—')+'</div></td>'+
         '<td class="mono">'+(r.order_count||0)+'</td>'+
         '<td class="mono">'+cyc+'</td>'+
@@ -5166,7 +5177,7 @@ function money2(v){ return '$' + Number(v).toFixed(3); }
           '<div class="gaprow'+(r.bought_this_month?' bought':'')+'" onclick="AccountsApp.openCustEdit(\''+
             (r.customer||'').replace(/'/g,"\\'").replace(/"/g,'&quot;')+'\')">'+
             '<div style="flex:1;min-width:0;">'+
-              '<div style="font-weight:700;font-size:13px;">'+r.customer+
+              '<div style="font-weight:700;font-size:13px;">'+escHtml(r.customer)+
                 (r.rep_is_manual?'<span class="mpill" title="Manually assigned">assigned</span>':'')+
                 (r.lost_last_round?'<span class="lostflag">lost last</span>':'')+'</div>'+
               '<div style="font-size:11px;color:var(--gray-text);">'+
@@ -5270,7 +5281,7 @@ function money2(v){ return '$' + Number(v).toFixed(3); }
         (r.status==='gone_quiet' ? '<button class="upd-btn" style="background:var(--red-light);color:var(--red-dark);border-color:var(--red-light);" onclick="AccountsApp.removeCustomerFromActiveList(\''+cust+'\')">Remove</button>' : '')+
       '</div>';
       return '<tr>'+
-        '<td style="font-weight:700;">'+r.customer+flag+lc+'</td>'+
+        '<td style="font-weight:700;">'+escHtml(r.customer)+flag+lc+'</td>'+
         '<td class="mono">'+fmtD(r.last_order)+'</td>'+
         '<td class="mono">'+(r.days_since_last||0)+'d</td>'+
         '<td class="mono">'+(r.avg_cycle_days||'?')+'d</td>'+
@@ -5332,7 +5343,7 @@ function money2(v){ return '$' + Number(v).toFixed(3); }
           .select('app_name').ilike('invoice_name',updCustomer).limit(1).maybeSingle();
         if(data&&data.app_name){
           document.getElementById('ulink-current').innerHTML=
-            'Currently linked to: <b>'+data.app_name+'</b>. Saving will replace it.';
+            'Currently linked to: <b>'+escHtml(data.app_name)+'</b>. Saving will replace it.';
         }
       }catch(_){}
       uShow('link');
@@ -5761,7 +5772,7 @@ function money2(v){ return '$' + Number(v).toFixed(3); }
 
     document.getElementById('fc-deliveries-body').innerHTML = F.potential.length
       ? F.potential.map(p=>
-          '<tr><td style="font-weight:700;">'+p.customer+'</td>'+
+          '<tr><td style="font-weight:700;">'+escHtml(p.customer)+'</td>'+
           '<td>'+p.expectedDay+' <span style="color:var(--gray-text);font-size:10px;">'+fmtDate(p.expectedDate)+'</span></td>'+
           '<td class="mono" style="text-align:right;">'+Math.round(p.litres).toLocaleString()+' L</td>'+
           '<td><span class="pill '+(p.fuelType==='Petrol'?'p-petrol':p.fuelType==='Paraffin'?'p-paraffin':'p-diesel')+'">'+p.fuelType+'</span></td>'+
@@ -5771,14 +5782,14 @@ function money2(v){ return '$' + Number(v).toFixed(3); }
 
     document.getElementById('fc-cash-confirmed-body').innerHTML = F.confirmedCash.length
       ? F.confirmedCash.map(c=>
-          '<tr><td style="font-weight:700;">'+c.customer+'</td><td class="mono">'+fmtDate(c.due)+'</td>'+
+          '<tr><td style="font-weight:700;">'+escHtml(c.customer)+'</td><td class="mono">'+fmtDate(c.due)+'</td>'+
           '<td class="mono" style="text-align:right;font-weight:700;">'+money(c.amount)+'</td></tr>'
         ).join('') + '<tr><td style="font-weight:700;">TOTAL</td><td></td><td class="mono" style="text-align:right;font-weight:700;">'+money(F.confirmedCashTotal)+'</td></tr>'
       : '<tr><td colspan="3" class="empty-msg">Nothing already on the books due this week.</td></tr>';
 
     document.getElementById('fc-cash-predicted-body').innerHTML = F.predictedCash.length
       ? F.predictedCash.map(c=>
-          '<tr><td style="font-weight:700;">'+c.customer+'</td><td>'+c.expectedDay+'</td>'+
+          '<tr><td style="font-weight:700;">'+escHtml(c.customer)+'</td><td>'+c.expectedDay+'</td>'+
           '<td class="mono" style="text-align:right;font-weight:700;">'+money(c.amount)+'</td></tr>'
         ).join('') + '<tr><td style="font-weight:700;">TOTAL</td><td></td><td class="mono" style="text-align:right;font-weight:700;">'+money(F.predictedCashTotal)+'</td></tr>'
       : '<tr><td colspan="3" class="empty-msg">No predicted COD orders this week.</td></tr>';
@@ -5893,7 +5904,7 @@ function money2(v){ return '$' + Number(v).toFixed(3); }
         '<table class="tbl"><thead><tr><th>Customer</th><th>Expected</th><th>Expected litres</th><th>Actual</th><th>Actual litres</th><th>Outcome</th></tr></thead><tbody>'+
         rows.map(r =>
           '<tr>'+
-            '<td style="font-weight:700;">'+r.customer+'</td>'+
+            '<td style="font-weight:700;">'+escHtml(r.customer)+'</td>'+
             '<td class="mono">'+(r.expectedDate ? fmtDate(r.expectedDate) : '—')+'</td>'+
             '<td class="mono">'+Math.round(r.expectedLitres||0).toLocaleString()+' L</td>'+
             '<td class="mono">'+(r.actualDate ? fmtDate(r.actualDate) : '—')+'</td>'+
@@ -8115,7 +8126,7 @@ const SalesApp = (() => {
   function acHighlight(name,q){
     const nq=acNorm(q), nn=acNorm(name);
     const i=nn.indexOf(nq);
-    if(i<0) return name;
+    if(i<0) return escHtml(name);
     let count=-1,start=-1,end=-1;
     for(let j=0;j<name.length;j++){
       const ch=name[j].toLowerCase();
@@ -8123,8 +8134,8 @@ const SalesApp = (() => {
       if(count===i && start<0) start=j;
       if(count===i+nq.length-1){ end=j+1; break; }
     }
-    if(start<0||end<0) return name;
-    return name.slice(0,start)+'<b>'+name.slice(start,end)+'</b>'+name.slice(end);
+    if(start<0||end<0) return escHtml(name);
+    return escHtml(name.slice(0,start))+'<b>'+escHtml(name.slice(start,end))+'</b>'+escHtml(name.slice(end));
   }
 
   function acRender(q){
@@ -8294,9 +8305,9 @@ const SalesApp = (() => {
     const nq = acNorm(q);
     if(nq.length<2){ list.classList.remove('show'); return; }
     let html = locAcCurrent.map((p,i)=>
-      '<div class="ac-item'+(i===locAcIdx?' sel':'')+'" onclick="SalesApp.locAcPick(\''+p.place.replace(/'/g,"\\'")+'\')">'+
+      '<div class="ac-item'+(i===locAcIdx?' sel':'')+'" onclick="SalesApp.locAcPick(\''+escHtml(p.place.replace(/'/g,"\\'"))+'\')">'+
         '<div class="ac-name">'+acHighlight(p.place,q)+'</div>'+
-        (p.parent?'<div class="ac-meta">'+p.parent+'</div>':'')+
+        (p.parent?'<div class="ac-meta">'+escHtml(p.parent)+'</div>':'')+
       '</div>'
     ).join('');
     const exact = locAcCurrent.some(p=>acNorm(p.place)===nq);
@@ -8974,18 +8985,18 @@ const SalesApp = (() => {
     const queued = getQueue();
     const queuedRows = queued.map(item => {
       const p = item.payload;
-      const fuelPill = p.fuel_type ? `<span class="pill ${fuelPillClass(p.fuel_type)}">${p.fuel_type}</span>` : '';
+      const fuelPill = p.fuel_type ? `<span class="pill ${fuelPillClass(p.fuel_type)}">${escHtml(p.fuel_type)}</span>` : '';
       const pendingPill = `<span class="pill" style="background:var(--amber-light);color:var(--amber);">⏳ Not synced yet</span>`;
       const editBtn = `<button class="del-btn" style="background:#fff;color:#5a5a57;border:1px solid var(--gray-border);margin-top:6px;" onclick="SalesApp.openSaleForEdit('${item._localId}');event.stopPropagation()">✎ Edit sale</button>`;
       return `<div class="sale-row" style="border-left:3px solid var(--amber);" onclick="SalesApp.openSaleForEdit('${item._localId}')">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <div class="sale-customer">${p.customer}${fuelPill}${pendingPill}</div>
+          <div class="sale-customer">${escHtml(p.customer)}${fuelPill}${pendingPill}</div>
           <div style="text-align:right;flex-shrink:0;">
             <div class="sale-litres">${(p.litres||0).toLocaleString()} L</div>
             ${salePriceHtml(p.litres, p.price_per_litre, p.price_tba)}
           </div>
         </div>
-        <div class="sale-meta">${p.location||'—'} · ${fmtDate(p.sale_date)} · ${p.payment_term}</div>
+        <div class="sale-meta">${escHtml(p.location || '—')} · ${fmtDate(p.sale_date)} · ${escHtml(p.payment_term)}</div>
         <div class="sale-meta">Del: ${fmtDate(p.delivery_date)} · Pay due: ${fmtDate(p.payment_due)}</div>
         <div class="sale-meta" style="color:var(--amber);font-weight:600;">Saved on this phone — will upload when back online</div>
         ${editBtn}
@@ -8998,7 +9009,7 @@ const SalesApp = (() => {
     }
     el.innerHTML = queuedRows + allSales.map(s => {
       const delivered = s.status === 'delivered';
-      const fuelPill = s.fuel_type ? `<span class="pill ${fuelPillClass(s.fuel_type)}">${s.fuel_type}</span>` : '';
+      const fuelPill = s.fuel_type ? `<span class="pill ${fuelPillClass(s.fuel_type)}">${escHtml(s.fuel_type)}</span>` : '';
       const delPill = delivered ? `<span class="pill p-del">✓ Delivered</span>` : '';
       const paidPill = s.paid ? `<span class="pill p-del">✓ Paid</span>` : '';
       const cancelledPill = s.status === 'cancelled' ? `<span class="pill" style="background:#F0F0EE;color:#5a5a57;">✗ Cancelled</span>` : '';
@@ -9013,13 +9024,13 @@ const SalesApp = (() => {
         `<button class="del-btn" style="background:transparent;color:var(--red);border:1px solid var(--red);margin-top:6px;" onclick="SalesApp.cancelSale(${s.id});event.stopPropagation()">🗑 Delete sale</button>` : '';
       return `<div class="sale-row" style="opacity:${(delivered||isCancelled)?'0.6':'1'}" onclick="SalesApp.openSaleForEdit(${s.id})">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <div class="sale-customer" style="${(delivered||isCancelled)?'text-decoration:line-through;color:var(--gray-text);':''}">${s.customer}${fuelPill}${delPill}${paidPill}${cancelledPill}${tbaPill}</div>
+          <div class="sale-customer" style="${(delivered||isCancelled)?'text-decoration:line-through;color:var(--gray-text);':''}">${escHtml(s.customer)}${fuelPill}${delPill}${paidPill}${cancelledPill}${tbaPill}</div>
           <div style="text-align:right;flex-shrink:0;">
             <div class="sale-litres">${(s.litres||0).toLocaleString()} L</div>
             ${priceHtml}
           </div>
         </div>
-        <div class="sale-meta">${s.location||'—'} · ${fmtDate(s.sale_date)} · ${s.payment_term}</div>
+        <div class="sale-meta">${escHtml(s.location || '—')} · ${fmtDate(s.sale_date)} · ${escHtml(s.payment_term)}</div>
         <div class="sale-meta">Del: ${fmtDate(s.delivery_date)} · Pay due: ${fmtDate(s.payment_due)}</div>
         ${delBtn}${editBtn}${cancelBtn}
       </div>`;
@@ -9072,8 +9083,8 @@ const SalesApp = (() => {
       delEl.innerHTML = upcoming.map(s => `
         <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-border);">
           <div>
-            <div style="font-size:14px;font-weight:600;">${s.customer}</div>
-            <div style="font-size:12px;color:var(--gray-text);">${s.location||'—'} · ${fmtDate(s.delivery_date)}</div>
+            <div style="font-size:14px;font-weight:600;">${escHtml(s.customer)}</div>
+            <div style="font-size:12px;color:var(--gray-text);">${escHtml(s.location || '—')} · ${fmtDate(s.delivery_date)}</div>
           </div>
           <div style="font-size:14px;font-weight:700;font-family:var(--mono);color:var(--green-dark);">${(s.litres||0).toLocaleString()} L</div>
         </div>`).join('');
@@ -9118,11 +9129,11 @@ const SalesApp = (() => {
       const col = RIPE_STATUS_COL[r.gap_status] || 'var(--gray-text)';
       const lbl = RIPE_STATUS_LBL[r.gap_status] || r.gap_status;
       const removeBtn = r.gap_status === 'gone_quiet'
-        ? `<button onclick="SalesApp.removeGoneQuietCustomer('${r.customer.replace(/'/g,"\\'")}')" style="padding:7px 10px;background:transparent;border:1px solid var(--red);color:var(--red);border-radius:8px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">Remove</button>`
+        ? `<button onclick="SalesApp.removeGoneQuietCustomer('${escHtml(r.customer.replace(/'/g,"\\'"))}')" style="padding:7px 10px;background:transparent;border:1px solid var(--red);color:var(--red);border-radius:8px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">Remove</button>`
         : '';
       return `<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--gray-border);">
         <div style="flex:1;min-width:0;">
-          <div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.customer}</div>
+          <div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(r.customer)}</div>
           <div style="font-size:11px;color:var(--gray-text);margin-top:2px;">${r.days_since_last!=null?r.days_since_last+'d since last order':'No orders yet'}${r.avg_cycle_days?' · every '+r.avg_cycle_days+'d':''}</div>
           <div style="font-size:11px;font-weight:600;color:${col};margin-top:2px;">${lbl}</div>
         </div>
@@ -9209,7 +9220,7 @@ const SalesApp = (() => {
       ${dayEvents.map(e => `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--gray-border);">
         <span style="font-size:16px;">${icons[e.type]}</span>
         <div style="flex:1;">
-          <div style="font-size:13px;font-weight:600;">${e.sale.customer}</div>
+          <div style="font-size:13px;font-weight:600;">${escHtml(e.sale.customer)}</div>
           <div style="font-size:11px;color:var(--gray-text);">${labels[e.type]} · ${(e.sale.litres||0).toLocaleString()} L</div>
         </div>
       </div>`).join('')}
@@ -9783,7 +9794,7 @@ const SalesApp = (() => {
       <div class="perf-cust-row">
         <div class="perf-cust-rank" style="background:${RANK_COLS[i]};">${i+1}</div>
         <div class="perf-cust-info">
-          <div class="perf-cust-name">${c.name}</div>
+          <div class="perf-cust-name">${escHtml(c.name)}</div>
           <div class="perf-cust-bar-track"><div class="perf-cust-bar-fill" style="width:${Math.round(c.litres/maxCust*100)}%;"></div></div>
         </div>
         <div class="perf-cust-vol">${c.litres.toLocaleString()} L</div>
@@ -11432,7 +11443,7 @@ function renderReport() {
             <div class="list-item">
               <div class="item-rank ${idx === 0 ? '' : idx === 1 ? 'silver' : idx === 2 ? 'bronze' : ''}">${idx + 1}</div>
               <div class="item-main" style="flex:1;">
-                <div class="item-name">${cust.name}</div>
+                <div class="item-name">${escHtml(cust.name)}</div>
                 <div class="item-meta">${cust.orders} orders • Avg: ${(cust.litres / cust.orders).toFixed(0)}L</div>
               </div>
               <div style="text-align:right;">
@@ -11467,7 +11478,7 @@ function renderReport() {
           <tbody>
             ${repLeaderboard.map((rep, idx) => `
               <tr>
-                <td><strong>${rep.name}</strong> <span class="ph-count" style="margin-left:8px;">#${idx + 1}</span></td>
+                <td><strong>${escHtml(rep.name)}</strong> <span class="ph-count" style="margin-left:8px;">#${idx + 1}</span></td>
                 <td style="text-align:right;font-family:var(--mono);">${formatNumber(rep.litres)}</td>
                 <td style="text-align:right;font-family:var(--mono);">${rep.orders}</td>
                 <td style="text-align:right;font-family:var(--mono);">${rep.customers}</td>
@@ -11570,14 +11581,14 @@ function renderReport() {
           <div class="list-item">
             <div class="item-main">
               <div class="item-name">Highest Price</div>
-              <div class="item-meta">${maxPriceSale.rep_name || 'N/A'} - ${maxPriceSale.fuel_type || 'Unknown'}</div>
+              <div class="item-meta">${escHtml(maxPriceSale.rep_name || 'N/A')} - ${escHtml(maxPriceSale.fuel_type || 'Unknown')}</div>
             </div>
             <div class="item-value">$${(maxPriceSale.price_per_litre || 0).toFixed(2)}/L</div>
           </div>
           <div class="list-item">
             <div class="item-main">
               <div class="item-name">Lowest Price</div>
-              <div class="item-meta">${minPriceSale.rep_name || 'N/A'} - ${minPriceSale.fuel_type || 'Unknown'}</div>
+              <div class="item-meta">${escHtml(minPriceSale.rep_name || 'N/A')} - ${escHtml(minPriceSale.fuel_type || 'Unknown')}</div>
             </div>
             <div class="item-value">$${(minPriceSale.price_per_litre || 0).toFixed(2)}/L</div>
           </div>

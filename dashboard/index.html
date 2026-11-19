@@ -322,6 +322,17 @@ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 </div>
 
 <script>
+// ---- escHtml: the one way user text reaches the page ----
+// Customer names, places and notes are typed freely by reps. Written
+// straight into innerHTML they are markup, not text, so a name like
+// <img src=x onerror=...> runs as code in every app that lists sales -
+// including an administrator's, where the session can manage users.
+// Every interpolation of a free-text column goes through this.
+function escHtml(v){
+  return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
 const SUPABASE_URL = 'https://lkaotuavapyvqfuuyzft.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYW90dWF2YXB5dnFmdXV5emZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MzU4NzcsImV4cCI6MjA5NzQxMTg3N30.he7Ah-TVyzZZAMiCHglIzP-UbdnxDw-CW4V9mYYJBDU';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -427,7 +438,7 @@ async function loadDueSoon() {
           <div style="font-size:9px;color:var(--gray-text);">${fmtWk(r.next_due_date)}</div>
         </div>
         <div style="flex:1;min-width:0;">
-          <div style="font-size:12px;font-weight:700;">${r.customer}</div>
+          <div style="font-size:12px;font-weight:700;">${escHtml(r.customer)}</div>
           <div style="font-size:10px;color:var(--gray-text);">every ${r.avg_cycle_days||'?'}d · last ${r.days_since_last||0}d ago</div>
         </div>
         <div style="font-size:11px;font-weight:700;font-family:var(--mono);color:${col(r.ripeness_pct)};">${r.avg_litres?Math.round(r.avg_litres).toLocaleString()+' L':'—'}</div>
@@ -1258,8 +1269,8 @@ function renderAll() {
           <div class="date-mon" style="color:${box[2]};">${d?MN[d.getMonth()]:'TBC'}</div>
         </div>
         <div class="ord-mid">
-          <div class="order-name">${s.customer}${np}${fp}</div>
-          <div class="order-meta">${s.location||'—'} · ${s.rep}${urg}</div>
+          <div class="order-name">${escHtml(s.customer)}${np}${fp}</div>
+          <div class="order-meta">${escHtml(s.location || '—')} · ${escHtml(s.rep)}${urg}</div>
           ${s.notes?`<div style="font-size:11px;color:var(--text2);margin-top:3px;background:var(--gray-light);padding:4px 6px;border-radius:4px;border-left:2px solid var(--amber);">📝 ${noteHtml(s.notes)}</div>`:''}
         </div>
         <div class="ord-rig">${rigBadge(s.id)}</div>
@@ -1283,8 +1294,8 @@ function renderAll() {
           <div class="date-mon" style="color:var(--green-dark);">${d?MN[d.getMonth()]:''}</div>
         </div>
         <div style="flex:1;min-width:0;">
-          <div class="order-name delivered">${s.customer}${fp}</div>
-          <div class="order-meta">${s.location||'—'} · ${s.rep}</div>
+          <div class="order-name delivered">${escHtml(s.customer)}${fp}</div>
+          <div class="order-meta">${escHtml(s.location || '—')} · ${escHtml(s.rep)}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;">
           <div class="order-litres" style="color:var(--gray-text);">${(s.litres||0).toLocaleString()} L</div>
@@ -1357,7 +1368,7 @@ function renderAll() {
   // TICKER — only upcoming (not delivered)
   const tickerSales = activeSales.filter(s => !s.delivered).slice(0,12);
   const items = tickerSales.map(s =>
-    `<span class="ticker-item">🛢 ${s.rep} → ${s.customer} · ${(s.litres||0).toLocaleString()} L · ${s.location||'—'} · Del: ${fmtDate(s.deliveryDate)}</span><span style="color:rgba(255,255,255,0.4);font-size:14px;"> | </span>`
+    `<span class="ticker-item">🛢 ${escHtml(s.rep)} → ${escHtml(s.customer)} · ${(s.litres||0).toLocaleString()} L · ${escHtml(s.location || '—')} · Del: ${fmtDate(s.deliveryDate)}</span><span style="color:rgba(255,255,255,0.4);font-size:14px;"> | </span>`
   ).join('');
   const track = document.getElementById('ticker-track');
   if (items) track.innerHTML = items + items;

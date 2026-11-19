@@ -775,6 +775,17 @@ font-family:var(--mono);margin-bottom:5px;}
 </div>
 
 <script>
+// ---- escHtml: the one way user text reaches the page ----
+// Customer names, places and notes are typed freely by reps. Written
+// straight into innerHTML they are markup, not text, so a name like
+// <img src=x onerror=...> runs as code in every app that lists sales -
+// including an administrator's, where the session can manage users.
+// Every interpolation of a free-text column goes through this.
+function escHtml(v){
+  return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
 const SUPABASE_URL='https://lkaotuavapyvqfuuyzft.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYW90dWF2YXB5dnFmdXV5emZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MzU4NzcsImV4cCI6MjA5NzQxMTg3N30.he7Ah-TVyzZZAMiCHglIzP-UbdnxDw-CW4V9mYYJBDU';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
@@ -1152,7 +1163,7 @@ function renderTracker(){
     return '<tr'+(needsCheck?' style="background:var(--red-light);"':'')+'>'+
       '<td class="mono" style="white-space:nowrap;">'+fmtDate(s.date)+'</td>'+
       '<td class="mono" style="white-space:nowrap;">'+(s.deliveryDate?fmtDate(s.deliveryDate):'<span style="color:var(--gray-text);">&mdash;</span>')+'</td>'+
-      '<td><div style="font-weight:700;">'+s.customer+'</div>'+
+      '<td><div style="font-weight:700;">'+escHtml(s.customer)+'</div>'+
         '<div style="font-size:10px;color:var(--gray-text);">'+(s.location||'&mdash;')+' &middot; '+(s.rep||'&mdash;')+'</div>'+
         lossPill+
         routePill+
@@ -1633,7 +1644,7 @@ function renderBook(){
     const pctCol = r.status==='gone_quiet'?'var(--red)':r.status==='overdue'?'var(--amber)':r.status==='due_now'?'var(--green-dark)':'var(--gray-text)';
     const cyc = r.avg_cycle_days ? r.avg_cycle_days+'d' : '—';
     return '<tr>'+
-      '<td style="font-weight:700;">'+r.customer+
+      '<td style="font-weight:700;">'+escHtml(r.customer)+
         '<div style="font-size:10px;font-weight:600;color:'+(patCol[r.buying_pattern]||'var(--gray-text)')+';">'+(patLabel[r.buying_pattern]||'—')+'</div></td>'+
       '<td class="mono">'+(r.order_count||0)+'</td>'+
       '<td class="mono">'+cyc+'</td>'+
@@ -2690,7 +2701,7 @@ function renderReport() {
             <div class="list-item">
               <div class="item-rank ${idx === 0 ? '' : idx === 1 ? 'silver' : idx === 2 ? 'bronze' : ''}">${idx + 1}</div>
               <div class="item-main" style="flex:1;">
-                <div class="item-name">${cust.name}</div>
+                <div class="item-name">${escHtml(cust.name)}</div>
                 <div class="item-meta">${cust.orders} orders • Avg: ${(cust.litres / cust.orders).toFixed(0)}L</div>
               </div>
               <div style="text-align:right;">
@@ -2724,7 +2735,7 @@ function renderReport() {
           <tbody>
             ${repLeaderboard.map((rep, idx) => `
               <tr>
-                <td><strong>${rep.name}</strong> <span class="ph-count" style="margin-left:8px;">#${idx + 1}</span></td>
+                <td><strong>${escHtml(rep.name)}</strong> <span class="ph-count" style="margin-left:8px;">#${idx + 1}</span></td>
                 <td style="text-align:right;font-family:var(--mono);">${formatNumber(rep.litres)}</td>
                 <td style="text-align:right;font-family:var(--mono);">${rep.orders}</td>
                 <td style="text-align:right;font-family:var(--mono);">${rep.customers}</td>
@@ -2824,14 +2835,14 @@ function renderReport() {
           <div class="list-item">
             <div class="item-main">
               <div class="item-name">Highest Price</div>
-              <div class="item-meta">${maxPriceSale.rep_name || 'N/A'} - ${maxPriceSale.fuel_type || 'Unknown'}</div>
+              <div class="item-meta">${escHtml(maxPriceSale.rep_name || 'N/A')} - ${escHtml(maxPriceSale.fuel_type || 'Unknown')}</div>
             </div>
             <div class="item-value">$${(maxPriceSale.price_per_litre || 0).toFixed(2)}/L</div>
           </div>
           <div class="list-item">
             <div class="item-main">
               <div class="item-name">Lowest Price</div>
-              <div class="item-meta">${minPriceSale.rep_name || 'N/A'} - ${minPriceSale.fuel_type || 'Unknown'}</div>
+              <div class="item-meta">${escHtml(minPriceSale.rep_name || 'N/A')} - ${escHtml(minPriceSale.fuel_type || 'Unknown')}</div>
             </div>
             <div class="item-value">$${(minPriceSale.price_per_litre || 0).toFixed(2)}/L</div>
           </div>
@@ -3198,7 +3209,7 @@ function renderGaps(){
         '<div class="gaprow'+(r.bought_this_month?' bought':'')+'" onclick="openCustEdit(\''+
           (r.customer||'').replace(/'/g,"\\'").replace(/"/g,'&quot;')+'\')">'+
           '<div style="flex:1;min-width:0;">'+
-            '<div style="font-weight:700;font-size:13px;">'+r.customer+
+            '<div style="font-weight:700;font-size:13px;">'+escHtml(r.customer)+
               (r.rep_is_manual?'<span class="mpill" title="Manually assigned">assigned</span>':'')+
               (r.lost_last_round?'<span class="lostflag">lost last</span>':'')+'</div>'+
             '<div style="font-size:11px;color:var(--gray-text);">'+
@@ -3301,7 +3312,7 @@ function renderRetention(){
       (r.status==='gone_quiet' ? '<button class="upd-btn" style="background:var(--red-light);color:var(--red-dark);border-color:var(--red-light);" onclick="removeCustomerFromActiveList(\''+cust+'\')">Remove</button>' : '')+
     '</div>';
     return '<tr>'+
-      '<td style="font-weight:700;">'+r.customer+flag+lc+'</td>'+
+      '<td style="font-weight:700;">'+escHtml(r.customer)+flag+lc+'</td>'+
       '<td class="mono">'+fmtD(r.last_order)+'</td>'+
       '<td class="mono">'+(r.days_since_last||0)+'d</td>'+
       '<td class="mono">'+(r.avg_cycle_days||'?')+'d</td>'+
@@ -3368,7 +3379,7 @@ async function uGo(what){
         .select('app_name').ilike('invoice_name',updCustomer).limit(1).maybeSingle();
       if(data&&data.app_name){
         document.getElementById('ulink-current').innerHTML=
-          'Currently linked to: <b>'+data.app_name+'</b>. Saving will replace it.';
+          'Currently linked to: <b>'+escHtml(data.app_name)+'</b>. Saving will replace it.';
       }
     }catch(_){}
     uShow('link');
@@ -3853,7 +3864,7 @@ function renderForecast(){
 
   document.getElementById('fc-deliveries-body').innerHTML = F.potential.length
     ? F.potential.map(p=>
-        '<tr><td style="font-weight:700;">'+p.customer+'</td>'+
+        '<tr><td style="font-weight:700;">'+escHtml(p.customer)+'</td>'+
         '<td>'+p.expectedDay+' <span style="color:var(--gray-text);font-size:10px;">'+fmtDate(p.expectedDate)+'</span></td>'+
         '<td class="mono" style="text-align:right;">'+Math.round(p.litres).toLocaleString()+' L</td>'+
         '<td><span class="pill '+(p.fuelType==='Petrol'?'p-petrol':p.fuelType==='Paraffin'?'p-paraffin':'p-diesel')+'">'+p.fuelType+'</span></td>'+
@@ -3863,14 +3874,14 @@ function renderForecast(){
 
   document.getElementById('fc-cash-confirmed-body').innerHTML = F.confirmedCash.length
     ? F.confirmedCash.map(c=>
-        '<tr><td style="font-weight:700;">'+c.customer+'</td><td class="mono">'+fmtDate(c.due)+'</td>'+
+        '<tr><td style="font-weight:700;">'+escHtml(c.customer)+'</td><td class="mono">'+fmtDate(c.due)+'</td>'+
         '<td class="mono" style="text-align:right;font-weight:700;">'+money(c.amount)+'</td></tr>'
       ).join('') + '<tr><td style="font-weight:700;">TOTAL</td><td></td><td class="mono" style="text-align:right;font-weight:700;">'+money(F.confirmedCashTotal)+'</td></tr>'
     : '<tr><td colspan="3" class="empty-msg">Nothing already on the books due this week.</td></tr>';
 
   document.getElementById('fc-cash-predicted-body').innerHTML = F.predictedCash.length
     ? F.predictedCash.map(c=>
-        '<tr><td style="font-weight:700;">'+c.customer+'</td><td>'+c.expectedDay+'</td>'+
+        '<tr><td style="font-weight:700;">'+escHtml(c.customer)+'</td><td>'+c.expectedDay+'</td>'+
         '<td class="mono" style="text-align:right;font-weight:700;">'+money(c.amount)+'</td></tr>'
       ).join('') + '<tr><td style="font-weight:700;">TOTAL</td><td></td><td class="mono" style="text-align:right;font-weight:700;">'+money(F.predictedCashTotal)+'</td></tr>'
     : '<tr><td colspan="3" class="empty-msg">No predicted COD orders this week.</td></tr>';
@@ -3984,7 +3995,7 @@ function renderForecastBreakdown(rows){
       '<table class="tbl"><thead><tr><th>Customer</th><th>Expected</th><th>Expected litres</th><th>Actual</th><th>Actual litres</th><th>Outcome</th></tr></thead><tbody>'+
       rows.map(r =>
         '<tr>'+
-          '<td style="font-weight:700;">'+r.customer+'</td>'+
+          '<td style="font-weight:700;">'+escHtml(r.customer)+'</td>'+
           '<td class="mono">'+(r.expectedDate ? fmtDate(r.expectedDate) : '—')+'</td>'+
           '<td class="mono">'+Math.round(r.expectedLitres||0).toLocaleString()+' L</td>'+
           '<td class="mono">'+(r.actualDate ? fmtDate(r.actualDate) : '—')+'</td>'+

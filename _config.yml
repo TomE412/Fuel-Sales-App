@@ -1,0 +1,53 @@
+# GitHub Pages configuration
+#
+# GitHub Pages publishes EVERY file in this repository to the public
+# internet, not just the apps. Anyone who guesses a path can download it.
+# Without this file that included the database migrations, the Edge
+# Function source and the test suite.
+#
+# Everything listed below stays in the repository and in git history. It
+# simply stops being served. To publish something again, take it off the
+# list. Nothing here is deleted.
+#
+# WHAT IS STILL PUBLIC, and has to be:
+#   index.html, admin/, accounts/, ops/, dashboard/, reports/
+#   the icons, the manifests, the service workers, ops-dashboard.html
+# These are the apps themselves. A browser cannot run a file it cannot
+# download, so they must stay readable. That is safe: what protects the
+# business is the database refusing the request, not the page being
+# hidden. An anonymous visitor who opens any of them sees an empty shell.
+
+exclude:
+  # Database migrations, Edge Function source, and the SQL that defines
+  # every security policy. This is a map of the entire security model and
+  # there is no reason to hand it out.
+  - supabase/
+
+  # The browser test suite. Its README names the test administrator's
+  # email address, which is half of a working admin credential pair.
+  - tests/
+  - test-results/
+
+  # A stale copy of the rep app. Superseded, unmaintained, and it has not
+  # had the escaping fixes the live apps received.
+  - test/
+
+  # A stale copy of the logistics map, replaced by the one inside the
+  # admin and ops apps. Same reason as above.
+  - logistics-map-live.html
+
+  # Server-side source and setup notes for the events app. The browser
+  # never fetches either one: the .gs file runs on Google's side, not in
+  # the page. The events app itself stays published.
+  - events/Code.gs
+  - events/SETUP.md
+
+  # Windows folder-settings junk, committed by accident.
+  - desktop.ini
+
+  # Jekyll excludes these by default. Setting `exclude` replaces that
+  # default list rather than adding to it, so they are repeated here.
+  - node_modules/
+  - vendor/
+  - Gemfile
+  - Gemfile.lock

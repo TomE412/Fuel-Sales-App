@@ -144,6 +144,17 @@ body{overflow-y:auto;}
 
 <script>
 // Initialize Supabase
+// ---- escHtml: the one way user text reaches the page ----
+// Customer names, places and notes are typed freely by reps. Written
+// straight into innerHTML they are markup, not text, so a name like
+// <img src=x onerror=...> runs as code in every app that lists sales -
+// including an administrator's, where the session can manage users.
+// Every interpolation of a free-text column goes through this.
+function escHtml(v){
+  return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
 const SUPABASE_URL = 'https://lcwivtnupbrzxigmwyqf.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxjd2l2dG51cGJyenhpZ213eXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjEwMzcwMzAsImV4cCI6MjAzNjYxNzAzMH0.6rk9gCpxXjDFRsJYKNQCHwVLpRe8c5JsQXKL6Zy9jFE';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -313,7 +324,7 @@ function renderReport() {
       <div class="metric-card accent-red">
         <div class="metric-label">Highest Fuel Price</div>
         <div class="metric-value">$${(maxPriceSale.price_per_litre || 0).toFixed(2)}</div>
-        <div class="metric-sub">${maxPriceSale.rep_name} - ${maxPriceSale.fuel_type}</div>
+        <div class="metric-sub">${escHtml(maxPriceSale.rep_name)} - ${escHtml(maxPriceSale.fuel_type)}</div>
       </div>
       <div class="metric-card accent-green">
         <div class="metric-label">Top Customers</div>
@@ -419,7 +430,7 @@ function renderReport() {
             <div class="list-item">
               <div class="item-rank ${idx === 0 ? '' : idx === 1 ? 'silver' : idx === 2 ? 'bronze' : ''}">${idx + 1}</div>
               <div class="item-main" style="flex:1;">
-                <div class="item-name">${cust.name}</div>
+                <div class="item-name">${escHtml(cust.name)}</div>
                 <div class="item-meta">${cust.orders} orders • Avg: ${(cust.litres / cust.orders).toFixed(0)}L</div>
               </div>
               <div style="text-align:right;">
@@ -454,7 +465,7 @@ function renderReport() {
           <tbody>
             ${repLeaderboard.map((rep, idx) => `
               <tr>
-                <td><strong>${rep.name}</strong> <span class="ph-count" style="margin-left:8px;">#${idx + 1}</span></td>
+                <td><strong>${escHtml(rep.name)}</strong> <span class="ph-count" style="margin-left:8px;">#${idx + 1}</span></td>
                 <td style="text-align:right;font-family:var(--mono);">${formatNumber(rep.litres)}</td>
                 <td style="text-align:right;font-family:var(--mono);">${rep.orders}</td>
                 <td style="text-align:right;font-family:var(--mono);">${rep.customers}</td>
@@ -557,14 +568,14 @@ function renderReport() {
           <div class="list-item">
             <div class="item-main">
               <div class="item-name">Highest Price</div>
-              <div class="item-meta">${maxPriceSale.rep_name || 'N/A'} - ${maxPriceSale.fuel_type || 'Unknown'}</div>
+              <div class="item-meta">${escHtml(maxPriceSale.rep_name || 'N/A')} - ${escHtml(maxPriceSale.fuel_type || 'Unknown')}</div>
             </div>
             <div class="item-value">$${(maxPriceSale.price_per_litre || 0).toFixed(2)}/L</div>
           </div>
           <div class="list-item">
             <div class="item-main">
               <div class="item-name">Lowest Price</div>
-              <div class="item-meta">${minPriceSale.rep_name || 'N/A'} - ${minPriceSale.fuel_type || 'Unknown'}</div>
+              <div class="item-meta">${escHtml(minPriceSale.rep_name || 'N/A')} - ${escHtml(minPriceSale.fuel_type || 'Unknown')}</div>
             </div>
             <div class="item-value">$${(minPriceSale.price_per_litre || 0).toFixed(2)}/L</div>
           </div>
