@@ -139,6 +139,8 @@ border-radius:99px;font-family:inherit;font-size:11px;font-weight:700;cursor:poi
 .notif-head{display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:800;}
 .notif-head.done{color:var(--green-dark);}
 .notif-head.road{color:var(--blue);}
+.notif-head.soon{color:var(--amber);}
+.notif-head.due{color:var(--red);}
 .notif-when{margin-left:auto;font-size:11px;font-weight:600;color:var(--text3);white-space:nowrap;}
 .notif-who{font-size:13px;color:var(--text);margin-top:2px;}
 .notif-det{font-size:11.5px;color:var(--text2);margin-top:3px;}
@@ -174,6 +176,12 @@ border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:poi
 .p-petrol{background:var(--red-light);color:var(--red-dark);}
 .p-paraffin{background:var(--amber-light);color:var(--amber);}
 .p-del{background:var(--green-light);color:var(--green-dark);}
+/* Money owed. Amber while it is coming, red on the day, and solid red once
+   it has gone by - the only pill on the card that fills in, because an
+   overdue payment is the one thing on a sale that is nobody else's job. */
+.p-soon{background:var(--amber-light);color:var(--amber);}
+.p-due{background:var(--red-light);color:var(--red-dark);}
+.p-over{background:var(--red);color:#fff;}
 .del-btn{width:100%;margin-top:10px;padding:9px;background:var(--green);color:#fff;border:none;border-radius:var(--radius-sm);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;}
 .del-btn:disabled{background:var(--green-light);color:var(--green-dark);cursor:default;}
 
@@ -830,7 +838,7 @@ let allSales = [];
 // Bump this on every release. It shows in the More tab, so when a rep
 // reports a problem you can ask what it says and know instantly whether
 // they are on the current build or a stale cached one.
-const APP_VERSION = 'v22 — 19 Nov 2026 (security fix)';
+const APP_VERSION = 'v23 — 20 Nov 2026 (payment due reminders)';
 
 let curFuel = 'Diesel';
 let curTerm = 'COD';
@@ -2558,6 +2566,11 @@ function renderSales() {
     const paidPill = s.paid ? `<span class="pill p-del">✓ Paid</span>` : '';
     const cancelledPill = s.status === 'cancelled' ? `<span class="pill" style="background:#F0F0EE;color:#5a5a57;">✗ Cancelled</span>` : '';
     const tbaPill = s.price_tba ? `<span class="pill" style="background:#FBE7CF;color:#8a5a10;">⏳ Price TBA</span>` : '';
+    // Money owed, on the order itself, so a rep who has not opened the bell
+    // still sees it while scrolling their own sales.
+    const payNow = payState(s);
+    const payPill = payNow && payNow.near
+      ? `<span class="pill ${payPillClass(payNow)}">${escHtml(payWords(payNow))}</span>` : '';
     const isCancelled = s.status === 'cancelled';
     const priceHtml = salePriceHtml(s.litres, s.price_per_litre, s.price_tba);
     const delBtn = !delivered && !isCancelled && s.delivery_date ?
@@ -2579,14 +2592,14 @@ function renderSales() {
       `<button class="del-btn" style="background:#fff;color:var(--green-dark);border:1px solid var(--green);margin-top:6px;" onclick="markPaid(${s.id});event.stopPropagation()">💵 Mark as paid</button>` : '';
     return `<div class="sale-row" style="opacity:${(delivered||isCancelled)?'0.6':'1'}" onclick="openSaleForEdit(${s.id})">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-        <div class="sale-customer" style="${(delivered||isCancelled)?'text-decoration:line-through;color:var(--text3);':''}">${escHtml(s.customer)}${fuelPill}${delPill}${paidPill}${cancelledPill}${tbaPill}</div>
+        <div class="sale-customer" style="${(delivered||isCancelled)?'text-decoration:line-through;color:var(--text3);':''}">${escHtml(s.customer)}${fuelPill}${delPill}${paidPill}${cancelledPill}${tbaPill}${payPill}</div>
         <div style="text-align:right;flex-shrink:0;">
           <div class="sale-litres">${(s.litres||0).toLocaleString()} L</div>
           ${priceHtml}
         </div>
       </div>
       <div class="sale-meta">${escHtml(s.location || '—')} · ${fmtDate(s.sale_date)} · ${escHtml(s.payment_term)}</div>
-      <div class="sale-meta">Del: ${fmtDate(s.delivery_date)} · Pay due: ${fmtDate(s.payment_due)}</div>
+      <div class="sale-meta">Del: ${fmtDate(s.delivery_date)} · Pay due: ${fmtDate(payDueDay(s))}</div>
       ${repRigBadge(s.id)}
       ${delBtn}${undoBtn}${paidBtn}${editBtn}${cancelBtn}
     </div>`;
@@ -2597,6 +2610,121 @@ function renderSales() {
   renderNotifBadge();
 }
 
+/* ================= PAYMENT DUE =================
+
+   The money side of the bell: a reminder to the rep whose sale it is that
+   a customer owes, two days before and again on the day.
+
+   Built the same way as the three load stages below it - nothing is
+   stored, it is worked out from the sale every time the list is drawn. So
+   the moment anyone marks the sale paid the reminder disappears by itself,
+   and it works with no signal because the sales are already cached here.
+
+   WHICH DATE, and why not delivered_at.
+
+     sales.payment_due is the system's single answer to when money is due.
+     Both this app and the admin app write it when the sale is recorded,
+     counted from the delivery date the rep agreed with the customer, and
+     the accounts debtors list, the admin sales table, the weekly
+     collections forecast and every CSV export all read it. Working out a
+     second answer here from delivered_at would mean a rep's phone and
+     accounts disagreeing about money - which is worse than either answer
+     being imperfect. One column, one answer.
+
+     What it does NOT do is move when a truck runs late: payment_due is
+     fixed at the moment the sale is recorded. Correcting that belongs in
+     the place that writes the column, not here, so that accounts gets the
+     same correction.
+
+   WHAT IS NEVER CHASED:
+     * a load not yet delivered - you cannot ask for money for fuel that
+       has not arrived, so the clock only starts once it is delivered
+     * COD - already marked paid the moment it is logged
+     * Price TBA - there is no figure to ask for. The accounts collections
+       report leaves these out for exactly the same reason
+     * anything with no payment_due at all, which is mostly back-entered
+       history */
+
+const PAY_WARN_DAYS = 2;        // the early warning, in days before due
+
+// A plain YYYY-MM-DD, whether the column comes back as a date or a stamp.
+function payDueDay(s){
+  if (!s || !s.payment_due) return null;
+  const day = String(s.payment_due).split('T')[0];
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
+}
+
+// Whole days from today until the money is due: 2 is due in two days, 0 is
+// today, -9 is nine days late. Local date parts only - never toISOString(),
+// which in Harare lands on the previous day and is how payment_due itself
+// was once a day early everywhere.
+function payDaysLeft(day){
+  const d = new Date(day + 'T00:00:00');
+  if (isNaN(d)) return null;
+  const n = new Date();
+  return Math.round((d - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000);
+}
+
+/* What this sale owes and when, or null when there is nothing to chase. */
+function payState(s){
+  if (!s || s.paid || s.price_tba || s.status === 'cancelled') return null;
+  if (!s.delivered_at && s.status !== 'delivered') return null;
+  const day = payDueDay(s);
+  if (!day) return null;
+  const left = payDaysLeft(day);
+  if (left === null) return null;
+  return {
+    day: day,
+    left: left,
+    amount: (parseFloat(s.litres) || 0) * (parseFloat(s.price_per_litre) || 0),
+    // null until it is worth saying anything at all
+    near: left <= PAY_WARN_DAYS,
+  };
+}
+
+// Whole dollars, the way the sale card already shows a total.
+function payMoney(v){
+  return '$' + (v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
+// The words on the pill and in the bell, from one place so the two can
+// never drift apart.
+function payWords(p){
+  if (p.left > 1)   return 'Due in ' + p.left + ' days';
+  if (p.left === 1) return 'Due tomorrow';
+  if (p.left === 0) return 'Due today';
+  if (p.left === -1) return '1 day overdue';
+  return (-p.left) + ' days overdue';
+}
+
+// Which pill colour the state earns.
+function payPillClass(p){
+  return p.left > 0 ? 'p-soon' : p.left === 0 ? 'p-due' : 'p-over';
+}
+
+// A stable local-midnight stamp for a day offset from the due date. This is
+// what makes a payment reminder work inside the existing bell: it gives the
+// event a fixed time, so the ordering, the 21-day cutoff and the read /
+// unread marking all carry on working untouched. Fixed matters - a stamp
+// that moved would mark itself unread again every morning.
+function payStamp(day, offset){
+  const d = new Date(day + 'T00:00:00');
+  if (isNaN(d)) return null;
+  d.setDate(d.getDate() + offset);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+    '-' + String(d.getDate()).padStart(2, '0') + 'T00:00:00';
+}
+
+// A payment row is about a date, not about how long ago something happened,
+// so the right-hand column carries the due date rather than a clock.
+function payWhen(s){
+  const day = payDueDay(s);
+  if (!day) return '';
+  const d = new Date(day + 'T00:00:00');
+  return isNaN(d) ? '' : String(d.getDate()).padStart(2, '0') + ' ' + NOTIF_MN[d.getMonth()];
+}
+
+const PAY_STAGES = { pay_soon: 1, pay_due: 1 };
 /* ================= NOTIFICATIONS FOR THE REP =================
    What the office has done to this rep's loads: a truck booked, the load
    sent on its way, the load delivered.
@@ -2652,6 +2780,23 @@ function notifEvents(){
     add('assigned',  a && a.assigned_at);
     add('en_route',  a && a.en_route_at);
     add('delivered', s.delivered_at);
+
+    // ONE row per debt at any moment, and it escalates: the amber warning
+    // from two days out, replaced on the day by the red one.
+    //
+    // They are two separate events with their own fixed times rather than one
+    // event that changes its wording, which is what makes the red one arrive
+    // as a NEW unread item. Fixed matters: a stamp that moved would mark
+    // itself unread every morning and teach the rep to ignore the bell.
+    //
+    // The amber one stops at zero on purpose. Showing both on the due date
+    // put two rows about the same money in the list, the first of them
+    // reading "Payment due soon - Due today".
+    const pay = payState(s);
+    if (pay) {
+      if (pay.left > 0 && pay.left <= PAY_WARN_DAYS) add('pay_soon', payStamp(payDueDay(s), -PAY_WARN_DAYS));
+      if (pay.left <= 0)                             add('pay_due',  payStamp(payDueDay(s), 0));
+    }
   });
   out.sort((x, y) => y.t - x.t);
   return out.slice(0, NOTIF_MAX);
@@ -2708,6 +2853,15 @@ function notifWhen(ts){
 // The line under the customer: whatever is worth knowing about this stage.
 // On a truck that means the reg, the fleet number and someone to ring.
 function notifDetail(n){
+  // What is owed, when it was due, and on what terms - the three things a
+  // rep needs before ringing a customer about money.
+  if (PAY_STAGES[n.stage]) {
+    const p = payState(n.sale);
+    if (!p) return '';
+    return '<b>' + payWords(p) + '</b>  &middot;  ' + payMoney(p.amount) +
+      (n.sale.payment_term ? '  &middot;  ' + repRigEsc(n.sale.payment_term) +
+        ' from delivery' : '');
+  }
   const a = n.assign;
   if (n.stage === 'delivered') {
     // No time here: it is already on the right-hand end of the row, and
@@ -2732,6 +2886,11 @@ const NOTIF_LOOK = {
   assigned:  { icon:'&#128666;', title:'Truck assigned', cls:'' },
   en_route:  { icon:'&#128666;', title:'On its way',     cls:'road' },
   delivered: { icon:'&#9989;',   title:'Delivered',      cls:'done' },
+  // The headings stay fixed while the line underneath carries the live
+  // state. A heading that said "due in 2 days" would be a lie the moment
+  // the rep read it late.
+  pay_soon:  { icon:'&#9203;',   title:'Payment due soon', cls:'soon' },
+  pay_due:   { icon:'&#128181;', title:'Payment due',      cls:'due'  },
 };
 
 function openNotifs(){
@@ -2752,7 +2911,9 @@ function openNotifs(){
         'onclick="tapNotif(' + n.saleId + ',\'' + n.stage + '\')">' +
         '<div class="notif-dot"></div><div class="notif-mid">' +
           '<div class="notif-head ' + L.cls + '"><span>' + L.icon + '</span>' + L.title +
-            '<span class="notif-when">' + notifWhen(n.at) + '</span></div>' +
+            '<span class="notif-when">' +
+              (PAY_STAGES[n.stage] ? payWhen(n.sale) : notifWhen(n.at)) +
+            '</span></div>' +
           '<div class="notif-who">' + repRigEsc(n.sale.customer) + '  &middot;  ' +
             (n.sale.litres || 0).toLocaleString() + ' L</div>' +
           (det ? '<div class="notif-det">' + det + '</div>' : '') +
@@ -2760,7 +2921,8 @@ function openNotifs(){
     }).join('')
     : '<div class="notif-none">No updates on your loads yet.<br>' +
       'When the office books a truck, sends it on its way or marks it ' +
-      'delivered, it shows up here.</div>';
+      'delivered, it shows up here \u2014 and so does a payment coming due ' +
+      'on one of your orders.</div>';
   }
   const clear = document.getElementById('notif-clear');
   if (clear) clear.style.display = unread ? '' : 'none';
@@ -2778,6 +2940,9 @@ function tapNotif(saleId, stage){
   if (ev) { read[saleId + ':' + stage] = ev.at; notifSaveRead(read); }
   renderNotifBadge();
   closeNotifs();
+  // A payment reminder is about the order, not about the truck, so it opens
+  // the sale itself - which is also where Mark as paid lives.
+  if (PAY_STAGES[stage]) { openSaleForEdit(saleId); return; }
   if ((RIG.assign || {})[String(saleId)]) openRepRig(saleId);
 }
 
