@@ -245,6 +245,29 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
 
 .runsec{padding:12px;border-bottom:1px solid var(--line);}
 .runsec h3{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text2);margin-bottom:9px;}
+/* Where the fleet is. A unit is dragged out of this list onto the map, so
+   the rows have to read as objects you can pick up rather than as a table. */
+.fleetgrp{font-size:9.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:10px 0 5px;}
+.fleetgrp:first-child{margin-top:0;}
+.fu{display:flex;align-items:center;gap:8px;padding:7px 8px;border:1.5px solid var(--line);border-radius:8px;margin-bottom:5px;background:#fff;cursor:grab;user-select:none;}
+.fu:hover{border-color:var(--blue);}
+.fu.armed{border-color:var(--purple);background:var(--purple-light);}
+.fu.placed{opacity:.58;}
+.fu .code{font-family:var(--mono);font-size:11px;color:var(--blue);flex:0 0 auto;}
+.fu.ispump .code{color:var(--purple);}
+.fu .nm{flex:1;min-width:0;font-size:11.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fu .cap{font-size:9.5px;color:var(--muted);font-family:var(--mono);flex:0 0 auto;}
+.fu .onmap{font-size:9px;font-weight:700;color:var(--green-dark);flex:0 0 auto;}
+.fu .load{width:6px;height:6px;border-radius:50%;background:var(--amber);flex:0 0 auto;}
+.farm{background:var(--purple);color:#fff;font-size:10.5px;font-weight:700;padding:6px 9px;border-radius:7px;margin-bottom:8px;line-height:1.4;}
+.fnote{font-size:10px;color:var(--muted);line-height:1.55;margin:4px 2px 0;}
+.fmiss{font-size:10.5px;color:var(--amber);background:var(--amber-light);border-radius:6px;padding:7px 9px;line-height:1.5;margin-top:9px;}
+/* While a unit is waiting to be placed the map is a target, not a map. */
+.leaflet-container.armed{cursor:crosshair;}
+.leaflet-container.dropping{outline:3px dashed var(--purple);outline-offset:-3px;}
+/* The order badge is white with a dark edge: the coloured dots already mean
+   customer ripeness, so an order gets a different SHAPE, not one more colour. */
+.dot.od{width:11px;height:11px;border-radius:3px;background:#fff;border:2px solid var(--text);}
 .trucks{display:flex;gap:5px;margin-bottom:10px;}
 .tk{flex:1;padding:7px 4px;text-align:center;border:1.5px solid var(--line);border-radius:8px;cursor:pointer;background:#fff;user-select:none;}
 .tk.active{border-color:var(--blue);background:var(--blue-light);}
@@ -420,6 +443,17 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
     <div class="mapwrap">
       <div id="map"></div>
       <div class="mside">
+        <!-- Where the fleet is. Dragged on by Munya, kept in fleet_positions
+             so everyone sees the same picture. Above the run planner because
+             "where is everything" comes before "what would this trip cost". -->
+        <div class="runsec">
+          <h3>&#128666; Where is the fleet?
+            <span style="float:right;font-family:var(--mono);color:var(--muted);font-weight:500;" id="fleet-cnt">&mdash;</span></h3>
+          <div class="farm" id="fleet-arm" style="display:none;"></div>
+          <div id="fleetlist"></div>
+          <p class="fnote">Drag a unit onto the map, or tap it and then tap the map.
+            An amber dot means it has a load booked on it.</p>
+        </div>
         <div class="runsec">
           <h3>1 · Loading where?</h3>
           <div class="depots" id="depots"></div>
@@ -627,6 +661,8 @@ let curRoute=null, page='today';
 let routeDir = 'out';
 function flipRoute(){ routeDir = (routeDir === 'out' ? 'in' : 'out'); renderRoute(); }
 let map=null, pinLayer=null, dragLayer=null, prospectLayer=null, markers={}, mapReady=false;
+let fleetLayer=null, orderLayer=null, armedUnit=null;
+let FLEETMAP={ vehicles:[], pumps:[], drivers:[], contractors:[], pos:{}, assign:{} };
 let RUN=[], truckKey=null, dragMode=false, addMode=false, pendingLatLng=null, runLine=null;
 
 // routing state: km + minutes from the last successful call, and how we got them
@@ -647,7 +683,8 @@ const LAYER_DEFS=[
   {key:'due_soon',label:'Due soon',col:'#185FA5'},
   {key:'not_yet',label:'Not yet',col:'#c9c9c6'},
   {key:'farmer',label:'Farmer prospects',col:'#0E8C7F',icon:'square'},
-  {key:'mine',label:'Mine prospects',col:'#A3348C',icon:'diamond'}
+  {key:'mine',label:'Mine prospects',col:'#A3348C',icon:'diamond'},
+  {key:'orders',label:'Orders',col:'#1a1a18',icon:'order'}
 ];
 let LAYERS={};
 (function initLayers(){
@@ -741,23 +778,42 @@ async function loadAll(){
 
 async function loadRefs(){
   try{
-    const [r,p,t,s,c,d,pr]=await Promise.all([
+    const [r,p,t,s,c,d,pr,veh,pmp,drv,con,fpos,dasg]=await Promise.all([
       sb.from('routes').select('*').order('sort_order'),
       sb.from('place_coords').select('*').order('place'),
       sb.from('trucks').select('*').eq('active',true).order('sort_order'),
       sb.from('app_settings').select('*').eq('id',1).maybeSingle(),
       sb.from('customer_locations').select('id,invoice_name').order('invoice_name'),
       sb.from('depots').select('*').eq('active',true).order('sort_order'),
-      sb.from('map_prospect_feed').select('*')
+      sb.from('map_prospect_feed').select('*'),
+      // The real fleet, for the map panel. `trucks` above is the costing
+      // table the run planner prices a route with - a different thing that
+      // happens to share the word.
+      sb.from('vehicles').select('id,fleet_no,reg_no,capacity_litres,driver_optional,default_driver_id,contractor_id').eq('active',true).order('fleet_no'),
+      sb.from('pump_units').select('id,unit_no,reg_no,driver_id,contractor_id').eq('active',true).order('unit_no'),
+      sb.from('drivers').select('id,full_name,phone').eq('active',true).order('full_name'),
+      sb.from('contractors').select('id,name,code').eq('active',true).order('name'),
+      // Absent until phase_e5 runs. Swallowed the same way as everything
+      // else here: the panel then lists the fleet with nothing placed.
+      sb.from('fleet_positions').select('*'),
+      sb.from('delivery_assignment').select('sale_id,vehicle_id,pump_unit_id')
     ]);
     ROUTES=r.data||[]; PLACES=p.data||[]; TRUCKS=t.data||[]; DEPOTS=d.data||[];
     if(s.data) SETTINGS=s.data;
     CUSTNAMES=c.data||[];
     PROSPECTS=pr.data||[];
+    FLEETMAP.vehicles=veh.data||[]; FLEETMAP.pumps=pmp.data||[];
+    FLEETMAP.drivers=drv.data||[]; FLEETMAP.contractors=con.data||[];
+    FLEETMAP.pos={};
+    (fpos.data||[]).forEach(x=>{ FLEETMAP.pos[posKey(x.kind,x.unit_id)]=
+      {lat:x.latitude,lng:x.longitude,at:x.moved_at,by:x.moved_by}; });
+    FLEETMAP.assign={};
+    (dasg.data||[]).forEach(a=>{ FLEETMAP.assign[String(a.sale_id)]=a; });
     if(!truckKey && TRUCKS.length) truckKey=TRUCKS[TRUCKS.length-1].truck_key;
     if(!depotKey && DEPOTS.length) depotKey=DEPOTS[0].depot_key;
     renderRoutePicker(); renderDepots(); renderTrucks(); renderSettings(); fillMapRoutes(); fillPlaceSelect(); renderLayerToggles();
-    if(mapReady) drawDepot();
+    renderFleetPanel();
+    if(mapReady){ drawDepot(); drawFleet(); drawOrders(); }
   }catch(e){ console.warn('refs',e); }
 }
 
@@ -788,6 +844,8 @@ async function loadSales(){
     try{ SALES=JSON.parse(localStorage.getItem('ops_sales')||'[]'); }catch(_){ SALES=[]; }
   }
   renderDeliveries();
+  renderFleetPanel();
+  if(mapReady){ drawOrders(); drawFleet(); renderLayerToggles(); }
   if(page==='routes'&&curRoute) renderRoute();
 }
 
@@ -1435,6 +1493,341 @@ function renderRoute(){
   document.getElementById('rt-cold-l').textContent='~'+Math.round(cold.reduce((t,r)=>t+(r.avg_litres||0),0)).toLocaleString()+' L potential';
 }
 
+
+/* ============ ORDERS AND THE FLEET ON THE MAP ============
+
+   Two additions, both of them visual aids rather than records.
+
+     ORDERS  one badge per TOWN, by matching the place the rep named on the
+             sale against place_coords. Not one per order: three loads for
+             Marondera would sit exactly on top of each other and only the
+             last one would ever be seen.
+
+     FLEET   every active truck and pumping unit in the side panel, dragged
+             onto the map to say roughly where it is. Positions live in
+             fleet_positions (phase_e5), so the picture is shared and
+             survives the page being closed.
+
+   Neither pretends to be exact, and neither should be read as one. The rep
+   types a town, not a grid reference, and Munya drops a truck by eye. */
+
+const FM_MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// Built from local date parts. Never toISOString() for a day - in Harare it
+// lands on the previous one.
+function fmDay(ds){
+  if(!ds) return 'no date';
+  const d=new Date(String(ds).split('T')[0]+'T00:00:00');
+  return isNaN(d)?'no date':String(d.getDate()).padStart(2,'0')+' '+FM_MN[d.getMonth()];
+}
+function fmStamp(ts){
+  const d=ts?new Date(ts):null;
+  if(!d||isNaN(d)) return '';
+  return String(d.getDate()).padStart(2,'0')+' '+FM_MN[d.getMonth()]+'  '+
+    String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+// The top bar shows an em dash until somebody signs in, and that must not
+// end up stored as the person who moved a truck.
+function fleetWho(){
+  const n=String(((document.getElementById('who')||{}).textContent)||'').trim();
+  return (n && n!=='—') ? n : null;
+}
+
+const posKey=(kind,id)=>kind+':'+id;
+const fmDriver=id=>FLEETMAP.drivers.find(d=>String(d.id)===String(id))||null;
+const fmOwner=u=>(u&&u.contractor_id)
+  ? (FLEETMAP.contractors.find(c=>String(c.id)===String(u.contractor_id))||null) : null;
+
+/* Everything that can be put on the map, as one list: trucks then pumping
+   units, each under whoever owns it. Hired-in units sit under their
+   transporter - they are vehicles like any other, tagged with an owner. */
+function fleetUnits(){
+  const out=[];
+  (FLEETMAP.vehicles||[]).forEach(v=>{
+    const o=fmOwner(v), d=fmDriver(v.default_driver_id);
+    out.push({ kind:'vehicle', id:v.id, code:v.fleet_no||'?',
+      name:d?d.full_name:(v.driver_optional?'Any driver':'(no driver)'),
+      sub:v.capacity_litres?Math.round(v.capacity_litres/1000)+'k':'',
+      reg:v.reg_no||'', owner:o?o.name:'Skelsee fleet' });
+  });
+  (FLEETMAP.pumps||[]).forEach(pu=>{
+    const o=fmOwner(pu), d=fmDriver(pu.driver_id);
+    out.push({ kind:'pump', id:pu.id, code:pu.unit_no||'?',
+      name:d?d.full_name:'(no driver)', sub:'pump',
+      reg:pu.reg_no||'', owner:o?o.name:'Skelsee fleet' });
+  });
+  return out;
+}
+
+// Which units have an undelivered load booked on them. Deliberately not
+// "out today": a load promised for Friday is still a reason the truck is
+// committed, and a date test here would only invent edge cases.
+function fleetBusy(){
+  const busy={};
+  (SALES||[]).forEach(s=>{
+    if(s.delivered_at||s.status==='delivered'||s.status==='cancelled') return;
+    const a=FLEETMAP.assign[String(s.id)];
+    if(!a) return;
+    if(a.vehicle_id) busy[posKey('vehicle',a.vehicle_id)]=true;
+    if(a.pump_unit_id) busy[posKey('pump',a.pump_unit_id)]=true;
+  });
+  return busy;
+}
+
+/* The rep types a place, not a grid reference, so match it three ways before
+   giving up: as written, then the last part after a comma, then the first.
+   "Birmingham, Harare" and "harare " are both Harare as far as a map goes. */
+function placeFor(loc){
+  const raw=String(loc||'').trim();
+  if(!raw) return null;
+  const same=a=>(PLACES||[]).find(pc=>
+    String(pc.place||'').trim().toLowerCase()===String(a).trim().toLowerCase() &&
+    pc.latitude!=null && pc.longitude!=null);
+  const bits=raw.split(',');
+  return same(raw) || same(bits[bits.length-1]) || same(bits[0]) || null;
+}
+
+/* Every order still owed, grouped by the town it is going to. `missing`
+   carries the places that could not be matched, because an order silently
+   left off the map is worse than one the panel admits it cannot draw. */
+function orderGroups(){
+  const groups={}, missing={};
+  (SALES||[]).forEach(s=>{
+    if(s.delivered_at||s.status==='delivered'||s.status==='cancelled') return;
+    const pc=placeFor(s.location);
+    if(!pc){
+      const k=String(s.location||'').trim()||'(no place given)';
+      missing[k]=(missing[k]||0)+1; return;
+    }
+    const g=groups[pc.place]||(groups[pc.place]={place:pc.place,lat:pc.latitude,
+      lng:pc.longitude,rows:[],litres:0});
+    g.rows.push(s); g.litres+=(+s.litres||0);
+  });
+  const list=Object.values(groups);
+  return { groups:list, missing:missing,
+    total:list.reduce((n,g)=>n+g.rows.length,0) };
+}
+
+function orderPopupHTML(g){
+  const rows=g.rows.slice().sort((a,b)=>
+    String(a.delivery_date||'9999').localeCompare(String(b.delivery_date||'9999')));
+  return '<b>'+esc(g.place)+'</b><br>'+
+    '<span style="color:var(--muted);font-size:11px;">'+g.rows.length+' order'+
+      (g.rows.length===1?'':'s')+' \u00b7 '+Math.round(g.litres).toLocaleString()+
+      ' L still to go</span>'+
+    '<div style="margin:7px 0 0;padding-top:6px;border-top:1px solid #eee;font-size:11px;'+
+      'line-height:1.55;max-height:210px;overflow-y:auto;">'+
+    rows.map(s=>{
+      const a=FLEETMAP.assign[String(s.id)];
+      const v=(a&&a.vehicle_id)?(FLEETMAP.vehicles||[]).find(x=>String(x.id)===String(a.vehicle_id)):null;
+      return '<div style="margin-bottom:7px;">'+
+        '<b>'+esc(s.customer||'\u2014')+'</b><br>'+
+        (+s.litres||0).toLocaleString()+' L '+esc(s.fuel_type||'')+'<br>'+
+        '<span style="color:var(--muted);">'+fmDay(s.delivery_date)+' \u00b7 '+
+          (v?esc(v.fleet_no)+' booked':'<b style="color:var(--amber);">no truck yet</b>')+
+        '</span></div>';
+    }).join('')+'</div>';
+}
+
+function drawOrders(){
+  if(!mapReady) return;
+  if(!orderLayer) orderLayer=L.layerGroup().addTo(map);
+  orderLayer.clearLayers();
+  if(!LAYERS.orders) return;
+  orderGroups().groups.forEach(g=>{
+    const label='<b>'+g.rows.length+'</b> \u00b7 '+Math.round(g.litres/1000)+'k L';
+    // A zero-size icon with the label shifted by transform, so a badge of any
+    // width still points at the right spot. iconAnchor cannot do that: it
+    // needs the size up front, and the size depends on the text.
+    const icon=L.divIcon({className:'',iconSize:[0,0],iconAnchor:[0,0],html:
+      '<div style="transform:translate(-50%,-100%);">'+
+        '<div style="background:#fff;border:2px solid var(--text);border-radius:5px;'+
+          'padding:1px 5px;font-family:var(--mono);font-size:10.5px;line-height:1.4;'+
+          'white-space:nowrap;box-shadow:0 2px 5px rgba(0,0,0,.22);">'+label+'</div>'+
+        '<div style="width:2px;height:7px;background:var(--text);margin:0 auto;"></div>'+
+      '</div>'});
+    L.marker([g.lat,g.lng],{icon,zIndexOffset:400}).addTo(orderLayer)
+      .bindPopup(orderPopupHTML(g));
+  });
+}
+
+/* ---- the side panel ---- */
+
+function renderFleetPanel(){
+  const el=document.getElementById('fleetlist');
+  if(!el) return;
+  const units=fleetUnits(), busy=fleetBusy();
+  const placedN=units.filter(u=>FLEETMAP.pos[posKey(u.kind,u.id)]).length;
+  const cnt=document.getElementById('fleet-cnt');
+  if(cnt) cnt.textContent=units.length?(placedN+' of '+units.length+' placed'):'\u2014';
+
+  // Unplaced first: what still needs positioning belongs at the top.
+  const byOwner={};
+  units.slice().sort((a,b)=>
+      (!!FLEETMAP.pos[posKey(a.kind,a.id)])-(!!FLEETMAP.pos[posKey(b.kind,b.id)]))
+    .forEach(u=>{ (byOwner[u.owner]=byOwner[u.owner]||[]).push(u); });
+
+  el.innerHTML = !units.length
+    ? '<div class="empty" style="padding:12px;">No active trucks on file.</div>'
+    : Object.keys(byOwner).map(owner=>
+        '<div class="fleetgrp">'+esc(owner)+'</div>'+
+        byOwner[owner].map(u=>{
+          const k=posKey(u.kind,u.id), on=!!FLEETMAP.pos[k];
+          return '<div class="fu'+(u.kind==='pump'?' ispump':'')+
+            (armedUnit===k?' armed':'')+(on?' placed':'')+'" draggable="true"'+
+            ' ondragstart="fleetDragStart(event,&quot;'+k+'&quot;)"'+
+            ' onclick="armUnit(&quot;'+k+'&quot;)"'+
+            ' title="'+esc(u.code+' \u2014 '+u.name+(u.reg?' \u2014 '+u.reg:''))+'">'+
+            '<span class="code">'+esc(u.code)+'</span>'+
+            '<span class="nm">'+esc(u.name)+'</span>'+
+            (busy[k]?'<span class="load" title="has a load booked on it"></span>':'')+
+            (on?'<span class="onmap">on map</span>'
+               :'<span class="cap">'+esc(u.sub)+'</span>')+
+          '</div>';
+        }).join('')).join('') + missingNote();
+}
+
+// Orders whose town is not in the place list cannot be drawn at all. Saying
+// so turns a silent omission into a to-do list of places worth coordinates.
+function missingNote(){
+  const m=orderGroups().missing;
+  const names=Object.keys(m).sort();
+  if(!names.length) return '';
+  const n=names.reduce((tot,k)=>tot+m[k],0);
+  return '<div class="fmiss">'+n+' order'+(n===1?'':'s')+' cannot be shown \u2014 '+
+    esc(names.slice(0,6).join(', '))+
+    (names.length>6?' and '+(names.length-6)+' more':'')+
+    '. Add the place on the map to put '+(n===1?'it':'them')+' on here.</div>';
+}
+
+/* Tapping a unit arms it; the next tap on the map places it. This is the
+   only route that works on a phone - HTML drag-and-drop does nothing at all
+   on a touch screen - so it is the primary one, not a fallback. */
+function armUnit(k){
+  armedUnit = (armedUnit===k) ? null : k;
+  // Adding a customer also wants the next map tap. Arming one cancels the
+  // other rather than both firing on the same click.
+  if(armedUnit && addMode) startAdd();
+  syncArm();
+  renderFleetPanel();
+}
+
+function syncArm(){
+  const el=document.getElementById('fleet-arm');
+  const u=armedUnit?fleetUnits().find(x=>posKey(x.kind,x.id)===armedUnit):null;
+  if(el){
+    el.style.display=u?'':'none';
+    el.textContent=u?('Now tap the map to place '+u.code+' \u2014 tap '+u.code+' again to cancel'):'';
+  }
+  if(mapReady&&map){
+    const c=map.getContainer();
+    if(armedUnit) L.DomUtil.addClass(c,'armed'); else L.DomUtil.removeClass(c,'armed');
+  }
+}
+
+function fleetDragStart(ev,k){
+  try{
+    ev.dataTransfer.setData('text/plain','fleet:'+k);
+    ev.dataTransfer.effectAllowed='copy';
+  }catch(e){}
+}
+
+/* Writes the position, then proves the write.
+
+   Row-level security refuses by matching zero rows and reporting NO error,
+   so an empty result is the only way to tell a refusal from a success.
+   Without this check the map would happily show a truck the database threw
+   away, and only Munya would ever see it. */
+async function placeUnit(k,latlng,fromMarker){
+  const bits=String(k).split(':');
+  const kind=bits[0], id=bits[1];
+  if(kind!=='vehicle'&&kind!=='pump') return;
+  const prev=FLEETMAP.pos[k]||null;
+  const stamp=new Date().toISOString();   // a stamp, not a date: UTC is right here
+  FLEETMAP.pos[k]={lat:latlng.lat,lng:latlng.lng,at:stamp,by:fleetWho()};
+  armedUnit=null; syncArm();
+  if(!fromMarker) drawFleet();
+  renderFleetPanel();
+  const {data,error}=await sb.from('fleet_positions').upsert({
+    kind:kind, unit_id:id, latitude:latlng.lat, longitude:latlng.lng,
+    moved_at:stamp, moved_by:fleetWho()
+  },{onConflict:'kind,unit_id'}).select('unit_id');
+  if(error || !data || !data.length){
+    if(prev) FLEETMAP.pos[k]=prev; else delete FLEETMAP.pos[k];
+    drawFleet(); renderFleetPanel();
+    alert('Could not move it.\n\n'+((error&&error.message)||
+      'The database would not accept it \u2014 only ops or an administrator can '+
+      'move a truck on the map.'));
+  }
+}
+
+async function removeUnit(k){
+  const bits=String(k).split(':');
+  const kind=bits[0], id=bits[1];
+  const prev=FLEETMAP.pos[k]||null;
+  if(!prev) return;
+  delete FLEETMAP.pos[k];
+  if(map) map.closePopup();
+  drawFleet(); renderFleetPanel();
+  const {data,error}=await sb.from('fleet_positions').delete()
+    .eq('kind',kind).eq('unit_id',id).select('unit_id');
+  if(error || !data || !data.length){
+    FLEETMAP.pos[k]=prev;
+    drawFleet(); renderFleetPanel();
+    alert('Could not take it off the map.\n\n'+((error&&error.message)||
+      'The database would not accept it \u2014 only ops or an administrator can '+
+      'move a truck on the map.'));
+  }
+}
+
+function fleetPopupHTML(u,k,pos,isBusy){
+  const when=fmStamp(pos&&pos.at);
+  return '<b>'+esc(u.code)+'</b> \u00b7 '+(u.kind==='pump'?'pumping unit':'truck')+'<br>'+
+    '<span style="color:var(--muted);font-size:11px;">'+esc(u.name)+
+      (u.reg?' \u00b7 '+esc(u.reg):'')+'</span>'+
+    (u.owner!=='Skelsee fleet'
+      ? '<br><span style="color:var(--purple);font-size:10.5px;font-weight:700;">'+
+        'hired from '+esc(u.owner)+'</span>' : '')+
+    '<div style="margin:7px 0;padding:6px 0;border-top:1px solid #eee;'+
+      'border-bottom:1px solid #eee;font-size:11px;line-height:1.6;">'+
+      (isBusy?'<b style="color:var(--amber);">Has a load booked on it</b>'
+             :'Nothing booked on it')+'<br>'+
+      (when?'Placed by '+esc(pos.by||'\u2014')+'<br>'+
+            '<span style="color:var(--muted);">'+when+'</span>':'')+
+    '</div>'+
+    '<div style="font-size:10px;color:var(--muted);line-height:1.5;">'+
+      'Drag it to move it.</div>'+
+    '<button class="pop-btn rm" onclick="removeUnit(&quot;'+k+'&quot;)">'+
+      'Take off the map</button>';
+}
+
+function drawFleet(){
+  if(!mapReady) return;
+  if(!fleetLayer) fleetLayer=L.layerGroup().addTo(map);
+  fleetLayer.clearLayers();
+  const busy=fleetBusy();
+  fleetUnits().forEach(u=>{
+    const k=posKey(u.kind,u.id), pos=FLEETMAP.pos[k];
+    if(!pos) return;
+    const col=u.kind==='pump'?'#6B4FA0':'#185FA5';
+    const icon=L.divIcon({className:'',iconSize:[0,0],iconAnchor:[0,0],html:
+      '<div style="transform:translate(-50%,-50%);display:flex;align-items:center;'+
+        'gap:5px;background:'+col+';color:#fff;border:2px solid #fff;border-radius:99px;'+
+        'padding:2px 9px;font-size:10.5px;font-weight:700;white-space:nowrap;'+
+        'box-shadow:0 2px 7px rgba(0,0,0,.3);cursor:grab;">'+
+        (u.kind==='pump'?'\u26fd':'\ud83d\ude9b')+' '+esc(u.code)+
+        (busy[k]?'<span style="width:6px;height:6px;border-radius:50%;'+
+          'background:#FFD27A;"></span>':'')+
+      '</div>'});
+    const m=L.marker([pos.lat,pos.lng],{icon,draggable:true,zIndexOffset:700})
+      .addTo(fleetLayer);
+    m.bindTooltip(u.code+' \u2014 '+u.name,{direction:'top'});
+    m.bindPopup(fleetPopupHTML(u,k,pos,busy[k]));
+    // fromMarker: the marker has already moved itself, so do not rebuild the
+    // layer underneath the drag that is still finishing.
+    m.on('dragend',ev=>{ placeUnit(k,ev.target.getLatLng(),true); });
+  });
+}
 /* ============ MAP ============ */
 function initMap(){
   if(mapReady) return;
@@ -1442,10 +1835,32 @@ function initMap(){
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
   pinLayer=L.layerGroup().addTo(map);
   prospectLayer=L.layerGroup().addTo(map);
-  map.on('click',e=>{ if(addMode) dropPin(e.latlng); });
+  orderLayer=L.layerGroup().addTo(map);
+  fleetLayer=L.layerGroup().addTo(map);
+  map.on('click',e=>{
+    // A unit waiting to be placed takes the tap. Both it and Add customer
+    // want the next click, and arming either one cancels the other.
+    if(armedUnit){ placeUnit(armedUnit,e.latlng); return; }
+    if(addMode) dropPin(e.latlng);
+  });
+
+  // Dropping a unit dragged out of the side panel. A convenience for a
+  // mouse; on a phone the tap route above is the only one that works.
+  const cont=map.getContainer();
+  cont.addEventListener('dragover',e=>{ e.preventDefault(); L.DomUtil.addClass(cont,'dropping'); });
+  cont.addEventListener('dragleave',()=>L.DomUtil.removeClass(cont,'dropping'));
+  cont.addEventListener('drop',e=>{
+    e.preventDefault(); L.DomUtil.removeClass(cont,'dropping');
+    let d='';
+    try{ d=String((e.dataTransfer&&e.dataTransfer.getData('text/plain'))||''); }catch(_){}
+    if(d.indexOf('fleet:')!==0) return;
+    placeUnit(d.slice(6), map.mouseEventToLatLng(e));
+  });
+
   mapReady=true;
   drawDepot();
   drawPins();
+  drawFleet();
 }
 
 function fillMapRoutes(){
@@ -1487,12 +1902,15 @@ function renderLayerToggles(){
   });
   const prospectCounts={farmer:0,mine:0};
   PROSPECTS.forEach(p=>{ if(prospectCounts[p.entity_type]!=null) prospectCounts[p.entity_type]++; });
+  const ordersN = orderGroups().total;
   el.innerHTML=LAYER_DEFS.map(d=>{
-    const n = d.key==='farmer'||d.key==='mine' ? (prospectCounts[d.key]||0) : (statusCounts[d.key]||0);
-    const dotClass = d.icon==='square'?'dot sq':d.icon==='diamond'?'dot dm':'dot';
+    const n = d.key==='orders' ? ordersN
+      : d.key==='farmer'||d.key==='mine' ? (prospectCounts[d.key]||0) : (statusCounts[d.key]||0);
+    const dotClass = d.icon==='order'?'dot od':d.icon==='square'?'dot sq':d.icon==='diamond'?'dot dm':'dot';
+    const dotStyle = d.icon==='order'?'':'background:'+d.col+';';
     return '<label class="lg">'+
       '<input type="checkbox" '+(LAYERS[d.key]?'checked':'')+' onchange="toggleLayer(\''+d.key+'\')">'+
-      '<span class="'+dotClass+'" style="background:'+d.col+';"></span>'+
+      '<span class="'+dotClass+'" style="'+dotStyle+'"></span>'+
       esc(d.label)+' <span class="n">'+n+'</span></label>';
   }).join('');
 }
@@ -1500,6 +1918,7 @@ function renderLayerToggles(){
 function drawPins(){
   if(!mapReady) return;
   renderLayerToggles();
+  drawOrders();
   pinLayer.clearLayers(); markers={};
   prospectLayer.clearLayers();
   if(dragLayer){ map.removeLayer(dragLayer); dragLayer=null; }

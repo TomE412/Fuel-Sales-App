@@ -4,7 +4,7 @@
 // truthy, so the old `cached || net || match` never fell back),
 // caches each file individually, and includes the app's own icons.
 // ============================================================
-const CACHE = 'ops-planner-v7';
+const CACHE = 'ops-planner-v8';
 const CORE = [
   './',
   'index.html',

@@ -504,19 +504,45 @@ test("the driver's WhatsApp job names the transporter", async ({ page }) => {
 test('admin keeps hired rigs out of the standing-allocation screen', async ({ page }) => {
   // Logistics -> Drivers is where a Skelsee truck's usual driver and trailer
   // are set. Somebody else's horse has no business on it.
+  //
+  // The map's fleet panel reads the same three tables and must do the
+  // OPPOSITE - it shows hired units under their transporter - so this pins
+  // the queries down by their select list rather than by counting them.
   await page.goto('/admin/');
   await page.waitForTimeout(2400);
-  const queries = await page.evaluate(() => {
-    const src = [...document.querySelectorAll('script')]
-      .map(s => s.textContent).join('\n');
-    return ['drivers', 'vehicles', 'trailers'].map(t => {
-      const re = new RegExp("sb\\.from\\('" + t + "'\\)[^\\n]*order\\('[a-z_]+'\\)", 'g');
-      return (src.match(re) || []).filter(q => q.includes("eq('active',true)"));
-    });
+
+  const STANDING = [
+    "sb.from('drivers').select('id,full_name,id_number,phone')",
+    "sb.from('vehicles').select('id,fleet_no,reg_no,default_driver_id,default_trailer_id')",
+    "sb.from('trailers').select('id,trailer_no,reg_no')",
+  ];
+  const MAP = [
+    "sb.from('drivers').select('id,full_name,phone')",
+    "sb.from('vehicles').select('id,fleet_no,reg_no,capacity_litres,driver_optional,default_driver_id,contractor_id')",
+    "sb.from('pump_units').select('id,unit_no,reg_no,driver_id,contractor_id')",
+  ];
+
+  const out = await page.evaluate(([standing, map]) => {
+    const src = [...document.querySelectorAll('script')].map(s => s.textContent).join('\n');
+    const lineFor = head => {
+      const i = src.indexOf(head);
+      if (i < 0) return null;
+      const end = src.indexOf('\n', i);
+      return src.slice(i, end < 0 ? undefined : end);
+    };
+    return { standing: standing.map(lineFor), map: map.map(lineFor) };
+  }, [STANDING, MAP]);
+  console.log(JSON.stringify(out, null, 1));
+
+  out.standing.forEach((q, i) => {
+    expect(q, 'standing-allocation query missing: ' + STANDING[i]).toBeTruthy();
+    expect(q, STANDING[i]).toContain("is('contractor_id',null)");
   });
-  console.log(JSON.stringify(queries, null, 1));
-  queries.forEach((list, i) => {
-    expect(list.length, 'standing-allocation query ' + i).toBe(1);
-    expect(list[0]).toContain("is('contractor_id',null)");
+
+  // And the fleet panel must NOT be filtered, or hired trucks could never be
+  // put on the map - which is the whole point of listing them.
+  out.map.forEach((q, i) => {
+    expect(q, 'fleet-panel query missing: ' + MAP[i]).toBeTruthy();
+    expect(q, MAP[i]).not.toContain("is('contractor_id',null)");
   });
 });
