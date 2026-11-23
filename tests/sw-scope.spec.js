@@ -176,10 +176,16 @@ test('the three workers keep separate caches and are all bumped past the fault',
   expect(new Set(names).size, 'two apps sharing a cache name would share a shell').toBe(3);
 
   // The old cache is deleted on activate, so bumping the version is what
-  // clears the wrong shell already saved on everyone's phone.
-  expect(names[0]).toBe('fuel-v37');
-  expect(names[1]).toBe('ops-planner-v9');
-  expect(names[2]).toBe('admin-v32');
+  // clears the wrong shell already saved on everyone's phone. These are the
+  // versions that first carried the scope fix: at or past them is fine, and
+  // below them would mean a phone could still be holding the wrong app.
+  const FIX = { 'fuel-v': 37, 'ops-planner-v': 9, 'admin-v': 32 };
+  names.forEach(n => {
+    const m = n.match(/^(.*-v)(\d+)$/);
+    expect(m, n + ' should end in a version number').toBeTruthy();
+    expect(FIX[m[1]], 'unexpected cache name ' + n).toBeDefined();
+    expect(+m[2], n + ' is older than the scope fix').toBeGreaterThanOrEqual(FIX[m[1]]);
+  });
 });
 
 /* ------------------------------------------------------------------ */

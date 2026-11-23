@@ -318,6 +318,90 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
 .pop-btn{width:100%;margin-top:8px;padding:6px;background:var(--green);color:#fff;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;}
 .pop-btn:hover{background:var(--green-dark);}
 .pop-btn.rm{background:var(--red);}
+/* ---- the Loads board. Ported from the Overview, in ops's own tokens. ---- */
+.order-row{display:flex;align-items:center;gap:9px;padding:7px 12px;border-bottom:1px solid #F4F4F2;}
+.order-row:last-child{border-bottom:none;}
+.order-row.done{opacity:.55;}
+.date-box{border-radius:7px;padding:4px 7px;text-align:center;flex-shrink:0;min-width:44px;}
+.date-num{font-size:13px;font-weight:700;font-family:var(--mono);line-height:1;}
+.date-mon{font-size:8px;font-weight:700;text-transform:uppercase;margin-top:1px;}
+.ord-mid{flex:1;min-width:0;}
+.order-name{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.order-meta{font-size:11px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ord-late{font-weight:700;color:var(--red);}
+.ord-note{font-size:11px;color:var(--text2);margin-top:3px;background:#F4F4F2;padding:4px 6px;border-radius:4px;border-left:2px solid var(--amber);}
+.ord-rig{flex-shrink:0;width:152px;}
+.ord-lit{font-size:13px;font-weight:700;font-family:var(--mono);flex-shrink:0;width:78px;text-align:right;}
+.ord-del{flex-shrink:0;width:148px;}
+.rigbtn{display:block;width:100%;padding:4px 9px;border:1px solid var(--line);background:#fff;
+color:var(--muted);border-radius:99px;font-family:var(--font);font-size:11px;font-weight:600;
+cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;}
+.rigbtn:hover{border-color:var(--blue);color:var(--blue);}
+.rigbtn.on{background:var(--blue-light);border-color:var(--blue);color:var(--blue-dark);}
+.rigbtn.warn{background:var(--amber-light);border-color:var(--amber);color:var(--amber);}
+.deliver-btn{width:100%;padding:6px 12px;background:var(--green);color:#fff;border:none;
+border-radius:7px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;}
+.deliver-btn:disabled{opacity:.5;cursor:default;}
+.undo-btn{width:100%;padding:5px 10px;background:#fff;color:var(--amber);
+border:1px solid var(--amber);border-radius:7px;font-family:var(--font);font-size:11px;
+font-weight:700;cursor:pointer;}
+.enroute-btn{width:100%;padding:6px 10px;margin-bottom:5px;background:#fff;color:var(--blue);
+border:1px solid var(--blue);border-radius:7px;font-family:var(--font);font-size:11.5px;
+font-weight:700;cursor:pointer;}
+.enroute-btn:disabled{opacity:.5;cursor:default;}
+.enroute-on{display:flex;align-items:center;justify-content:center;gap:5px;width:100%;
+padding:5px 10px;margin-bottom:5px;background:var(--blue-light);color:var(--blue-dark);
+border-radius:7px;font-size:11px;font-weight:700;}
+.enroute-on .er-undo{background:none;border:none;color:var(--blue);font-size:13px;
+cursor:pointer;padding:0 2px;}
+.pill{display:inline-flex;align-items:center;font-size:9.5px;font-weight:700;padding:1px 7px;
+border-radius:99px;margin-left:5px;vertical-align:middle;}
+.p-diesel{background:var(--green-light);color:var(--green-dark);}
+.p-petrol{background:var(--red-light);color:var(--red-dark);}
+.p-paraffin{background:var(--amber-light);color:var(--amber);}
+/* ---- the assign-a-rig dialog ---- */
+.rigm{position:fixed;inset:0;background:rgba(26,26,24,.45);display:none;align-items:center;
+justify-content:center;z-index:900;padding:18px;}
+.rigm.on{display:flex;}
+.rigbox{background:#fff;border-radius:14px;padding:20px 22px;width:100%;max-width:420px;
+box-shadow:0 18px 50px rgba(0,0,0,.25);max-height:90vh;overflow-y:auto;}
+.rigbox h2{font-size:17px;font-weight:800;margin:0 0 3px;}
+.rigbox .sub{font-size:12px;color:var(--muted);margin-bottom:16px;}
+.rigfld{margin-bottom:12px;}
+.rigfld label{display:block;font-size:11px;font-weight:700;color:var(--muted);
+text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;}
+.rigfld select{width:100%;padding:10px 11px;background:#F4F4F2;border:1.5px solid var(--line);
+border-radius:8px;font-family:var(--font);font-size:13px;outline:none;}
+.rigfld select:focus{border-color:var(--blue);background:#fff;}
+.rigfld input[type=text],.rigfld input[type=tel]{width:100%;padding:10px 11px;background:#fff;
+border:1.5px solid var(--line);border-radius:8px;font-family:var(--font);font-size:13px;
+outline:none;box-sizing:border-box;color:var(--text);}
+.rigfld input[type=text]:focus,.rigfld input[type=tel]:focus{border-color:var(--blue);}
+.rigfld .req{color:var(--red);}
+.rigfld .soft{font-weight:400;text-transform:none;letter-spacing:0;}
+.riglink{background:none;border:none;padding:0;font-family:var(--font);font-size:11.5px;
+font-weight:700;color:var(--blue);cursor:pointer;text-decoration:underline;}
+.rignote{font-size:12px;color:var(--green);font-weight:700;margin-bottom:6px;}
+.rigerr{font-size:12px;color:var(--red);min-height:16px;margin-bottom:8px;font-weight:700;}
+.rigrow{display:flex;gap:8px;margin-top:4px;}
+.rigrow button{flex:1;padding:11px;border:none;border-radius:8px;font-family:var(--font);
+font-size:13px;font-weight:700;cursor:pointer;}
+.rigrow .pri{background:var(--blue);color:#fff;}
+.rigrow .sec{background:#F4F4F2;color:var(--text);}
+.rigrow .dgr{background:#fff;color:var(--red);border:1px solid var(--red);}
+.rigrow .wha{background:var(--green);color:#fff;}
+.rigwa{width:100%;margin-top:9px;min-height:200px;padding:10px;resize:vertical;
+border:1px solid var(--line);border-radius:8px;background:#F4F4F2;font-family:var(--mono);
+font-size:11px;line-height:1.5;color:var(--text);}
+.hirep{border:1.5px solid var(--purple);background:#F8F6FC;border-radius:10px;
+padding:14px 15px 2px;margin-bottom:12px;}
+.hirep .ph{font-size:12px;font-weight:800;color:var(--purple);text-transform:uppercase;
+letter-spacing:.06em;margin:0 0 12px;}
+.hirep .two{display:flex;gap:9px;}
+.hirep .two>*{flex:1;min-width:0;}
+.hirechk{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;line-height:1.45;
+margin:2px 0 12px;cursor:pointer;color:var(--text);}
+.hirechk input{margin:1px 0 0;flex:0 0 auto;width:15px;height:15px;}
 </style>
 </head>
 <body>
@@ -326,6 +410,7 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
   <div class="auth-box">
     <h1>⛽ Ops Planner</h1>
     <div class="sub">Delivery &amp; reorder planning</div>
+    <div class="sub" id="auth-build" style="opacity:.6;margin-top:-6px;"></div>
     <div class="fld"><label>Email</label><input type="email" id="em" autocomplete="email"></div>
     <div class="fld"><label>Password</label><input type="password" id="pw" autocomplete="current-password"></div>
     <button class="btn" onclick="signIn()">Sign in</button>
@@ -339,55 +424,53 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
     <span class="who" id="who">—</span>
     <div class="right">
       <span class="clock" id="clock"></span>
+    <span class="clock" id="build" title="Which build this phone is running" style="opacity:.55;"></span>
       <span class="live">● Live</span>
       <button class="signout" onclick="signOut()">Sign out</button>
     </div>
   </div>
 
   <div class="mtabs">
-    <div class="mtab active" data-p="today"  onclick="go('today')">📊 Dash <span class="badge" id="bg-today">0</span></div>
+    <div class="mtab active" data-p="loads"  onclick="go('loads')">&#128230; Loads <span class="badge" id="bg-loads">0</span></div>
     <div class="mtab"        data-p="routes" onclick="go('routes')">🛣️ Routes</div>
     <div class="mtab"        data-p="map"    onclick="go('map')">🗺️ Map</div>
     <div class="mtab"        data-p="book"   onclick="go('book')">📒 Book</div>
     <div class="mtab"        data-p="set"    onclick="go('set')">⚙️ Settings</div>
   </div>
 
-  <!-- ================= TODAY ================= -->
-  <div class="page active" id="p-today">
-    <div class="planwrap">
-
-      <!-- To plan: a horizontal strip, so 30 orders stay one card tall and
-           leave the lanes their room. Open by default — it is the drag source. -->
-      <div class="tray open" id="tray-plan">
-        <div class="trayh" onclick="toggleTray('plan')">
-          <span class="caret">&#9656;</span>
-          <b>To plan</b>
-          <span class="trayn" id="tp-n">0</span>
-          <span class="trayhint">drag onto a truck &rarr;</span>
-          <span class="trayl" id="tp-l">0 L</span>
+  <!-- ================= LOADS =================
+       Every order still to go out, then the last week of delivered ones so a
+       wrong tick can be put back, then the reorder prompts. Replaced the
+       three-lane planner, which read a table that was never created. -->
+  <div class="page active" id="p-loads">
+    <div class="scroll">
+      <div class="panel">
+        <div class="ph"><h2>&#128666; Still to deliver</h2>
+          <span class="cnt" id="loads-count">&mdash;</span>
+          <span style="margin-left:auto;font-size:10px;color:var(--muted);">soonest first &middot; nothing drops off until it is delivered</span>
         </div>
-        <div class="trayb"><div class="strip" id="tp-list"
-               ondragover="planDragOver(event,this)" ondragleave="planDragLeave(event,this)"
-               ondrop="planUnassign(event,this)"></div></div>
+        <div id="loads-list"><div class="empty">Loading&hellip;</div></div>
       </div>
 
-      <!-- Ripe to pair: reference only. These customers have no order yet,
-           just a prediction that they are due, so there is nothing to drag —
-           ring them, and the order appears in To plan above. -->
-      <div class="tray" id="tray-ripe">
-        <div class="trayh" onclick="toggleTray('ripe')">
-          <span class="caret">&#9656;</span>
-          <b>Ripe to pair</b>
-          <span class="trayn" id="tr-n">0</span>
-          <span class="trayhint">near their reorder point &mdash; ring them</span>
+      <div class="panel">
+        <div class="ph"><h2 style="color:var(--green-dark);">&#9989; Delivered</h2>
+          <span class="cnt" id="done-count">0</span>
+          <span style="margin-left:auto;font-size:10px;color:var(--muted);">the last seven days</span>
         </div>
-        <div class="trayb"><div class="strip" id="tr-list"></div></div>
+        <div id="done-list"><div class="empty">Nothing delivered in the last week.</div></div>
       </div>
 
-      <div class="lanes" id="lanes"><div class="empty">Loading&hellip;</div></div>
+      <!-- Reorder prompts: customers near their usual gap, with whether a
+           truck is already going that way. renderChase() has always built
+           this and has never had anywhere to put it. -->
+      <div class="panel">
+        <div class="ph"><h2 style="color:var(--purple);">&#128222; Ripe to ring</h2>
+          <span style="margin-left:auto;font-size:10px;color:var(--muted);">no order yet &mdash; a prompt, not a forecast</span>
+        </div>
+        <div id="ripe-list"><div class="empty">Loading&hellip;</div></div>
+      </div>
     </div>
   </div>
-
   <!-- ================= ROUTES ================= -->
   <div class="page" id="p-routes">
     <div class="rpick" id="rpick"></div>
@@ -560,6 +643,95 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
   </div>
 </div>
 
+<div class="rigm" id="rigm">
+  <div class="rigbox">
+    <h2>&#128666; Assign a rig</h2>
+    <div class="sub" id="rig-who">&mdash;</div>
+    <div class="rigfld"><label>Driver &amp; rig</label>
+      <select id="rig-rig" onchange="rigPicked()"></select></div>
+    <!-- Hiring in a truck from another transporter. Everything saved here
+         becomes an ordinary truck, driver and pump unit owned by that
+         company, so the second load with them is a single tap. -->
+    <div class="hirep" id="rig-new" style="display:none;">
+      <p class="ph">&#10133; Hire in a truck</p>
+      <div class="rigfld"><label>Transporter <span class="req">*</span></label>
+        <select id="hire-con" onchange="hireConChanged()"></select></div>
+      <div class="rigfld" id="hire-con-new-wrap" style="display:none;">
+        <label>Company name <span class="soft">&mdash; as it is on their invoice</span></label>
+        <input type="text" id="hire-con-new" placeholder="Zimgo Transport"></div>
+      <div class="two">
+        <div class="rigfld"><label>Truck reg <span class="req">*</span></label>
+          <input type="text" id="hire-reg" placeholder="ACZ 1234"></div>
+        <div class="rigfld"><label>Trailer reg <span class="soft">&mdash; if any</span></label>
+          <input type="text" id="hire-trailer" placeholder="ACZ 1235"></div>
+      </div>
+      <div class="rigfld"><label>Carries</label>
+        <select id="hire-cap">
+          <option value="">&mdash; not known &mdash;</option>
+          <option value="3500">3,500 L</option>
+          <option value="10000">10,000 L</option>
+          <option value="18000">18,000 L</option>
+          <option value="30000">30,000 L</option>
+          <option value="36000">36,000 L</option>
+          <option value="40000">40,000 L</option>
+        </select></div>
+      <div class="two">
+        <div class="rigfld"><label>Driver <span class="req">*</span></label>
+          <input type="text" id="hire-driver" placeholder="Tapiwa Moyo"></div>
+        <div class="rigfld"><label>Phone <span class="req">*</span></label>
+          <input type="tel" id="hire-phone" placeholder="0772 123 456"></div>
+      </div>
+      <div class="rigfld"><label>Driver ID no <span class="soft">&mdash; optional</span></label>
+        <input type="text" id="hire-id" placeholder="63-1482377M48"></div>
+      <label class="hirechk">
+        <input type="checkbox" id="hire-pump" onchange="hirePumpToggle()">
+        <span>This truck needs a pumping unit alongside it</span></label>
+      <div id="hire-pump-wrap" style="display:none;">
+        <div class="two">
+          <div class="rigfld"><label>Pump reg</label>
+            <input type="text" id="hire-pump-reg" placeholder="AFX 1111"></div>
+          <div class="rigfld"><label>Pump driver</label>
+            <input type="text" id="hire-pump-driver" placeholder="Lovemore"></div>
+        </div>
+        <div class="rigfld"><label>Pump driver&rsquo;s phone</label>
+          <input type="tel" id="hire-pump-phone" placeholder="0771 987 654"></div>
+      </div>
+      <div class="rigerr" id="hire-err"></div>
+      <div class="rigrow" style="margin-bottom:12px;">
+        <button class="pri" id="hire-save" onclick="saveHiredTruck()">Save this truck</button>
+        <button class="sec" onclick="cancelHire()">Back</button>
+      </div>
+    </div>
+    <div class="rigfld" id="rig-pump-wrap" style="display:none;">
+      <label>Pumping unit <span style="font-weight:400;text-transform:none;">&mdash; leave blank and add it later if you do not know yet</span></label>
+      <select id="rig-pump"></select></div>
+    <div style="text-align:right;margin:-6px 0 10px;" id="rig-advrow">
+      <button type="button" class="riglink" id="rig-adv-btn" onclick="toggleRigAdvanced()">Swap truck, trailer or driver</button>
+    </div>
+    <div id="rig-adv" style="display:none;">
+    <div class="rigfld"><label>Truck</label>
+      <select id="rig-vehicle" onchange="rigVehiclePicked()"></select></div>
+    <div class="rigfld"><label>Trailer <span style="font-weight:400;text-transform:none;">&mdash; rigid trucks have none</span></label>
+      <select id="rig-trailer"></select></div>
+    <div class="rigfld"><label>Driver</label>
+      <select id="rig-driver"></select></div>
+    </div>
+    <div class="rignote" id="rig-note"></div>
+    <div class="rigerr" id="rig-err"></div>
+    <div class="rigrow" id="rig-mainrow">
+      <button class="pri" id="rig-save" onclick="saveRig()">Save</button>
+      <button class="sec" onclick="closeRig()">Cancel</button>
+    </div>
+    <div class="rigrow" style="margin-top:9px;" id="rig-warow">
+      <button class="wha" id="rig-wa-btn" onclick="copyDriverMessage()">&#128203; Copy job for the driver</button>
+    </div>
+    <textarea class="rigwa" id="rig-wa-text" readonly style="display:none;"></textarea>
+    <div class="rigrow" id="rig-clear" style="display:none;">
+      <button class="dgr" onclick="clearRig()">Take off this truck</button>
+    </div>
+  </div>
+</div>
+
 <!-- ADD CUSTOMER MODAL -->
 <div class="modal" id="addm">
   <div class="mbox">
@@ -662,7 +834,7 @@ let routeDir = 'out';
 function flipRoute(){ routeDir = (routeDir === 'out' ? 'in' : 'out'); renderRoute(); }
 let map=null, pinLayer=null, dragLayer=null, prospectLayer=null, markers={}, mapReady=false;
 let fleetLayer=null, orderLayer=null, armedUnit=null;
-let FLEETMAP={ vehicles:[], pumps:[], drivers:[], contractors:[], pos:{}, assign:{} };
+let FLEETMAP={ vehicles:[], pumps:[], trailers:[], drivers:[], contractors:[], pos:{}, assign:{} };
 let RUN=[], truckKey=null, dragMode=false, addMode=false, pendingLatLng=null, runLine=null;
 
 // routing state: km + minutes from the last successful call, and how we got them
@@ -773,12 +945,12 @@ function go(p){
 /* ============ DATA ============ */
 async function loadAll(){
   await loadRefs();
-  await Promise.all([loadSales(), loadChase(), loadBook(), loadBoard(), loadPlan()]);
+  await Promise.all([loadSales(), loadChase(), loadBook(), loadBoard()]);
 }
 
 async function loadRefs(){
   try{
-    const [r,p,t,s,c,d,pr,veh,pmp,drv,con,fpos,dasg]=await Promise.all([
+    const [r,p,t,s,c,d,pr,veh,pmp,trl,drv,con,fpos,dasg]=await Promise.all([
       sb.from('routes').select('*').order('sort_order'),
       sb.from('place_coords').select('*').order('place'),
       sb.from('trucks').select('*').eq('active',true).order('sort_order'),
@@ -789,20 +961,22 @@ async function loadRefs(){
       // The real fleet, for the map panel. `trucks` above is the costing
       // table the run planner prices a route with - a different thing that
       // happens to share the word.
-      sb.from('vehicles').select('id,fleet_no,reg_no,capacity_litres,driver_optional,default_driver_id,contractor_id').eq('active',true).order('fleet_no'),
-      sb.from('pump_units').select('id,unit_no,reg_no,driver_id,contractor_id').eq('active',true).order('unit_no'),
+      sb.from('vehicles').select('*').eq('active',true).order('fleet_no'),
+      sb.from('pump_units').select('*').eq('active',true).order('unit_no'),
+      sb.from('trailers').select('*').eq('active',true).order('trailer_no'),
       sb.from('drivers').select('id,full_name,phone').eq('active',true).order('full_name'),
       sb.from('contractors').select('id,name,code').eq('active',true).order('name'),
       // Absent until phase_e5 runs. Swallowed the same way as everything
       // else here: the panel then lists the fleet with nothing placed.
       sb.from('fleet_positions').select('*'),
-      sb.from('delivery_assignment').select('sale_id,vehicle_id,pump_unit_id')
+      sb.from('delivery_assignment').select('*')
     ]);
     ROUTES=r.data||[]; PLACES=p.data||[]; TRUCKS=t.data||[]; DEPOTS=d.data||[];
     if(s.data) SETTINGS=s.data;
     CUSTNAMES=c.data||[];
     PROSPECTS=pr.data||[];
     FLEETMAP.vehicles=veh.data||[]; FLEETMAP.pumps=pmp.data||[];
+    FLEETMAP.trailers=trl.data||[];
     FLEETMAP.drivers=drv.data||[]; FLEETMAP.contractors=con.data||[];
     FLEETMAP.pos={};
     (fpos.data||[]).forEach(x=>{ FLEETMAP.pos[posKey(x.kind,x.unit_id)]=
@@ -813,6 +987,7 @@ async function loadRefs(){
     if(!depotKey && DEPOTS.length) depotKey=DEPOTS[0].depot_key;
     renderRoutePicker(); renderDepots(); renderTrucks(); renderSettings(); fillMapRoutes(); fillPlaceSelect(); renderLayerToggles();
     renderFleetPanel();
+    renderDeliveries();
     if(mapReady){ drawDepot(); drawFleet(); drawOrders(); }
   }catch(e){ console.warn('refs',e); }
 }
@@ -915,235 +1090,865 @@ function notifyRep(saleId, stage){
   } catch(e) { console.log('push not sent:', (e && e.message) || e); }
 }
 
-/* ============ DELIVERIES ============ */
-async function markDelivered(id){
-  const s=SALES.find(x=>x.id===id);
-  if(!s) return;
-  if(!confirm('Mark '+s.customer+' as delivered?')) return;
-  const {error}=await sb.from('sales').update({status:'delivered',delivered_at:new Date().toISOString()}).eq('id',id);
-  if(error){ alert('Could not update: '+error.message); return; }
-  notifyRep(id,'delivered');
-  await loadSales();
+/* ============ LOADS ============
+
+   Every order still to go out, soonest first, with the three things the
+   office does to a load on each row: book a rig, send it on its way, mark it
+   delivered. The same board as the Overview and the TV dashboard, and the
+   same rule that matters most - NOTHING ages off it. An order whose day has
+   gone by stays pinned at the top until somebody deals with it.
+
+   This replaced the three-lane planning board that used to be the Dash tab.
+   That board read a `delivery_plan` table which was never created, so it
+   404'd on every load and the lanes were always empty.
+
+   The handlers below the board - en route, undo, and the whole assign-a-rig
+   dialog - are the Overview's own code, so a load handled here behaves
+   exactly as it does there, down to the message the rep's phone gets. */
+
+// The same lookup the map code does, under the name the rig dialog uses.
+// Wrapped rather than aliased: fmOwner is declared further down the file, and
+// `const conOf = fmOwner` would read it before it exists and throw at load,
+// which stops every later const in this file from ever being initialised.
+const conOf = x => fmOwner(x);
+const byId = (arr, id) => (arr || []).find(x => String(x.id) === String(id)) || null;
+let rigSaleId = null;                      // the sale the assign dialog is open on
+
+// Local date parts, never toISOString(). On a board whose whole job is to say
+// "late" or "today", being a day out either side of midnight is the one
+// mistake that matters.
+function todayISO(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+    '-' + String(d.getDate()).padStart(2, '0');
+}
+const delDay = s => String(s && s.delivery_date || '').split('T')[0];
+
+function fuelPill(ft){
+  if (!ft) return '';
+  const c = ft === 'Petrol' ? 'p-petrol' : ft === 'Paraffin' ? 'p-paraffin' : 'p-diesel';
+  return '<span class="pill ' + c + '">' + esc(ft) + '</span>';
 }
 
-function row(s,opts){
-  const done = s.status==='delivered';
-  const fp = s.fuel_type?'<span class="pill '+(s.fuel_type==='Petrol'?'p-petrol':s.fuel_type==='Paraffin'?'p-paraffin':'p-diesel')+'">'+esc(s.fuel_type)+'</span>':'';
-  const dp = done?'<span class="pill p-done">✓</span>':'';
-  const btn = (!done && opts.showBtn)
-    ? '<button class="mark" onclick="markDelivered('+s.id+')">Mark delivered</button>' : '';
-  const loc = s.location ? '<span class="pill p-place">📍 '+esc(s.location)+'</span>' : '';
-  return '<div class="row'+(done?' done':'')+'">'+
-    '<div class="info">'+
-      '<div class="nm">'+esc(s.customer)+fp+dp+'</div>'+
-      '<div class="meta">'+loc+fmt(s.delivery_date)+(s.rep_name?' · '+esc(s.rep_name):'')+
-        (s.notes?' · <i>'+noteHtml(s.notes)+'</i>':'')+'</div>'+
-    '</div>'+
-    '<div class="lit">'+(s.litres||0).toLocaleString()+' L</div>'+
-    btn+
+/* The board, and the delivered list under it. Called whenever SALES changes. */
+function renderDeliveries(){
+  const live = (SALES || []).filter(s => s.status !== 'cancelled');
+  const today = todayISO();
+  const t0 = new Date(today + 'T00:00:00').getTime();
+
+  // Soonest first. An order with no delivery date sinks to the bottom, oldest
+  // first, so a forgotten one surfaces instead of hiding among next week's.
+  const due = live.filter(s => s.status !== 'delivered').sort((a, b) => {
+    const da = delDay(a), db = delDay(b);
+    if (!da && !db) return String(a.sale_date || '').localeCompare(String(b.sale_date || ''));
+    if (!da) return 1;
+    if (!db) return -1;
+    return da.localeCompare(db) ||
+      String(a.sale_date || '').localeCompare(String(b.sale_date || ''));
+  });
+
+  // Delivered, a week either side. Long enough that a wrong tick can be put
+  // back, short enough that history does not crowd the screen.
+  const done = live.filter(s => {
+    if (s.status !== 'delivered') return false;
+    const dd = delDay(s);
+    if (!dd) return false;
+    const days = Math.round((t0 - new Date(dd + 'T00:00:00').getTime()) / 86400000);
+    return days <= 7 && days >= -7;
+  }).sort((a, b) => delDay(b).localeCompare(delDay(a)));
+
+  const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  set('bg-loads', due.length);
+  set('loads-count', due.length + '  ·  ' +
+    due.reduce((t, s) => t + (+s.litres || 0), 0).toLocaleString() + ' L');
+  set('done-count', done.length);
+
+  const el = document.getElementById('loads-list');
+  if (el) el.innerHTML = due.length
+    ? due.map(s => loadRow(s, t0, false)).join('')
+    : '<div class="empty">Nothing outstanding — every order is marked delivered.</div>';
+
+  const del = document.getElementById('done-list');
+  if (del) del.innerHTML = done.length
+    ? done.map(s => loadRow(s, t0, true)).join('')
+    : '<div class="empty">Nothing delivered in the last week.</div>';
+}
+
+function loadRow(s, t0, isDone){
+  const dd = delDay(s);
+  const d = dd ? new Date(dd + 'T00:00:00') : null;
+  const days = d ? Math.round((d.getTime() - t0) / 86400000) : null;
+
+  // Urgency, not a palette: the box colour says late / today / ahead and the
+  // words repeat it, because a long customer name truncates and must never be
+  // able to hide that a load is late.
+  const kind = isDone ? 'done'
+    : days === null ? 'none' : days < 0 ? 'late' : days === 0 ? 'today' : 'ahead';
+  const box = {
+    late:  ['var(--red-light)',   'var(--red)',   'var(--red-dark)'],
+    today: ['var(--amber-light)', 'var(--amber)', 'var(--amber)'],
+    ahead: ['var(--green-light)', 'var(--green)', 'var(--green-dark)'],
+    done:  ['var(--green-light)', 'var(--green)', 'var(--green-dark)'],
+    none:  ['#F4F4F2',            'var(--line)',  'var(--muted)'],
+  }[kind];
+  const urg = kind === 'late'
+      ? '  ·  <span class="ord-late">' + (-days) + ' day' + (days === -1 ? '' : 's') + ' late</span>'
+    : kind === 'today'
+      ? '  ·  <span class="ord-late" style="color:var(--amber);">today</span>'
+    : kind === 'none'
+      ? '  ·  no delivery date'
+    : '';
+
+  const act = isDone
+    ? '<button class="undo-btn" onclick="undoDelivered(\'' + s.id + '\')">↩ Not delivered</button>'
+    : enRouteCell(s.id) +
+      '<button class="deliver-btn" onclick="markDelivered(\'' + s.id + '\')">✓ Mark delivered</button>';
+
+  return '<div class="order-row' + (isDone ? ' done' : '') + '">' +
+    '<div class="date-box" style="background:' + box[0] + ';border:1px solid ' + box[1] + ';" ' +
+      'title="Delivery: ' + esc(dd || 'not set') + '">' +
+      '<div class="date-num" style="color:' + box[2] + ';">' +
+        (d ? String(d.getDate()).padStart(2, '0') : '—') + '</div>' +
+      '<div class="date-mon" style="color:' + box[2] + ';">' +
+        (d ? FM_MN[d.getMonth()].toUpperCase() : 'TBC') + '</div>' +
+    '</div>' +
+    '<div class="ord-mid">' +
+      '<div class="order-name">' + esc(s.customer || '—') + fuelPill(s.fuel_type) + '</div>' +
+      '<div class="order-meta">' + esc(s.location || '—') +
+        (s.rep_name ? '  ·  ' + esc(s.rep_name) : '') + urg + '</div>' +
+      (s.notes ? '<div class="ord-note">📝 ' + noteHtml(s.notes) + '</div>' : '') +
+    '</div>' +
+    '<div class="ord-rig">' + rigBadge(s.id) + '</div>' +
+    '<div class="ord-lit">' + (+s.litres || 0).toLocaleString() + ' L</div>' +
+    '<div class="ord-del">' + act + '</div>' +
   '</div>';
 }
 
-function renderDeliveries(){
-  // The Dash is the planning board now. The old Today/Upcoming/Delivered
-  // panels are gone, so this only keeps the tab badge honest and hands off
-  // to the board, which does its own filtering from SALES.
-  const today=new Date().toISOString().split('T')[0];
-  const dd=s=>(s.delivery_date||'').split('T')[0];
-  const due=SALES.filter(s=>dd(s)&&dd(s)<=today&&s.status!=='delivered'&&s.status!=='cancelled');
-  const bg=document.getElementById('bg-today');
-  if(bg) bg.textContent=due.length;
-  renderPlan();
-}
+/* ---- the bits the assign dialog needs that ops did not have ---- */
 
-/* ============ DELIVERY PLANNING BOARD (Dash) ============
-   A shared board: which sale is on which truck. delivery_plan holds ONLY the
-   assignment and points at sales(id), so the sale stays the single source of
-   truth for customer/litres/location — a rep correcting litres updates the
-   board instead of leaving a stale copy sitting on it. */
+const hv = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
 
-let PLAN = [];          // rows from delivery_plan
-let dragSaleId = null;
-let planBusy = false;   // suppresses the background refresh mid-drag, so a
-                        // poll landing between drop and save cannot snap a
-                        // card back to where it was a second ago
+// Which parts of the dialog are put away while the hire-in form is open, and
+// what their display was, so closing it restores exactly what was there.
+const HIRE_HIDES = ['rig-pump-wrap','rig-advrow','rig-adv','rig-mainrow','rig-warow','rig-clear'];
+let hirePrev = null;
 
-function toggleTray(which){
-  const el = document.getElementById('tray-' + which);
-  if (el) el.classList.toggle('open');
-}
+// Unit numbers for a hired-in rig: ZIM1, ZIM2, and ZIMP1 for its pump.
+// Named unitSeq, not seq - ops already uses `seq` as a local inside the
+// routing code, and two things with one name is how a bug hides.
+const unitSeq = (prefix, used, n) => {
+  const out = [];
+  for (let i = used + 1; i <= used + n; i++) out.push(prefix + i);
+  return out;
+};
 
-async function loadPlan(){
-  try{
-    const { data, error } = await sb.from('delivery_plan').select('*').order('position');
+async function markDelivered(id){
+  const s = (SALES || []).find(x => String(x.id) === String(id));
+  if (!s) return;
+  if (!confirm('Mark ' + s.customer + ' as delivered?')) return;
+  const btns = document.querySelectorAll('.deliver-btn');
+  btns.forEach(b => b.disabled = true);
+  try {
+    const { error } = await sb.from('sales')
+      .update({ status: 'delivered', delivered_at: new Date().toISOString() })
+      .eq('id', id);
     if (error) throw error;
-    PLAN = data || [];
-  }catch(e){ console.warn('plan', e); }
-  renderPlan();
+    notifyRep(id, 'delivered');
+    await loadSales();
+  } catch(e) {
+    alert('Could not mark it delivered: ' + ((e && e.message) || e));
+    btns.forEach(b => b.disabled = false);
+  }
 }
 
-function planWho(){
-  // Reuse the name the header already shows rather than keeping a second
-  // copy of the signed-in user that could drift out of step with it.
-  const el = document.getElementById('who');
-  return (el && el.textContent.trim()) || null;
+
+// Today's departure shows a time; an older one shows the date. "14:32" on
+// a load that left three days ago would read as if it had only just gone.
+function enRouteWhen(ts){
+  // Caught before parsing on purpose: new Date(null) is 1 Jan 1970 rather
+  // than an invalid date, so a missing stamp would read as "01 Jan".
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d)) return '';
+  const now = new Date();
+  const sameDay = d.getFullYear() === now.getFullYear() &&
+                  d.getMonth()    === now.getMonth() &&
+                  d.getDate()     === now.getDate();
+  return sameDay
+    ? String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0')
+    : String(d.getDate()).padStart(2,'0') + ' ' + FM_MN[d.getMonth()];
 }
 
-const planOf = id => PLAN.find(p => String(p.sale_id) === String(id));
-
-function planCard(s){
-  const today = new Date().toISOString().split('T')[0];
-  const dd = (s.delivery_date || '').split('T')[0];
-  const late = dd && dd < today;
-  return '<div class="pcard" draggable="true" data-sale="' + s.id + '"' +
-    ' ondragstart="planDragStart(event,' + s.id + ')" ondragend="planDragEnd(event)">' +
-    '<button class="tick" title="Mark delivered" onclick="planDeliver(event,' + s.id + ')">&#10003;</button>' +
-    '<b>' + esc(s.customer) + '</b>' +
-    '<span class="meta">' + esc(s.location || '—') + (s.rep_name ? ' · ' + esc(s.rep_name) : '') + '</span>' +
-    '<span class="meta"><span class="l">' + (s.litres || 0).toLocaleString() + ' L</span>' +
-    (dd ? ' · <span class="' + (late ? 'late' : '') + '">' + fmt(s.delivery_date) + '</span>' : ' · no date') +
-    '</span></div>';
+function enRouteCell(saleId){
+  const a = FLEETMAP.assign[String(saleId)];
+  if (a && a.en_route_at) {
+    return '<div class="enroute-on" title="' +
+      (a.en_route_by ? 'Sent by ' + esc(a.en_route_by) : 'On the road') + '">' +
+      '<span>&#128666; On its way &middot; ' + enRouteWhen(a.en_route_at) + '</span>' +
+      '<button class="er-undo" title="Not actually gone \u2014 undo" ' +
+        'onclick="event.stopPropagation();clearEnRoute(\'' + saleId + '\')">&#8617;</button>' +
+      '</div>';
+  }
+  return '<button class="enroute-btn" ' +
+    'onclick="event.stopPropagation();setEnRoute(\'' + saleId + '\')">' +
+    '&#128666; En route</button>';
 }
 
-function renderPlan(){
-  if (!document.getElementById('lanes')) return;
-  const sales = SALES.filter(s => s.status !== 'delivered' && s.status !== 'cancelled');
-  const byId = new Map(sales.map(s => [String(s.id), s]));
-  const dkey = s => (s.delivery_date || '9999-99-99').split('T')[0];
-
-  // --- To plan tray: everything not on a truck -----------------------------
-  const unplanned = sales.filter(s => !planOf(s.id)).sort((a,b) => dkey(a).localeCompare(dkey(b)));
-  document.getElementById('tp-n').textContent = unplanned.length;
-  document.getElementById('tp-l').textContent =
-    unplanned.reduce((t,s) => t + (s.litres || 0), 0).toLocaleString() + ' L';
-  const tp = document.getElementById('tp-list');
-  tp.innerHTML = unplanned.length ? unplanned.map(s => planCard(s)).join('')
-    : '<div class="empty">Everything is on a truck</div>';
-
-  // --- Ripe to pair: reference only, deliberately not draggable ------------
-  // These customers have no order yet, only a prediction that they are due.
-  // Dragging one onto a truck would mean inventing a sale with a price and a
-  // quantity nobody agreed — that is a rep's job, not a planner's.
-  const tr = document.getElementById('tr-list');
-  document.getElementById('tr-n').textContent = RIPE.length;
-  tr.innerHTML = RIPE.length
-    ? RIPE.slice(0,40).map(r =>
-        '<div class="pcard ripe"><b>' + esc(r.customer) + '</b>' +
-        '<span class="meta">' + (r.days_since_last || 0) + 'd ago · every ' + (r.avg_cycle_days || '?') + 'd</span>' +
-        '<span class="meta"><span class="l">~' + Math.round(r.avg_litres || 0).toLocaleString() + ' L</span>' +
-        (r.ripeness_pct != null ? ' · ' + r.ripeness_pct + '%' : '') + '</span></div>').join('')
-    : '<div class="empty">Nobody due right now</div>';
-
-  // --- Lanes, one per active truck ----------------------------------------
-  const lanes = document.getElementById('lanes');
-  if (!TRUCKS.length){
-    lanes.innerHTML = '<div class="empty">No active trucks — add one in Settings</div>';
+async function setEnRoute(id){
+  const a = FLEETMAP.assign[String(id)];
+  // A load is on its way ON something. With no truck assigned the rep would
+  // be told their load had left with nothing to ring and no reg to look for,
+  // which is worse than being told nothing - so this opens the assign dialog
+  // instead of sending a message that cannot be acted on.
+  if (!a || !a.vehicle_id) {
+    alert('Assign a truck first.' + String.fromCharCode(10,10) +
+          'The rep gets told which truck is coming and who is driving it, so' +
+          String.fromCharCode(10) + 'there has to be a truck on the load before it can be sent.');
+    openRig(id);
     return;
   }
-  lanes.innerHTML = TRUCKS.map(t => {
-    const mine = PLAN.filter(p => p.truck_key === t.truck_key)
-      .map(p => byId.get(String(p.sale_id)))
-      .filter(Boolean);
-    const load = mine.reduce((x,s) => x + (s.litres || 0), 0);
-    const cap  = Number(t.capacity_l) || 0;
-    const over = cap > 0 && load > cap;
-    const pct  = cap > 0 ? Math.min(100, Math.round(load / cap * 100)) : 0;
-    const key  = esc(t.truck_key);
-    return '<div class="lane' + (over ? ' over' : '') + '" data-truck="' + key + '"' +
-      ' ondragover="planDragOver(event,this)" ondragleave="planDragLeave(event,this)"' +
-      ' ondrop="planDrop(event,this)">' +
-      '<div class="laneh"><b>&#128666; ' + esc(t.truck_name) + '</b>' +
-      '<div class="lanecap"><span>' + load.toLocaleString() + ' / ' + cap.toLocaleString() + ' L</span>' +
-      '<span>' + (over ? 'OVER by ' + (load - cap).toLocaleString() + ' L'
-                       : mine.length + ' stop' + (mine.length === 1 ? '' : 's')) + '</span></div>' +
-      '<div class="bar"><i style="width:' + pct + '%"></i></div></div>' +
-      '<div class="laneb">' + (mine.length ? mine.map(s => planCard(s)).join('')
-        : '<div class="empty">Drop orders here</div>') + '</div></div>';
-  }).join('');
-}
+  const sale = (SALES || []).find(x => String(x.id) === String(id));
+  const v = byId(FLEETMAP.vehicles, a.vehicle_id);
+  if (!confirm('Tell the rep that ' + (sale ? sale.customer : 'this load') +
+               ' is on its way' + (v ? ' on ' + v.fleet_no : '') + '?')) return;
 
-/* ---- drag and drop ---- */
-function planDragStart(e, id){
-  dragSaleId = id; planBusy = true;
-  e.dataTransfer.effectAllowed = 'move';
-  try { e.dataTransfer.setData('text/plain', String(id)); } catch(_){}
-  e.currentTarget.classList.add('dragging');
-}
-function planDragEnd(e){
-  e.currentTarget.classList.remove('dragging');
-  document.querySelectorAll('.lane.hot,.strip.hot').forEach(x => x.classList.remove('hot'));
-  planBusy = false;
-}
-function planDragOver(e, el){
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  el.classList.add('hot');
-}
-function planDragLeave(e, el){
-  if (!el.contains(e.relatedTarget)) el.classList.remove('hot');
-}
-function planDraggedId(e){
-  if (dragSaleId) return dragSaleId;
-  const raw = e.dataTransfer && e.dataTransfer.getData('text/plain');
-  const n = Number(raw);
-  return isNaN(n) || !n ? null : n;
-}
-
-async function planDrop(e, el){
-  e.preventDefault();
-  el.classList.remove('hot');
-  const truckKey = el.getAttribute('data-truck');
-  const id = planDraggedId(e);
-  if (!id || !truckKey) return;
-  const existing = planOf(id);
-  if (existing && existing.truck_key === truckKey) return;   // dropped where it already was
-
-  const pos = PLAN.filter(p => p.truck_key === truckKey).length;
-  // Move it on screen first, then save. A failed save reloads from the
-  // server rather than leaving the board quietly disagreeing with it.
-  if (existing) existing.truck_key = truckKey;
-  else PLAN.push({ sale_id: id, truck_key: truckKey, position: pos });
-  renderPlan();
-  try{
-    const { error } = await sb.from('delivery_plan')
-      .upsert({ sale_id: id, truck_key: truckKey, position: pos,
-                updated_at: new Date().toISOString(), updated_by: planWho() },
-              { onConflict: 'sale_id' });
+  const btns = document.querySelectorAll('.enroute-btn');
+  btns.forEach(b => b.disabled = true);
+  const stamp = new Date().toISOString();
+  const who = fleetWho();
+  try {
+    // .select() on purpose: row-level security refuses a write by matching
+    // NO rows and reporting no error at all, so an empty result is the only
+    // way to tell a refusal from a success.
+    const { data, error } = await sb.from('delivery_assignment')
+      .update({ en_route_at: stamp, en_route_by: who })
+      .eq('sale_id', Number(id))
+      .select('sale_id');
     if (error) throw error;
-    // Only once the move is actually saved. Dropping the same load on a
-    // second truck re-notifies, but notify-rep tags by sale, so the newer
-    // one replaces the older on the lock screen rather than stacking.
-    notifyRep(id, 'assigned');
-  }catch(err){
-    alert('Could not save that move:\n\n' + ((err && err.message) || err) +
-          '\n\nThe board has been reloaded from the server.');
-    await loadPlan();
+    if (!data || !data.length) {
+      throw new Error('the database would not accept it \u2014 check you are signed in as ops or admin');
+    }
+    a.en_route_at = stamp; a.en_route_by = who;
+    notifyRep(id, 'en_route');
+    renderDeliveries();
+  } catch(e) {
+    alert('Could not send it on its way: ' + ((e && e.message) || e));
+    btns.forEach(b => b.disabled = false);
   }
 }
 
-async function planUnassign(e, el){
-  e.preventDefault();
-  el.classList.remove('hot');
-  const id = planDraggedId(e);
-  if (!id || !planOf(id)) return;
-  PLAN = PLAN.filter(p => String(p.sale_id) !== String(id));
-  renderPlan();
-  try{
-    const { error } = await sb.from('delivery_plan').delete().eq('sale_id', id);
+async function clearEnRoute(id){
+  const sale = (SALES || []).find(x => String(x.id) === String(id));
+  if (!confirm('Take ' + (sale ? sale.customer : 'this load') + ' back off the road?' +
+               String.fromCharCode(10,10) +
+               'The rep will stop seeing it as on its way.')) return;
+  try {
+    const { data, error } = await sb.from('delivery_assignment')
+      .update({ en_route_at: null, en_route_by: null })
+      .eq('sale_id', Number(id))
+      .select('sale_id');
     if (error) throw error;
-  }catch(err){
-    alert('Could not take that off the truck:\n\n' + ((err && err.message) || err) +
-          '\n\nThe board has been reloaded from the server.');
-    await loadPlan();
+    if (!data || !data.length) throw new Error('the database would not accept it');
+    const a = FLEETMAP.assign[String(id)];
+    if (a) { a.en_route_at = null; a.en_route_by = null; }
+    renderDeliveries();
+  } catch(e) {
+    alert('Could not change it back: ' + ((e && e.message) || e));
   }
 }
 
-async function planDeliver(e, id){
-  e.stopPropagation();          // the card is draggable; don't let this start one
-  await markDelivered(id);
-  await loadPlan();
+/* Put a delivery back. The office uses this when a rep ticked the wrong
+   row; the rep has the same thing in their own app.
+
+   Two deliberate choices. An already-invoiced sale says so in the
+   confirmation, because accounts have acted on the tick and the invoice is
+   already with the customer. And the status change is sent on its own with
+   the trail following separately - if phase_d4 has not been run the
+   correction still lands, which matters more than the audit line. */
+async function undoDelivered(id){
+  const sale = (SALES || []).find(x => String(x.id) === String(id));
+  const who = sale ? sale.customer : 'this delivery';
+  let msg = 'Put the delivery to ' + who + ' back to NOT delivered?';
+  if (sale && sale.invoiced) {
+    msg += String.fromCharCode(10,10) +
+      'CAREFUL: accounts have already invoiced this one. Ring them, or the' +
+      String.fromCharCode(10) + 'invoice will not match what was delivered.';
+  }
+  if (!confirm(msg)) return;
+
+  try {
+    const { error } = await sb.from('sales')
+      .update({ status: 'pending', delivered_at: null })
+      .eq('id', id);
+    if (error) throw error;
+  } catch (e) {
+    alert('Could not change it back: ' + (e.message || e));
+    return;
+  }
+
+  // Best effort, and never allowed to block the correction itself.
+  sb.from('sales').update({
+    undelivered_at: new Date().toISOString(),
+    undelivered_by: fleetWho() || 'Ops planner',
+  }).eq('id', id).then(({ error }) => {
+    if (error) console.log('undo trail not recorded:', error.message);
+  });
+
+  await loadSales();
 }
 
+function rigBadge(saleId){
+  const a = FLEETMAP.assign[String(saleId)];
+  const open = 'onclick="event.stopPropagation();openRig(\'' + saleId + '\')"';
+  if (!a) {
+    return '<button class="rigbtn" ' + open + '>&#128666; Assign</button>';
+  }
+  const v = byId(FLEETMAP.vehicles, a.vehicle_id);
+  const d = byId(FLEETMAP.drivers, a.driver_id);
+  const label = [v ? v.fleet_no : null, d ? d.full_name : null].filter(Boolean).join(' · ') || 'Assigned';
+  // A tanker with no pump yet is the one thing on this row that still
+  // needs doing, so it gets the warning triangle rather than the truck:
+  // the label truncates at this width, and a marker at the front is the
+  // only part guaranteed to survive.
+  const wantsPump = !!(v && v.needs_pump) && !a.pump_unit_id;
+  return '<button class="rigbtn ' + (wantsPump ? 'warn' : 'on') + '" ' + open +
+    ' title="' + (wantsPump ? 'No pumping unit yet — tap to add one' : 'Tap to change') + '">' +
+    (wantsPump ? '&#9888;' : '&#128666;') + ' ' + esc(label) + '</button>';
+}
+
+// SP01 and SP02 are ours and have a named driver. A pump hired in with a
+// truck belongs to that transporter and is listed under its name.
+function rigPumpOptions(sel){
+  const el = document.getElementById('rig-pump');
+  if (!el) return;
+  // SP03 was the old "hired in, details on the day" stand-in. A hired pump
+  // now belongs to a named transporter, so SP03 stops being offered - but
+  // never while it is the one already on the load, or saving would quietly
+  // drop it.
+  const pumps = (FLEETMAP.pumps || []).filter(p =>
+      !!p.contractor_id || !p.is_hired || String(sel) === String(p.id));
+    el.innerHTML = '<option value="">\u2014 none yet \u2014</option>' +
+    ownerGrouped(pumps, p => {
+      const d = byId(FLEETMAP.drivers, p.driver_id);
+      const label = p.unit_no +
+        (d ? '  \u2014  ' + d.full_name
+           : (p.is_hired && !p.contractor_id ? '  (hired in)' : '')) +
+        (p.reg_no ? '  (' + p.reg_no + ')' : '');
+      return '<option value="' + p.id + '"' +
+        (String(sel) === String(p.id) ? ' selected' : '') + '>' +
+        esc(label) + '</option>';
+    });
+}
+
+// Only a horse and tanker needs a pump alongside it. A rigid has one
+// built on, so the field stays hidden rather than inviting a wrong
+// answer. needs_pump is read off the vehicle, not guessed from the fleet
+// number, so ops can correct it without a code change.
+function rigPumpVisibility(){
+  const wrap = document.getElementById('rig-pump-wrap');
+  if (!wrap) return;
+  const v = byId(FLEETMAP.vehicles, document.getElementById('rig-vehicle').value);
+  const show = !!(v && v.needs_pump) && (FLEETMAP.pumps || []).length > 0;
+  wrap.style.display = show ? '' : 'none';
+  if (!show) document.getElementById('rig-pump').value = '';
+}
+
+// The transporter's name sits on the heading above the options, not on
+// every line under it, so a hired rig reads no longer than one of ours.
+function rigLabel(v){
+  const d = byId(FLEETMAP.drivers, v.default_driver_id);
+  const t = byId(FLEETMAP.trailers, v.default_trailer_id);
+  return (d ? d.full_name : (v.driver_optional ? 'Any driver' : '(no driver)')) +
+    '  \u2014  ' + v.fleet_no +
+    (v.reg_no ? ' (' + v.reg_no + ')' : '') +
+    (t ? '  +  ' + t.trailer_no + (t.reg_no ? ' (' + t.reg_no + ')' : '') : '') +
+    (v.capacity_litres ? '  \u00b7  ' + v.capacity_litres.toLocaleString() + ' L' : '');
+}
+
+/* Options for a rig select, under one heading per owner. With nothing
+   ever hired in there are no headings at all - a plain list, as before. */
+function ownerGrouped(rows, mk){
+  const groups = (FLEETMAP.contractors || [])
+    .map(c => ({ c: c, rows: rows.filter(x => String(x.contractor_id) === String(c.id)) }))
+    .filter(g => g.rows.length);
+  if (!groups.length) return rows.map(mk).join('');
+  return '<optgroup label="Skelsee fleet">' +
+    rows.filter(x => !x.contractor_id).map(mk).join('') + '</optgroup>' +
+    groups.map(g => '<optgroup label="' + esc(g.c.name) + '">' +
+      g.rows.map(mk).join('') + '</optgroup>').join('');
+}
+
+/* Fills all four rig selects from FLEET with the given assignment chosen.
+   Lifted out of openRig so that hiring a truck in can refill them without
+   closing and reopening the box over the top of the load being assigned. */
+function rigFillSelects(a){
+  a = a || {};
+  const o = (id, label, cur) => '<option value="' + id + '"' +
+    (String(cur) === String(id) ? ' selected' : '') + '>' + esc(label) + '</option>';
+
+  document.getElementById('rig-rig').innerHTML =
+    '<option value="">\u2014 pick a driver \u2014</option>' +
+    ownerGrouped(FLEETMAP.vehicles, v => o(v.id, rigLabel(v), a.vehicle_id)) +
+    '<option value="__hire__">\u2795  Hire in a truck\u2026</option>';
+
+  document.getElementById('rig-vehicle').innerHTML =
+    '<option value="">\u2014 pick a truck \u2014</option>' +
+    ownerGrouped(FLEETMAP.vehicles, v => o(v.id,
+      v.fleet_no + '  ' + (v.reg_no || '') + '  ' + (v.model || ''), a.vehicle_id));
+
+  document.getElementById('rig-trailer').innerHTML =
+    '<option value="">\u2014 none \u2014</option>' +
+    ownerGrouped(FLEETMAP.trailers, t => o(t.id,
+      t.trailer_no + '  ' + (t.reg_no || ''), a.trailer_id));
+
+  document.getElementById('rig-driver').innerHTML =
+    '<option value="">\u2014 pick a driver \u2014</option>' +
+    ownerGrouped(FLEETMAP.drivers, d => o(d.id, d.full_name, a.driver_id));
+
+  rigPumpOptions(a.pump_unit_id);
+}
+
+function openRig(saleId){
+  rigSaleId = String(saleId);
+    hireShow(false); hireReset();
+  // The last job's message must not be sitting there when the next
+  // one is opened - that is how the wrong job gets sent.
+  const waBox = document.getElementById('rig-wa-text');
+  if (waBox) { waBox.value = ''; waBox.style.display = 'none'; }
+  const a = FLEETMAP.assign[rigSaleId] || {};
+  const sale = (SALES || []).find(s => String(s.id) === rigSaleId);
+
+  document.getElementById('rig-who').textContent = sale
+    ? sale.customer + '  ·  ' + (sale.litres || 0).toLocaleString() + ' L'
+    : 'Delivery';
+
+  rigFillSelects(a);
+  rigPumpVisibility();
+  // Open the detail fields only when this assignment is NOT the usual rig —
+  // otherwise the one-click case stays one click.
+  const picked = byId(FLEETMAP.vehicles, a.vehicle_id);
+  const unusual = !!picked && (
+    (a.driver_id  && String(a.driver_id)  !== String(picked.default_driver_id)) ||
+    (a.trailer_id && String(a.trailer_id) !== String(picked.default_trailer_id)));
+  setRigAdvanced(unusual);
+
+  document.getElementById('rig-clear').style.display = FLEETMAP.assign[rigSaleId] ? '' : 'none';
+  document.getElementById('rig-err').textContent = '';
+  document.getElementById('rigm').classList.add('on');
+}
+
+function setRigAdvanced(show){
+  document.getElementById('rig-adv').style.display = show ? '' : 'none';
+  document.getElementById('rig-adv-btn').textContent =
+    show ? 'Hide truck, trailer and driver' : 'Swap truck, trailer or driver';
+}
+
+function toggleRigAdvanced(){
+  setRigAdvanced(document.getElementById('rig-adv').style.display === 'none');
+}
+
+// The picker is a shortcut, not a second source of truth: it fills the three
+// fields below and saving still reads only those. One place to be wrong.
+function rigPicked(){
+  const pick = document.getElementById('rig-rig').value;
+  if (pick === '__hire__') { openHire(); return; }
+  hireShow(false);
+  const v = byId(FLEETMAP.vehicles, pick);
+  document.getElementById('rig-vehicle').value = v ? v.id : '';
+  document.getElementById('rig-trailer').value = (v && v.default_trailer_id) || '';
+  document.getElementById('rig-driver').value  = (v && v.default_driver_id)  || '';
+  document.getElementById('rig-err').textContent = '';
+  rigPumpVisibility();
+}
+
+/* Picking a truck fills in the trailer and driver it normally runs with, so
+   whoever is assigning only has to touch them when it is a swap. Only fills
+   blanks - it never overwrites a choice already made. */
+function rigVehiclePicked(){
+  const v = byId(FLEETMAP.vehicles, document.getElementById('rig-vehicle').value);
+  if (!v) return;
+  const tr = document.getElementById('rig-trailer');
+  const dr = document.getElementById('rig-driver');
+  if (!tr.value && v.default_trailer_id) tr.value = v.default_trailer_id;
+  if (!dr.value && v.default_driver_id)  dr.value = v.default_driver_id;
+  rigPumpVisibility();
+}
+
+function hireShow(on){
+  const panel = document.getElementById('rig-new');
+  if (!panel) return;
+  if (on) {
+    if (!hirePrev) {
+      hirePrev = {};
+      HIRE_HIDES.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { hirePrev[id] = el.style.display; el.style.display = 'none'; }
+      });
+    }
+    panel.style.display = '';
+    hireConOptions();
+  } else {
+    panel.style.display = 'none';
+    if (hirePrev) {
+      Object.keys(hirePrev).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = hirePrev[id];
+      });
+      hirePrev = null;
+    }
+  }
+}
+
+function hireReset(){
+  ['hire-con-new','hire-reg','hire-trailer','hire-driver','hire-phone','hire-id',
+   'hire-pump-reg','hire-pump-driver','hire-pump-phone'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const cap = document.getElementById('hire-cap'); if (cap) cap.value = '';
+  const chk = document.getElementById('hire-pump'); if (chk) chk.checked = false;
+  const pw = document.getElementById('hire-pump-wrap'); if (pw) pw.style.display = 'none';
+  const e = document.getElementById('hire-err'); if (e) e.textContent = '';
+  const n = document.getElementById('rig-note'); if (n) n.textContent = '';
+}
+
+function openHire(){ document.getElementById('rig-rig').value = ''; hireShow(true); }
+
+function cancelHire(){ hireShow(false); hireReset(); }
+
+function hireConOptions(){
+  const el = document.getElementById('hire-con');
+  if (!el) return;
+  const keep = el.value;
+  el.innerHTML = '<option value="">\u2014 pick a transporter \u2014</option>' +
+    (FLEETMAP.contractors || []).map(c =>
+      '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('') +
+    '<option value="__new__">\u2795  a company not on the list\u2026</option>';
+  el.value = keep && el.querySelector('option[value="' + keep + '"]') ? keep : '';
+  hireConChanged();
+}
+
+function hireConChanged(){
+  const wrap = document.getElementById('hire-con-new-wrap');
+  if (wrap) wrap.style.display =
+    document.getElementById('hire-con').value === '__new__' ? '' : 'none';
+}
+
+function hirePumpToggle(){
+  const wrap = document.getElementById('hire-pump-wrap');
+  if (wrap) wrap.style.display =
+    document.getElementById('hire-pump').checked ? '' : 'none';
+}
+
+// A short code for the transporter, which is what builds its unit numbers:
+// "Zimgo Transport" -> ZIM -> ZIM1, ZIM2, and ZIMP1 for its pump.
+function conCode(name){
+  return String(name).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) || 'CON';
+}
+
+/* Inserts a row, trying each candidate for the unique column in turn.
+
+   Two transporters can each employ a John Moyo, and drivers.full_name is
+   unique across the whole table, so the second is stored as
+   "John Moyo (ZIM)" rather than refused. Fleet numbers work the same way:
+   if ZIM1 has gone since the page loaded, ZIM2 is taken instead.
+
+   Anything that is not a duplicate - a row-level security refusal above
+   all - is thrown straight out, because retrying it would only hide it. */
+async function insertUnique(table, col, candidates, row){
+  let last = null;
+  for (let i = 0; i < candidates.length; i++) {
+    const r = Object.assign({}, row); r[col] = candidates[i];
+    const { data, error } = await sb.from(table).insert(r).select('*').single();
+    if (!error) return data;
+    last = error;
+    if (!(error.code === '23505' || /duplicate key|already exists/i.test(error.message || ''))) throw error;
+  }
+  throw last || new Error('No free ' + col + ' for ' + table);
+}
+
+/* Records the hired rig and selects it. It does NOT assign the load - the
+   Save button below still does that, so the pump can be added first and
+   so nothing is written to the delivery until the office says so. */
+async function saveHiredTruck(){
+  const err = document.getElementById('hire-err');
+  const btn = document.getElementById('hire-save');
+  const conSel   = hv('hire-con');
+  const conName  = conSel === '__new__' ? hv('hire-con-new') : '';
+  const reg      = hv('hire-reg');
+  const trReg    = hv('hire-trailer');
+  const cap      = hv('hire-cap');
+  const dName    = hv('hire-driver');
+  const dPhone   = hv('hire-phone');
+  const dId      = hv('hire-id');
+  const wantPump = !!document.getElementById('hire-pump').checked;
+  const pReg     = hv('hire-pump-reg');
+  const pDriver  = hv('hire-pump-driver');
+  const pPhone   = hv('hire-pump-phone');
+
+  if (!conSel) { err.textContent = 'Which transporter is it?'; return; }
+  if (conSel === '__new__' && conName.length < 2) {
+    err.textContent = 'Type the transporter\u2019s name.'; return; }
+  if (!reg) { err.textContent = 'The truck\u2019s registration, please \u2014 it is what the depot and the customer will see.'; return; }
+  if (!dName) { err.textContent = 'Who is driving?'; return; }
+  if (!dPhone) { err.textContent = 'A phone number for the driver \u2014 without one the rep cannot ring them.'; return; }
+
+  err.textContent = '';
+  btn.disabled = true; btn.textContent = 'Saving\u2026';
+  try {
+    // 1. the transporter
+    let con = conSel === '__new__' ? null : byId(FLEETMAP.contractors || [], conSel);
+    if (!con) {
+      const base = conCode(conName);
+      try {
+        con = await insertUnique('contractors', 'code',
+          [base, base + '1', base + '2', base + '3', base + '4'],
+          { name: conName, created_by: fleetWho() });
+      } catch (dup) {
+        // Already on file - most likely one that was marked inactive.
+        const r = await sb.from('contractors').select('*').ilike('name', conName).limit(1);
+        if (!r.data || !r.data.length) throw dup;
+        con = r.data[0];
+        await sb.from('contractors').update({ active: true }).eq('id', con.id);
+      }
+    }
+
+    // 2. the driver. Used this transporter's driver before? Reuse the row
+    //    and top up whatever was missing, so a phone number typed today
+    //    fixes every future load rather than making a second John Moyo.
+    const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+    const findDrv = nm => (FLEETMAP.drivers || []).find(d =>
+      String(d.contractor_id) === String(con.id) && same(d.full_name, nm));
+
+    let drv = findDrv(dName);
+    if (drv) {
+      const patch = {};
+      if (dPhone && dPhone !== drv.phone) patch.phone = dPhone;
+      if (dId && dId !== drv.id_number) patch.id_number = dId;
+      if (Object.keys(patch).length) {
+        const u = await sb.from('drivers').update(patch).eq('id', drv.id).select('id');
+        if (u.error) throw u.error;
+      }
+    } else {
+      drv = await insertUnique('drivers', 'full_name',
+        [dName, dName + ' (' + con.code + ')', dName + ' (' + con.code + ' 2)',
+         dName + ' (' + con.code + ' 3)'],
+        { phone: dPhone, id_number: dId || null, contractor_id: con.id });
+    }
+
+    // 3. the trailer, if it pulls one
+    let trl = null;
+    if (trReg) {
+      trl = (FLEETMAP.trailers || []).find(x => same(x.trailer_no, trReg) || same(x.reg_no, trReg));
+      if (!trl) trl = await insertUnique('trailers', 'trailer_no',
+        [trReg, trReg + ' (' + con.code + ')', trReg + ' (' + con.code + ' 2)'],
+        { reg_no: trReg, contractor_id: con.id });
+    }
+
+    // 4. the pumping unit, if one was named. Ticking the box without
+    //    filling anything in is allowed on purpose: the truck is recorded
+    //    as needing a pump and the board shows its amber warning until one
+    //    is added, which is the same way our own tankers behave.
+    let pump = null;
+    if (wantPump && (pReg || pDriver)) {
+      let pd = null;
+      if (pDriver) {
+        pd = findDrv(pDriver);
+        if (!pd) {
+          pd = await insertUnique('drivers', 'full_name',
+            [pDriver, pDriver + ' (' + con.code + ')', pDriver + ' (' + con.code + ' 2)'],
+            { phone: pPhone || null, contractor_id: con.id });
+        } else if (pPhone && pPhone !== pd.phone) {
+          await sb.from('drivers').update({ phone: pPhone }).eq('id', pd.id);
+        }
+      }
+      const usedP = (FLEETMAP.pumps || []).filter(x => String(x.contractor_id) === String(con.id)).length;
+      pump = await insertUnique('pump_units', 'unit_no', unitSeq(con.code + 'P', usedP, 12),
+        { reg_no: pReg || null, driver_id: pd ? pd.id : null,
+          is_hired: true, contractor_id: con.id });
+    }
+
+    // 5. the truck itself
+    const usedV = (FLEETMAP.vehicles || []).filter(x => String(x.contractor_id) === String(con.id)).length;
+    const veh = await insertUnique('vehicles', 'fleet_no', unitSeq(con.code, usedV, 20), {
+      reg_no: reg,
+      default_driver_name: drv.full_name,
+      default_driver_id: drv.id,
+      default_trailer_id: trl ? trl.id : null,
+      default_trip_type: 'delivery',
+      needs_pump: wantPump,
+      capacity_litres: cap ? Number(cap) : null,
+      driver_optional: false,
+      contractor_id: con.id,
+      active: true
+    });
+
+    // Back to the picker with the new rig chosen, over the same load.
+    await loadFleet(true);
+    const cur = FLEETMAP.assign[rigSaleId] || {};
+    hireShow(false);
+    hireReset();
+    rigFillSelects({ vehicle_id: veh.id, driver_id: drv.id,
+      trailer_id: trl ? trl.id : null,
+      pump_unit_id: pump ? pump.id : cur.pump_unit_id });
+    rigPumpVisibility();
+    const note = document.getElementById('rig-note');
+    if (note) note.textContent = veh.fleet_no + ' \u2014 ' + drv.full_name +
+      ' added under ' + con.name + '. Press Save to put this load on it.';
+  } catch(e) {
+    err.textContent = 'Could not save: ' + ((e && e.message) || e);
+  }
+  btn.disabled = false; btn.textContent = 'Save this truck';
+}
+
+/* The job as the driver needs to read it on a phone.
+
+   No price and no payment terms, on purpose: a driver does not need them
+   and this message gets forwarded on. *asterisks* are WhatsApp's own
+   bold, and there are no columns or tables because WhatsApp reflows
+   everything into one narrow strip. The notes go in raw so a pasted maps
+   link stays tappable. */
+function driverMessage(){
+  const NL = String.fromCharCode(10);
+  const sale = (SALES || []).find(x => String(x.id) === String(rigSaleId)) || {};
+  const val = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  const v = byId(FLEETMAP.vehicles, val('rig-vehicle'));
+  const t = byId(FLEETMAP.trailers, val('rig-trailer'));
+  const d = byId(FLEETMAP.drivers,  val('rig-driver'));
+  const p = byId(FLEETMAP.pumps || [], val('rig-pump'));
+
+  // fleet number and reg together - the driver checks the plate, the yard
+  // calls it by its number.
+  const unit = x => x ? [x.fleet_no || x.trailer_no || x.unit_no, x.reg_no]
+    .filter(Boolean).join('  \u00b7  ') : '';
+  const bold = (label, value) => value ? '*' + label + ':* ' + value : null;
+
+  // A tanker that cannot discharge on its own says so rather than going
+  // out silently short of a pump.
+  let pumpLine = null;
+  if (v && v.needs_pump) {
+    if (p) {
+      const pd = byId(FLEETMAP.drivers, p.driver_id);
+      pumpLine = unit(p) + (p.is_hired ? '  (hired in)' : '') +
+        (pd ? '  \u2014  ' + pd.full_name + (pd.phone ? '  ' + pd.phone : '') : '');
+    } else {
+      pumpLine = 'TO BE CONFIRMED';
+    }
+  }
+
+  const litres = (sale.litres || 0).toLocaleString() + ' L' +
+    (sale.fuel_type ? '  ' + sale.fuel_type : '');
+
+  return [
+    '*SKELSEE DELIVERY*',
+    '',
+    bold('Customer', sale.customer),
+    bold('Where', sale.location),
+    bold('Date', fmDay(sale.delivery_date)),
+    bold('Load', litres),
+    '',
+          bold('Truck', v ? unit(v) + (conOf(v) ? '  (' + conOf(v).name + ')' : '') : null),
+    bold('Trailer', unit(t)),
+    bold('Driver', d ? d.full_name + (d.phone ? '  ' + d.phone : '') : null),
+    bold('Pump unit', pumpLine),
+    sale.notes ? '' : null,
+    sale.notes ? '*Notes:*' : null,
+    sale.notes ? String(sale.notes) : null,
+    '',
+    sale.rep_name ? 'Sales rep: ' + sale.rep_name : null,
+    'Ref: ' + (sale.id != null ? sale.id : '-'),
+  ].filter(x => x !== null && x !== undefined).join(NL);
+}
+
+async function copyDriverMessage(){
+  const ta = document.getElementById('rig-wa-text');
+  const btn = document.getElementById('rig-wa-btn');
+  if (!ta) return;
+  ta.value = driverMessage();
+  ta.style.display = '';
+  const done = ok => {
+    if (!btn) return;
+    btn.textContent = ok ? '\u2713 Copied - paste into WhatsApp' : 'Press Ctrl+C to copy';
+    setTimeout(() => { btn.innerHTML = '&#128203; Copy job for the driver'; }, 2600);
+  };
+  try {
+    await navigator.clipboard.writeText(ta.value);
+    done(true);
+  } catch (e) {
+    // The clipboard API is refused on some phones and over plain http.
+    // Select it instead so the button is never a dead end.
+    ta.focus(); ta.select();
+    done(false);
+  }
+}
+
+function closeRig(){ document.getElementById('rigm').classList.remove('on'); rigSaleId = null; }
+
+async function saveRig(){
+  if (!rigSaleId) return;
+  const vehicle_id = document.getElementById('rig-vehicle').value || null;
+  const trailer_id = document.getElementById('rig-trailer').value || null;
+  const driver_id  = document.getElementById('rig-driver').value || null;
+  const pump_unit_id = document.getElementById('rig-pump').value || null;
+  const err = document.getElementById('rig-err');
+  if (!vehicle_id) { err.textContent = 'Pick a truck.'; return; }
+  const chosen = byId(FLEETMAP.vehicles, vehicle_id);
+
+  // SR01 is the small runabout - whoever is free takes it, so it is the
+  // one truck that may go out without a named driver.
+  if (!driver_id && !(chosen && chosen.driver_optional)) {
+    err.textContent = 'Pick a driver — the rep needs someone to ring.'; return;
+  }
+
+  // A tanker still needs a pump alongside it to offload, but which one is
+  // often not known when the truck is booked. So this does NOT block the
+  // save - the load goes on the board marked as still needing one, and
+  // the pump is added later by tapping the same button.
+
+  const btn = document.getElementById('rig-save');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  // If this load is already on the road, swapping its truck means it is not
+  // on its way with the truck the rep was told about. Cleared separately,
+  // below, so it can never fail the save itself.
+  const wasEnRoute = !!(FLEETMAP.assign[rigSaleId] && FLEETMAP.assign[rigSaleId].en_route_at);
+  // Re-assigning is a change the rep should see again, so clear the seen stamp.
+  const row = { sale_id: Number(rigSaleId), vehicle_id, trailer_id, driver_id,
+                assigned_at: new Date().toISOString(), assigned_by: fleetWho(), seen_by_rep_at: null };
+  // Only sent once the pump table exists, so an un-migrated database
+  // still saves the truck and driver instead of refusing the whole row.
+  if ((FLEETMAP.pumps || []).length) row.pump_unit_id = pump_unit_id;
+  try {
+    const { error } = await sb.from('delivery_assignment').upsert(row, { onConflict: 'sale_id' });
+    if (error) throw error;
+    FLEETMAP.assign[rigSaleId] = row;
+    notifyRep(rigSaleId, 'assigned');
+    if (wasEnRoute) {
+      sb.from('delivery_assignment')
+        .update({ en_route_at: null, en_route_by: null })
+        .eq('sale_id', Number(rigSaleId))
+        .then(({ error }) => { if (error) console.log('en route not cleared:', error.message); });
+    }
+    closeRig();
+    renderDeliveries();
+  } catch(e) {
+    err.textContent = 'Could not save: ' + ((e && e.message) || e);
+  }
+  btn.disabled = false; btn.textContent = 'Save';
+}
+
+async function clearRig(){
+  if (!rigSaleId) return;
+  if (!confirm('Take this delivery off its truck?')) return;
+  const id = rigSaleId;
+  try {
+    const { error } = await sb.from('delivery_assignment').delete().eq('sale_id', Number(id));
+    if (error) throw error;
+    delete FLEETMAP.assign[id];
+    closeRig();
+    renderDeliveries();
+  } catch(e) {
+    document.getElementById('rig-err').textContent = 'Could not clear: ' + ((e && e.message) || e);
+  }
+}
 /* ============ RIPE TO PAIR ============ */
 function renderChase(){
   const el=document.getElementById('ripe-list');
@@ -1171,7 +1976,7 @@ function renderChase(){
   // ---- What's already scheduled: today + upcoming, not delivered ----
   // Build sets of places and routes a truck is heading to, with the soonest
   // matching delivery's date + rep for the label.
-  const today=new Date().toISOString().split('T')[0];
+  const today=todayISO();
   const dd=s=>(s.delivery_date||'').split('T')[0];
   const schedPlace={};   // place(lower) -> {date, rep}
   const schedRoute={};   // route_key    -> {date, rep, place}
@@ -1385,7 +2190,7 @@ function renderRoute(){
   if(!curRoute) return;
   const rows=BOARD.filter(b=>b.route_key===curRoute);
   const places=placesOnRoute(curRoute);
-  const today=new Date().toISOString().split('T')[0];
+  const today=todayISO();
 
   // 1 — already going
   const going=SALES.filter(s=>{
@@ -2379,7 +3184,7 @@ function openLost(customer){
   lostCustomer=customer;
   lostReason='pricing';
   document.getElementById('lost-who').textContent=customer;
-  document.getElementById('lost-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('lost-date').value=todayISO();
   document.getElementById('lost-litres').value='';
   document.getElementById('lost-notes').value='';
   document.getElementById('lost-err').textContent='';
@@ -2400,7 +3205,7 @@ async function saveLost(){
   if(!lostCustomer){ err.textContent='No customer.'; return; }
   const d=document.getElementById('lost-date').value;
   if(!d){ err.textContent='Pick the date they bought elsewhere.'; return; }
-  if(d>new Date().toISOString().split('T')[0]){ err.textContent='That date is in the future.'; return; }
+  if(d>todayISO()){ err.textContent='That date is in the future.'; return; }
 
   const litres=parseInt(document.getElementById('lost-litres').value)||null;
   const notes=(document.getElementById('lost-notes').value||'').trim()||null;
@@ -2605,6 +3410,20 @@ function flash(id){
 }
 
 /* ============ CLOCK + INIT ============ */
+
+/* Which build this phone is actually running.
+
+   Not vanity. A service worker caches the whole app, so an old copy can sit on
+   a phone long after a fix has gone out - and in November 2026 the root
+   worker was serving the sales app in place of this one. Shown on the sign-in
+   screen as well as in the bar, because that is where you are standing when
+   you are trying to work out whether you have the new version. */
+const OPS_BUILD = 'Build v2 · 23 Nov 2026';
+['build', 'auth-build'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.textContent = OPS_BUILD;
+});
+
 function tick(){
   const n=new Date();
   document.getElementById('clock').textContent=
@@ -2629,14 +3448,6 @@ setInterval(()=>{
   }
 },60000);
 
-// The planning board is shared, so poll it faster than the rest — two people
-// planning at once should see each other within seconds, not a minute.
-// planBusy is set while a card is being dragged: a refresh landing between
-// the drop and the save would snap the card back to where it just was.
-setInterval(()=>{
-  if(page==='today' && !planBusy &&
-     document.getElementById('app').classList.contains('active')) loadPlan();
-},15000);
 
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 </script>
