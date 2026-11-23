@@ -362,3 +362,40 @@ test('a screen with no microphone says so rather than failing quietly', async ({
   expect(st).toContain('cannot record');
   expect(st).toContain('phone or laptop');
 });
+
+/* ------------------------------------------------------------------ */
+
+test('the dashboard survives its own migration not having run yet', async ({ page, context }) => {
+  // The house rule is SQL first, then push. This is what happens when it goes
+  // the other way round - which it did on 23 Nov 2026. The screen must keep
+  // working on the default chime rather than throwing, and a save must say
+  // why rather than pretending.
+  const errs = [];
+  page.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
+  await page.route('**/rest/v1/alert_settings**', r => r.fulfill({
+    status: 404, contentType: 'application/json',
+    body: JSON.stringify({ code: '42P01',
+      message: 'relation "public.alert_settings" does not exist' }) }));
+  await boot(page, context);
+
+  const out = await page.evaluate(async () => {
+    await playAlert({ id: 1, customer: 'Border Timbers', litres: 36000, rep: 'Tom' });
+    await new Promise(r => setTimeout(r, 400));
+    return { kind: ALERT.kind, preset: ALERT.preset,
+             notes: window.__spy.notes, gear: !!document.querySelector('.gearbtn') };
+  });
+  console.log(JSON.stringify(out));
+
+  expect(out.kind, 'it falls back to the built-in default').toBe('chime');
+  expect(out.notes, 'and still alerts').toEqual([880, 660, 880]);
+  expect(out.gear, 'the settings button still opens').toBe(true);
+  expect(realErrors(errs), 'a missing table must not throw').toEqual([]);
+
+  await page.click('.gearbtn');
+  await page.evaluate(async () => { await saveAlertSettings(); });
+  await page.waitForTimeout(400);
+  const err = await page.locator('#set-err').textContent();
+  console.log('save says: ' + JSON.stringify(err));
+  expect(err).toContain('Could not save');
+  expect(err).toContain('does not exist');
+});
