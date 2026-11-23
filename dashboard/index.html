@@ -246,6 +246,49 @@ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
 .alert-banner{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:var(--red);color:#fff;border-radius:12px;padding:14px 28px;font-size:16px;font-weight:700;z-index:99;display:none;align-items:center;gap:12px;box-shadow:0 8px 40px rgba(212,24,10,0.5);border:2px solid #fff;white-space:nowrap;}
 .alert-banner.show{display:flex;animation:slideIn 0.4s ease;}
+/* ---- the settings sheet ---- */
+.gearbtn{background:none;border:1px solid var(--gray-border);border-radius:8px;
+padding:5px 9px;font-size:13px;cursor:pointer;color:var(--gray-text);line-height:1;}
+.gearbtn:hover{border-color:var(--blue);color:var(--blue);}
+.sndpill{display:inline-block;font-size:9.5px;font-weight:700;padding:2px 8px;
+border-radius:99px;background:var(--amber-light);color:var(--amber);}
+.setsec{padding:13px 0;border-top:1px solid var(--gray-light);}
+.setsec:first-of-type{border-top:none;padding-top:4px;}
+.setsec h3{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+color:var(--gray-text);margin:0 0 9px;}
+.segs{display:flex;gap:6px;flex-wrap:wrap;}
+.seg{flex:1;min-width:72px;padding:8px 6px;border:1.5px solid var(--gray-border);
+border-radius:8px;background:#fff;font-family:var(--font);font-size:12px;font-weight:700;
+color:var(--gray-text);cursor:pointer;}
+.seg.on{border-color:var(--red);background:var(--red-light);color:var(--red-dark);}
+.preset{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;
+border:1.5px solid var(--gray-border);border-radius:8px;margin-bottom:6px;background:#fff;
+font-family:var(--font);cursor:pointer;text-align:left;}
+.preset:hover{border-color:var(--blue);}
+.preset.on{border-color:var(--red);background:var(--red-light);}
+.preset .pp{flex:0 0 auto;width:22px;height:22px;border-radius:50%;background:var(--blue);
+color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;}
+.preset.on .pp{background:var(--red);}
+.preset .pn{flex:1;font-size:13px;font-weight:700;color:var(--text);}
+.noterow{display:grid;grid-template-columns:18px 86px 1fr 26px;gap:7px;align-items:center;
+margin-bottom:5px;}
+.noterow .nn{font-family:var(--mono);font-size:10.5px;color:var(--gray-text);text-align:right;}
+.noterow select{padding:5px 6px;border:1.5px solid var(--gray-border);border-radius:6px;
+font-family:var(--font);font-size:12px;background:#fff;}
+.noterow input[type=range]{width:100%;accent-color:var(--red);}
+.noterow .nx{border:none;background:none;color:var(--gray-text);font-size:15px;cursor:pointer;}
+.noterow .nx:hover{color:var(--red);}
+.setrow{display:flex;gap:8px;margin-top:9px;}
+.setrow button{flex:1;padding:10px;border:none;border-radius:8px;font-family:var(--font);
+font-size:13px;font-weight:700;cursor:pointer;}
+.setrow .pri{background:var(--red);color:#fff;}
+.setrow .sec{background:var(--gray-light);color:var(--text);}
+.setrow .ghost{background:#fff;border:1.5px solid var(--gray-border);color:var(--text);}
+.setnote{font-size:11px;color:var(--gray-text);line-height:1.5;margin-top:7px;}
+.setchk{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;line-height:1.45;
+cursor:pointer;color:var(--text);}
+.setchk input{margin:1px 0 0;flex:0 0 auto;width:15px;height:15px;}
+input[type=range].vol{width:100%;accent-color:var(--red);}
 @keyframes slideIn{from{opacity:0;transform:translateX(-50%) translateY(-16px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
 .empty-msg{padding:20px;text-align:center;color:var(--gray-text);font-size:13px;}
 </style>
@@ -286,7 +329,11 @@ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     </div>
     <div style="text-align:right;">
       <div class="live-pill"><div class="live-dot"></div> Live</div>
-      <div style="font-size:10px;color:var(--gray-text);margin-top:3px;">Synced: <span id="last-sync">—</span></div>
+      <div style="font-size:10px;color:var(--gray-text);margin-top:3px;">Synced: <span id="last-sync">&mdash;</span></div>
+      <div style="display:flex;align-items:center;gap:7px;justify-content:flex-end;margin-top:5px;">
+        <span class="sndpill" id="snd-warn">&#128266; Tap once for sound</span>
+        <button class="gearbtn" onclick="openSettings()" title="Alert settings">&#9881;</button>
+      </div>
     </div>
   </div>
 
@@ -1159,6 +1206,474 @@ const byId = (arr, id) => arr.find(x => String(x.id) === String(id)) || null;
   }
 
 
+/* ============ WHAT THE TV DOES WHEN AN ORDER ARRIVES ============
+
+   Four shapes, chosen in Settings and shared by every screen:
+
+     chime   a tune - one of six, or one designed here
+     voice   a few seconds of Tom's own voice, recorded on a phone
+     speak   the screen reads the order out in the browser's own voice
+     silent  the red highlight only
+
+   Volume is the one thing kept per screen, because the right level in the
+   office is not the right level on a phone in a lay-by.
+
+   THE RULE THAT CATCHES EVERYONE: a browser makes no sound at all until
+   somebody has touched the page. A TV switched on and left alone has had no
+   taps, so an alert can be silently doing nothing for ever. That is why the
+   first tap unlocks it and why the state is shown on screen - a silence you
+   cannot see is the worst kind. */
+
+const ALERT_DEFAULTS = {
+  kind: 'chime', preset: 'chime', tune: null, wave: 'sine',
+  repeats: 1, say_detail: false, clip: null, clip_type: null, clip_ms: null,
+};
+let ALERT = Object.assign({}, ALERT_DEFAULTS);
+
+// Per screen, not shared.
+function alertVolume(){
+  let v = null;
+  try { v = localStorage.getItem('dash_alert_volume'); } catch(e){}
+  const n = v === null ? 60 : parseInt(v, 10);
+  return isFinite(n) ? Math.max(0, Math.min(100, n)) / 100 : 0.6;
+}
+function setAlertVolume(pct){
+  try { localStorage.setItem('dash_alert_volume', String(pct)); } catch(e){}
+}
+
+/* ---- the tunes ---- */
+// [frequency, length in ms, gap to the next note in ms]
+const ALERT_PRESETS = {
+  chime:    { name: 'Three-tone chime', wave: 'sine',
+              tune: [[880,150,180],[660,150,180],[880,150,0]] },
+  doorbell: { name: 'Doorbell', wave: 'sine',
+              tune: [[659,320,330],[523,520,0]] },
+  ping:     { name: 'Single ping', wave: 'triangle', tune: [[880,420,0]] },
+  rising:   { name: 'Rising four', wave: 'triangle',
+              tune: [[523,130,150],[659,130,150],[784,130,150],[1047,300,0]] },
+  urgent:   { name: 'Urgent', wave: 'square',
+              tune: [[1047,90,130],[1047,90,130],[1047,90,0]] },
+  horn:     { name: 'Depot horn', wave: 'sawtooth', tune: [[196,650,0]] },
+};
+
+/* ---- one sound engine for the whole page ----
+
+   Not one per alert. The old code built a fresh engine every time and never
+   closed it; I tested whether that eventually refused and it did not, so this
+   is tidiness rather than a fix - but it is also where the unlock lives, and
+   that needs to be in one place. */
+let AUDIO = null;
+function audioCtx(){
+  try {
+    if (!AUDIO) AUDIO = new (window.AudioContext || window.webkitAudioContext)();
+    if (AUDIO.state === 'suspended') AUDIO.resume();
+  } catch(e) { return null; }
+  return AUDIO;
+}
+function soundReady(){ return !!(AUDIO && AUDIO.state === 'running'); }
+
+/* The first touch anywhere unlocks sound, and is the only thing that can.
+   Kept listening rather than once-only: a resume can be refused, and the next
+   tap should get another go. */
+function armSound(){
+  audioCtx();
+  try { if (window.speechSynthesis) speechSynthesis.getVoices(); } catch(e){}
+  renderSoundState();
+}
+['pointerdown','keydown','touchstart'].forEach(ev =>
+  document.addEventListener(ev, armSound, { passive: true }));
+
+function renderSoundState(){
+  const el = document.getElementById('snd-state');
+  if (!el) return;
+  const ok = soundReady();
+  el.textContent = ok ? 'Sound on' : 'Tap once to turn sound on';
+  el.style.background = ok ? 'var(--green-light)' : 'var(--amber-light)';
+  el.style.color = ok ? 'var(--green-dark)' : 'var(--amber)';
+  const hdr = document.getElementById('snd-warn');
+  if (hdr) hdr.style.display = ok ? 'none' : '';
+}
+
+/* ---- playing a tune ---- */
+function playTune(tune, wave, vol){
+  const a = audioCtx();
+  if (!a || !tune || !tune.length) return 0;
+  let t = a.currentTime + 0.03;
+  tune.forEach(n => {
+    const f = +n[0], len = (+n[1] || 150) / 1000, gap = (+n[2] || 0) / 1000;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = wave || 'sine';
+    o.frequency.value = f;
+    o.connect(g); g.connect(a.destination);
+    // A short fade either end, or every note clicks.
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol), t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    o.start(t); o.stop(t + len + 0.02);
+    t += (gap || len);
+  });
+  return t - a.currentTime;
+}
+const tuneSeconds = tune =>
+  (tune || []).reduce((s, n) => s + ((+n[2] || +n[1] || 150) / 1000), 0);
+
+function currentTune(){
+  if (ALERT.preset === 'mine' && ALERT.tune && ALERT.tune.length)
+    return { tune: ALERT.tune, wave: ALERT.wave || 'sine' };
+  const p = ALERT_PRESETS[ALERT.preset] || ALERT_PRESETS.chime;
+  return { tune: p.tune, wave: p.wave };
+}
+
+/* ---- the recorded voice note ---- */
+let alertClipEl = null;
+let clipBroken = false;
+
+/* Plays the recording, and reports whether it actually managed to.
+
+   Browsers record in different formats and will not all play each other's, so
+   rather than guess which combination of phone and TV works, the screen tries
+   it and says if it cannot - then falls back to a chime, so a format problem
+   is never silence. */
+function playClip(vol){
+  return new Promise(resolve => {
+    if (!ALERT.clip) return resolve(false);
+    try {
+      if (!alertClipEl) { alertClipEl = new Audio(); alertClipEl.preload = 'auto'; }
+      if (alertClipEl.src !== ALERT.clip) alertClipEl.src = ALERT.clip;
+      alertClipEl.volume = Math.max(0, Math.min(1, vol));
+      alertClipEl.currentTime = 0;
+      const done = ok => { clipBroken = !ok; renderClipState(); resolve(ok); };
+      alertClipEl.onerror = () => done(false);
+      const p = alertClipEl.play();
+      if (p && p.catch) p.then(() => done(true)).catch(() => done(false));
+      else done(true);
+    } catch(e) { clipBroken = true; renderClipState(); resolve(false); }
+  });
+}
+
+function renderClipState(){
+  const el = document.getElementById('clip-state');
+  if (!el) return;
+  if (!ALERT.clip) { el.textContent = 'No recording yet'; el.style.color = 'var(--gray-text)'; return; }
+  if (clipBroken) {
+    el.textContent = 'This screen cannot play that recording — a chime is used instead';
+    el.style.color = 'var(--red)';
+  } else {
+    el.textContent = 'Recording ready' +
+      (ALERT.clip_ms ? '  ·  ' + (ALERT.clip_ms / 1000).toFixed(1) + 's' : '');
+    el.style.color = 'var(--green-dark)';
+  }
+}
+
+/* ---- the browser reading the order out ---- */
+function sayOrder(sale, vol){
+  try {
+    if (!window.speechSynthesis) return;
+    const words = sale
+      ? 'New order. ' + (sale.rep || '') + '. ' + (sale.customer || '') + '. ' +
+        (sale.litres ? Math.round(sale.litres).toLocaleString() + ' litres.' : '')
+      : 'New order.';
+    const u = new SpeechSynthesisUtterance(words);
+    u.volume = Math.max(0, Math.min(1, vol));
+    u.rate = 1;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  } catch(e) {}
+}
+
+/* ---- the alert itself ---- */
+async function playAlert(sale){
+  const vol = alertVolume();
+  if (ALERT.kind === 'silent' || vol <= 0) return;
+
+  if (ALERT.kind === 'speak') { sayOrder(sale, vol); return; }
+
+  if (ALERT.kind === 'voice') {
+    const ok = await playClip(vol);
+    // A format this screen cannot play must not become silence.
+    if (!ok) { const c = currentTune(); playTune(c.tune, c.wave, vol); }
+    if (ALERT.say_detail) setTimeout(() => sayOrder(sale, vol), (ALERT.clip_ms || 1500) + 250);
+    return;
+  }
+
+  const c = currentTune();
+  const once = tuneSeconds(c.tune) + 0.35;
+  for (let i = 0; i < (ALERT.repeats || 1); i++) {
+    setTimeout(() => playTune(c.tune, c.wave, vol), i * once * 1000);
+  }
+  if (ALERT.say_detail) {
+    setTimeout(() => sayOrder(sale, vol), ((ALERT.repeats || 1) * once + 0.2) * 1000);
+  }
+}
+
+/* ---- reading and writing the shared setting ---- */
+async function loadAlertSettings(){
+  try {
+    const { data, error } = await sb.from('alert_settings').select('*').eq('id', 1).maybeSingle();
+    if (error) throw error;
+    if (data) ALERT = Object.assign({}, ALERT_DEFAULTS, data);
+  } catch(e) {
+    // Absent until phase_e6 runs, or no signal. The default chime still works.
+    console.log('alert settings not loaded:', (e && e.message) || e);
+  }
+  clipBroken = false;
+  renderAlertSettings();
+}
+
+async function saveAlertSettings(){
+  const btn = document.getElementById('set-save');
+  const err = document.getElementById('set-err');
+  if (err) err.textContent = '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  const row = {
+    id: 1,
+    kind: ALERT.kind, preset: ALERT.preset, tune: ALERT.tune, wave: ALERT.wave,
+    repeats: ALERT.repeats, say_detail: ALERT.say_detail,
+    clip: ALERT.clip, clip_type: ALERT.clip_type, clip_ms: ALERT.clip_ms,
+    updated_at: new Date().toISOString(), updated_by: DASH_WHO,
+  };
+  try {
+    // .select() on purpose: row-level security refuses by matching NO rows and
+    // reporting no error, so an empty result is the only way to tell a refusal
+    // from a success.
+    const { data, error } = await sb.from('alert_settings')
+      .upsert(row, { onConflict: 'id' }).select('id');
+    if (error) throw error;
+    if (!data || !data.length) {
+      throw new Error('the database would not accept it — only ops or an administrator can change the alert');
+    }
+    if (btn) btn.textContent = '✓ Saved for every screen';
+    setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = 'Save for every screen'; } }, 2200);
+  } catch(e) {
+    if (err) err.textContent = 'Could not save: ' + ((e && e.message) || e);
+    if (btn) { btn.disabled = false; btn.textContent = 'Save for every screen'; }
+  }
+}
+
+/* ---- recording ---- */
+const CLIP_MAX_MS = 4000;
+let recorder = null, recChunks = [], recTimer = null, recStart = 0;
+
+function recSupported(){
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia &&
+            window.MediaRecorder);
+}
+
+async function startRecording(){
+  const st = document.getElementById('rec-state');
+  if (!recSupported()) {
+    if (st) st.textContent = 'This screen cannot record — use a phone or laptop.';
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recChunks = [];
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
+    recorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      const ms = Date.now() - recStart;
+      const blob = new Blob(recChunks, { type: recorder.mimeType || 'audio/webm' });
+      // Stored as a data: URL so it travels in one text column - no storage
+      // bucket and its policies for one short file.
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const url = String(reader.result || '');
+        if (url.length > 400000) {
+          if (st) st.textContent = 'That came out too big. Try a shorter, quieter recording.';
+          return;
+        }
+        ALERT.clip = url;
+        ALERT.clip_type = blob.type;
+        ALERT.clip_ms = Math.min(ms, CLIP_MAX_MS);
+        ALERT.kind = 'voice';
+        clipBroken = false;
+        renderAlertSettings();
+        if (st) st.textContent = 'Recorded ' + (ms / 1000).toFixed(1) + 's. Press Save to put it on every screen.';
+      };
+      reader.readAsDataURL(blob);
+      setRecButton(false);
+    };
+    recStart = Date.now();
+    recorder.start();
+    setRecButton(true);
+    if (st) st.textContent = 'Recording… say it now.';
+    // Hard stop. A long voice note on every order is unbearable by the fourth.
+    recTimer = setTimeout(stopRecording, CLIP_MAX_MS);
+  } catch(e) {
+    if (st) st.textContent = 'No microphone, or permission refused.';
+    setRecButton(false);
+  }
+}
+
+function stopRecording(){
+  if (recTimer) { clearTimeout(recTimer); recTimer = null; }
+  try { if (recorder && recorder.state === 'recording') recorder.stop(); } catch(e) {}
+}
+
+function setRecButton(on){
+  const b = document.getElementById('rec-btn');
+  if (!b) return;
+  b.textContent = on ? '■ Stop' : '● Record (4s max)';
+  b.style.background = on ? 'var(--red)' : '';
+  b.style.color = on ? '#fff' : '';
+  b.onclick = on ? stopRecording : startRecording;
+}
+
+function clearRecording(){
+  if (!confirm('Delete the recorded voice note?')) return;
+  ALERT.clip = null; ALERT.clip_type = null; ALERT.clip_ms = null;
+  if (ALERT.kind === 'voice') ALERT.kind = 'chime';
+  clipBroken = false;
+  renderAlertSettings();
+}
+
+/* ---- the settings sheet ---- */
+function openSettings(){
+  armSound();
+  renderAlertSettings();
+  document.getElementById('setm').classList.add('on');
+}
+function closeSettings(){ document.getElementById('setm').classList.remove('on'); }
+
+function setKind(k){ ALERT.kind = k; renderAlertSettings(); }
+function setPreset(k){
+  ALERT.preset = k; ALERT.kind = 'chime';
+  // Picking one means starting from it, so an earlier design is let go.
+  // Without this the designer showed the preset you picked but edited the
+  // design you had before, which is the kind of mismatch nobody can explain.
+  ALERT.tune = null;
+  const p = ALERT_PRESETS[k];
+  if (p) ALERT.wave = p.wave;
+  renderAlertSettings();
+  const c = currentTune();
+  playTune(c.tune, c.wave, alertVolume());
+}
+function setRepeats(n){ ALERT.repeats = n; renderAlertSettings(); }
+function setWave(w){
+  ALERT.wave = w; ALERT.preset = 'mine';
+  if (!ALERT.tune || !ALERT.tune.length) ALERT.tune = ALERT_PRESETS.chime.tune.map(n => n.slice());
+  renderAlertSettings();
+}
+function toggleSayDetail(){ ALERT.say_detail = !ALERT.say_detail; renderAlertSettings(); }
+function setVolumePct(v){
+  setAlertVolume(v);
+  const el = document.getElementById('vol-val');
+  if (el) el.textContent = v + '%';
+}
+function testAlert(){
+  armSound();
+  const s = (BOARD && BOARD[0]) || (allSales && allSales[0]) || null;
+  playAlert(s);
+}
+
+/* The designer. Each row is one note: how high, and how long. */
+function noteRow(n, i){
+  const opts = [];
+  const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  for (let o = 3; o <= 7; o++) {
+    for (let k = 0; k < 12; k++) {
+      const f = Math.round(440 * Math.pow(2, (k - 9) / 12 + (o - 4)) * 10) / 10;
+      opts.push('<option value="' + f + '"' +
+        (Math.abs(f - n[0]) < 1 ? ' selected' : '') + '>' + names[k] + o + '</option>');
+    }
+  }
+  return '<div class="noterow">' +
+    '<span class="nn">' + (i + 1) + '</span>' +
+    '<select onchange="setNotePitch(' + i + ',this.value)">' + opts.join('') + '</select>' +
+    '<input type="range" min="60" max="800" step="10" value="' + n[1] +
+      '" oninput="setNoteLen(' + i + ',this.value)">' +
+    '<button class="nx" onclick="removeNote(' + i + ')" title="remove">&times;</button>' +
+  '</div>';
+}
+/* Turns whatever is on screen into your own design.
+
+   It seeds from the preset CURRENTLY selected, not from the chime: the
+   designer shows the sound you just picked, so adding a note to it has to
+   start from that one. Seeding from the chime regardless meant picking the
+   single ping and adding two notes gave you five. */
+function ensureMine(){
+  if (!ALERT.tune || !ALERT.tune.length) {
+    const c = currentTune();
+    ALERT.tune = c.tune.map(n => n.slice());
+    ALERT.wave = c.wave;
+  }
+  ALERT.preset = 'mine'; ALERT.kind = 'chime';
+}
+function setNotePitch(i, v){ ensureMine(); ALERT.tune[i][0] = +v; renderAlertSettings(); }
+function setNoteLen(i, v){
+  ensureMine();
+  ALERT.tune[i][1] = +v;
+  if (i < ALERT.tune.length - 1) ALERT.tune[i][2] = Math.round(+v * 1.2);
+  renderAlertSettings();
+}
+function addNote(){
+  ensureMine();
+  if (ALERT.tune.length >= 8) return;
+  const last = ALERT.tune[ALERT.tune.length - 1];
+  if (last) last[2] = Math.round(last[1] * 1.2);
+  ALERT.tune.push([660, 150, 0]);
+  renderAlertSettings();
+}
+function removeNote(i){
+  ensureMine();
+  ALERT.tune.splice(i, 1);
+  if (ALERT.tune.length) ALERT.tune[ALERT.tune.length - 1][2] = 0;
+  renderAlertSettings();
+}
+function playMine(){
+  ensureMine();
+  playTune(ALERT.tune, ALERT.wave, alertVolume());
+}
+
+function renderAlertSettings(){
+  const box = document.getElementById('setm');
+  if (!box || !box.classList.contains('on')) { renderSoundState(); renderClipState(); return; }
+
+  const KINDS = [['chime','A sound'],['voice','My voice'],['speak','Read it out'],['silent','Silent']];
+  document.getElementById('kind-segs').innerHTML = KINDS.map(k =>
+    '<button class="seg' + (ALERT.kind === k[0] ? ' on' : '') + '" onclick="setKind(\'' + k[0] + '\')">' +
+    k[1] + '</button>').join('');
+
+  document.getElementById('chime-part').style.display = ALERT.kind === 'chime' ? '' : 'none';
+  document.getElementById('voice-part').style.display = ALERT.kind === 'voice' ? '' : 'none';
+
+  document.getElementById('preset-list').innerHTML =
+    Object.keys(ALERT_PRESETS).map(k =>
+      '<button class="preset' + (ALERT.preset === k ? ' on' : '') + '" onclick="setPreset(\'' + k + '\')">' +
+        '<span class="pp">&#9654;</span><span class="pn">' + ALERT_PRESETS[k].name + '</span>' +
+      '</button>').join('') +
+    '<button class="preset' + (ALERT.preset === 'mine' ? ' on' : '') + '" onclick="playMine()">' +
+      '<span class="pp">&#9654;</span><span class="pn">My own design</span></button>';
+
+  document.getElementById('notes-list').innerHTML =
+    (ALERT.preset === 'mine' && ALERT.tune ? ALERT.tune : currentTune().tune)
+      .map(noteRow).join('');
+
+  const WAVES = [['sine','Soft'],['triangle','Round'],['square','Sharp'],['sawtooth','Buzzy']];
+  document.getElementById('wave-segs').innerHTML = WAVES.map(w =>
+    '<button class="seg' + (ALERT.wave === w[0] ? ' on' : '') + '" onclick="setWave(\'' + w[0] + '\')">' +
+    w[1] + '</button>').join('');
+
+  const REPS = [[1,'Once'],[2,'Twice'],[3,'Three times']];
+  document.getElementById('rep-segs').innerHTML = REPS.map(r =>
+    '<button class="seg' + (ALERT.repeats === r[0] ? ' on' : '') + '" onclick="setRepeats(' + r[0] + ')">' +
+    r[1] + '</button>').join('');
+
+  const say = document.getElementById('say-chk');
+  if (say) say.checked = !!ALERT.say_detail;
+
+  const v = Math.round(alertVolume() * 100);
+  const vs = document.getElementById('vol'); if (vs) vs.value = v;
+  const vv = document.getElementById('vol-val'); if (vv) vv.textContent = v + '%';
+
+  const del = document.getElementById('clip-del');
+  if (del) del.style.display = ALERT.clip ? '' : 'none';
+  setRecButton(recorder && recorder.state === 'recording');
+  renderClipState();
+  renderSoundState();
+}
+
 /* The badge on a delivery row: what is assigned, or an invitation to assign. */
 /* The week's promises, as one WhatsApp message.
 
@@ -1721,18 +2236,8 @@ function renderAll() {
       document.getElementById('alert-text').textContent = `New order! ${s.rep} → ${s.customer} · ${(s.litres||0).toLocaleString()} L`;
       banner.classList.add('show');
       setTimeout(() => banner.classList.remove('show'), 10000);
-      try {
-        const ctx = new(window.AudioContext||window.webkitAudioContext)();
-        [880,660,880].forEach((f,i) => {
-          const o=ctx.createOscillator(),g=ctx.createGain();
-          o.connect(g);g.connect(ctx.destination);
-          o.frequency.value=f;
-          g.gain.setValueAtTime(0.3,ctx.currentTime+i*0.18);
-          g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+i*0.18+0.15);
-          o.start(ctx.currentTime+i*0.18);
-          o.stop(ctx.currentTime+i*0.18+0.15);
-        });
-      } catch(e) {}
+      // Whatever was chosen in Settings, on one shared sound engine.
+      playAlert(s);
       lastKnownIds.add(String(s.id));
     });
   } else {
@@ -1785,6 +2290,10 @@ sb.auth.getSession().then(async ({ data }) => {
 });
 
 // Auto-refresh every 30s
+// The alert is a shared setting, so it is read once at startup and again
+// with the data, in case somebody changed it on another screen.
+loadAlertSettings();
+setInterval(loadAlertSettings, 300000);
 setInterval(fetchData, 30000);
 setInterval(loadDueSoon, 30000);
 loadDueSoon();
@@ -1794,6 +2303,83 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
 </script>
+
+<!-- WHAT THE TV DOES WHEN AN ORDER ARRIVES.
+     Shared by every screen, because a voice note has to be recorded on a
+     phone and reach the wall. Volume is the exception and stays per screen. -->
+<div class="rigm" id="setm" onclick="if(event.target===this)closeSettings()">
+  <div class="rigbox" style="max-width:440px;">
+    <h2>&#9881; New order alert</h2>
+    <div class="sub">Saved for every screen &mdash; except the volume, which is just this one</div>
+
+    <div class="setsec">
+      <h3>What happens</h3>
+      <div class="segs" id="kind-segs"></div>
+    </div>
+
+    <div id="chime-part">
+      <div class="setsec">
+        <h3>Pick a sound</h3>
+        <div id="preset-list"></div>
+      </div>
+      <div class="setsec">
+        <h3>Or design one &mdash; each line is a note</h3>
+        <div id="notes-list"></div>
+        <div class="setrow">
+          <button class="ghost" onclick="addNote()">+ Add a note</button>
+          <button class="ghost" onclick="playMine()">&#9654; Play mine</button>
+        </div>
+        <div style="margin-top:11px;"><div class="segs" id="wave-segs"></div></div>
+      </div>
+      <div class="setsec">
+        <h3>How many times</h3>
+        <div class="segs" id="rep-segs"></div>
+      </div>
+    </div>
+
+    <div id="voice-part" style="display:none;">
+      <div class="setsec">
+        <h3>Your own voice</h3>
+        <div class="setrow">
+          <button class="ghost" id="rec-btn" onclick="startRecording()">&#9679; Record (4s max)</button>
+          <button class="ghost" onclick="testAlert()">&#9654; Hear it</button>
+        </div>
+        <div class="setnote" id="rec-state">Record it on a phone or laptop &mdash; the TV has no microphone.</div>
+        <div class="setnote" id="clip-state">No recording yet</div>
+        <div class="setrow" id="clip-del" style="display:none;">
+          <button class="ghost" style="color:var(--red);border-color:var(--red);" onclick="clearRecording()">Delete the recording</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="setsec">
+      <h3>Also read the order out</h3>
+      <label class="setchk">
+        <input type="checkbox" id="say-chk" onchange="toggleSayDetail()">
+        <span>After the sound, the screen says who it is from, the customer and the litres, in the browser&rsquo;s own voice.</span>
+      </label>
+    </div>
+
+    <div class="setsec">
+      <h3>Volume on this screen <span style="float:right;font-family:var(--mono);font-weight:500;text-transform:none;letter-spacing:0;" id="vol-val">60%</span></h3>
+      <input type="range" class="vol" id="vol" min="0" max="100" value="60"
+             oninput="setVolumePct(this.value)">
+      <div class="setnote">A browser makes no sound until somebody touches the page,
+        so one tap on this screen is needed before any alert can be heard.
+        <span class="sndpill" id="snd-state" style="margin-left:4px;">&mdash;</span></div>
+    </div>
+
+    <div class="rigerr" id="set-err"></div>
+    <div class="setrow">
+      <button class="pri" id="set-save" onclick="saveAlertSettings()">Save for every screen</button>
+      <button class="sec" onclick="closeSettings()">Close</button>
+    </div>
+    <div class="setrow">
+      <button class="ghost" onclick="testAlert()">&#9654; Test it exactly as an order would</button>
+    </div>
+  </div>
+</div>
+
 <div class="rigm" id="rigm">
   <div class="rigbox">
     <h2>&#128666; Assign a rig</h2>
