@@ -486,7 +486,7 @@ margin:2px 0 12px;cursor:pointer;color:var(--text);}
     <div class="right">
       <span class="clock" id="clock"></span>
     <span class="clock" id="build" title="Which build this phone is running" style="opacity:.55;"></span>
-      <span class="live">● Live</span>
+      <span class="live" id="live" title="Up to date">&#9679; Live</span>
       <button class="signout" onclick="signOut()">Sign out</button>
     </div>
   </div>
@@ -526,6 +526,7 @@ margin:2px 0 12px;cursor:pointer;color:var(--text);}
            this and has never had anywhere to put it. -->
       <div class="panel">
         <div class="ph"><h2 style="color:var(--purple);">&#128222; Ripe to ring</h2>
+          <span class="cnt" id="n-ripe" style="background:var(--purple-light);color:var(--purple);">0</span>
           <span class="hint" style="margin-left:auto;font-size:10px;color:var(--muted);">no order yet &mdash; a prompt, not a forecast</span>
         </div>
         <div id="ripe-list"><div class="empty">Loading&hellip;</div></div>
@@ -893,6 +894,137 @@ function escHtml(v){
 }
 const SUPABASE_URL='https://lkaotuavapyvqfuuyzft.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYW90dWF2YXB5dnFmdXV5emZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MzU4NzcsImV4cCI6MjA5NzQxMTg3N30.he7Ah-TVyzZZAMiCHglIzP-UbdnxDw-CW4V9mYYJBDU';
+/* ============ WORKING WITH NO SIGNAL ============
+
+   The rule that governs all of this: A SLOW NETWORK IS WORSE THAN NO
+   NETWORK. Offline fails fast and the catch block runs. A request on a dying
+   signal never settles at all, so catch never runs, so the fallback never
+   happens and the screen simply freezes. Every call below is bounded.
+
+   WHAT THIS APP CAN AND CANNOT DO WITH NO SIGNAL:
+
+     CAN     open, and show the loads, the notes, the customer book and the
+             map pins as they were at the last sync
+     CANNOT  mark delivered, assign a rig, send a load on its way, move a
+             truck or log a lost sale. Those are writes. They now say so
+             straight away instead of sitting on a dead button for eight
+             seconds and then failing.
+     CANNOT  work at all on a phone that has never once opened it WITH a
+             signal. There is nothing cached to show. Somebody has to be
+             told that before they find it out in a lay-by.
+
+   The map TILES are not cached either - thousands of images, and the point
+   of this app offline is the loads board. Offline the map draws its pins on
+   an empty background. */
+
+// Most database and auth clients have no timeout at all. A plain function
+// declaration, so hoisting makes it available to everything above as well.
+function withTimeout(promise, ms){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Network timeout')), ms || 8000)),
+  ]);
+}
+
+/* The last profile we were able to read.
+
+   WORTH KNOWING, and Tom has been told: this means somebody whose access was
+   switched off can still open the app offline and see what was already on
+   their phone. They can change nothing - every write is refused by the
+   database itself, not by this screen - and the next start with a signal
+   reads the real profile and shuts the door. The alternative was an app that
+   will not open in the field, which is worse. */
+const OPS_PROFILE_KEY = 'ops_profile';
+function cacheProfile(p){
+  try{ localStorage.setItem(OPS_PROFILE_KEY, JSON.stringify(p)); }catch(e){}
+}
+function cachedProfile(){
+  try{ return JSON.parse(localStorage.getItem(OPS_PROFILE_KEY) || 'null'); }
+  catch(e){ return null; }
+}
+
+/* The badge top right. Green when the last read came back, amber with a time
+   when it did not - so "is what I am looking at old?" has an answer on the
+   screen rather than being a guess. */
+function stampSync(){
+  try{ localStorage.setItem('ops_synced_at', new Date().toISOString()); }catch(e){}
+}
+function lastSyncText(){
+  let raw = null;
+  try{ raw = localStorage.getItem('ops_synced_at'); }catch(e){}
+  if (!raw) return '';
+  const d = new Date(raw);
+  if (isNaN(d)) return '';
+  return fmDay(raw) + ' ' + String(d.getHours()).padStart(2,'0') + ':' +
+    String(d.getMinutes()).padStart(2,'0');
+}
+function setLive(ok){
+  const el = document.getElementById('live');
+  if (!el) return;
+  if (ok) {
+    el.textContent = '\u25cf Live';
+    el.style.background = ''; el.style.color = '';
+    el.title = 'Up to date';
+    stampSync();
+  } else {
+    const when = lastSyncText();
+    el.textContent = '\u25cf Offline' + (when ? '  \u00b7  ' + when : '');
+    el.style.background = 'var(--amber-light)';
+    el.style.color = 'var(--amber)';
+    el.title = 'No signal. Showing what was on this phone' +
+      (when ? ' at ' + when : '') + '. Nothing can be changed until it is back.';
+  }
+}
+
+/* Every button that changes something asks this first.
+
+   navigator.onLine is only trusted in one direction: a FALSE is reliable, a
+   true can be wrong behind a captive portal. So it is used to refuse early,
+   never to promise success - the timeouts handle the rest. */
+function needsSignal(what){
+  if (navigator.onLine) return null;
+  return 'No signal.' + String.fromCharCode(10,10) + what + ' needs a connection, so nothing has been changed.' + String.fromCharCode(10) +
+    'What is on screen is how things stood at the last sync.';
+}
+
+/* Everything the app needs to open and be useful, kept on the phone.
+
+   Wrapped in try/catch throughout: storage can be full, or blocked outright
+   in a private window, and a refused write must not take the app down with
+   it. */
+const OPS_REFS_KEY = 'ops_refs';
+function cacheRefs(){
+  try{
+    localStorage.setItem(OPS_REFS_KEY, JSON.stringify({
+      ROUTES: ROUTES, PLACES: PLACES, TRUCKS: TRUCKS, DEPOTS: DEPOTS,
+      SETTINGS: SETTINGS, CUSTNAMES: CUSTNAMES, PROSPECTS: PROSPECTS,
+      BOARD: BOARD, FLEETMAP: FLEETMAP,
+    }));
+  }catch(e){ /* full or blocked: the app still works, it just forgets */ }
+}
+function restoreRefs(){
+  let r = null;
+  try{ r = JSON.parse(localStorage.getItem(OPS_REFS_KEY) || 'null'); }catch(e){}
+  if (!r) return false;
+  ROUTES = r.ROUTES || []; PLACES = r.PLACES || []; TRUCKS = r.TRUCKS || [];
+  DEPOTS = r.DEPOTS || []; CUSTNAMES = r.CUSTNAMES || [];
+  PROSPECTS = r.PROSPECTS || []; BOARD = r.BOARD || [];
+  if (r.SETTINGS) SETTINGS = r.SETTINGS;
+  if (r.FLEETMAP) FLEETMAP = r.FLEETMAP;
+  return true;
+}
+// Leaflet and the database client come from a file host. The service worker
+// keeps copies so they load with no signal - but a phone that has never been
+// online has no copies, and createClient on a missing library throws right
+// here, which stops every line below from running and leaves a dead page
+// with nothing on it to explain why.
+if (typeof supabase === 'undefined' || !supabase.createClient) {
+  const e0 = document.getElementById('err');
+  if (e0) e0.textContent = 'The app could not finish loading. Open it once ' +
+    'with a signal and it will work offline after that.';
+  throw new Error('supabase-js did not load');
+}
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
 let DEPOTS=[], depotKey=null, depotMarker=null;
@@ -959,9 +1091,26 @@ async function signIn(){
   const err=document.getElementById('err');
   err.textContent='';
   if(!email||!password){err.textContent='Enter email and password.';return;}
-  const {data,error}=await sb.auth.signInWithPassword({email,password});
-  if(error){err.textContent=error.message;return;}
-  const {data:p}=await sb.from('profiles').select('full_name,role,app_access,active').eq('id',data.user.id).single();
+  // Signing in is genuinely slower than a read, but it still has to be
+  // bounded or the button sits there for ever on a bad signal.
+  let data, p;
+  try{
+    const r = await withTimeout(sb.auth.signInWithPassword({email,password}), 15000);
+    if(r.error){ err.textContent=r.error.message; return; }
+    data = r.data;
+  }catch(e){
+    err.textContent = 'Could not reach the server. Check your signal and try again.';
+    return;
+  }
+  try{
+    const r2 = await withTimeout(
+      sb.from('profiles').select('full_name,role,app_access,active')
+        .eq('id', data.user.id).single(), 8000);
+    p = r2.data;
+  }catch(e){
+    err.textContent = 'Signed in, but your profile would not load. Try again in a moment.';
+    return;
+  }
   if(!p||!['ops','admin'].includes(p.role)){
     await sb.auth.signOut();
     err.textContent='Access denied — ops or admin only.';
@@ -969,7 +1118,10 @@ async function signIn(){
   }
   const refused=appDoorRefusal(p);
   if(refused){ await sb.auth.signOut(); err.textContent=refused; return; }
+  // Kept so a reload with no signal opens the app instead of stopping here.
+  cacheProfile(p);
   start(p);
+  setLive(true);
 }
 
 // ===== FRONT DOOR =====
@@ -1010,6 +1162,27 @@ function start(p){
   document.getElementById('who').textContent=p.full_name||'';
   document.getElementById('auth').classList.add('hidden');
   document.getElementById('app').classList.add('active');
+
+  /* Paint from what is already on this phone BEFORE any network call.
+
+     This is the whole of offline-first in four lines. loadAll() below
+     refreshes everything, but it is allowed to take as long as it likes:
+     the board is already on screen by the time it is called. */
+  const had = restoreRefs();
+  try{ SALES = JSON.parse(localStorage.getItem('ops_sales') || '[]'); }
+  catch(e){ SALES = []; }
+  if (had || SALES.length) {
+    renderFleetPanel();
+    renderDeliveries();
+    /* Amber until something actually comes back.
+
+       NOT navigator.onLine: that reports true behind a captive portal and on
+       a signal too weak to carry anything, so trusting it here would label
+       three-hour-old loads "Live". The badge says what has been CONFIRMED,
+       and the loaders below turn it green when a read really returns. */
+    setLive(false);
+  }
+
   loadAll();
 }
 
@@ -1031,7 +1204,9 @@ async function loadAll(){
 
 async function loadRefs(){
   try{
-    const [r,p,t,s,c,d,pr,veh,pmp,trl,drv,con,fpos,dasg]=await Promise.all([
+    // One timeout around the whole set: thirteen unbounded reads is thirteen
+    // ways to hang the first paint.
+    const [r,p,t,s,c,d,pr,veh,pmp,trl,drv,con,fpos,dasg]=await withTimeout(Promise.all([
       sb.from('routes').select('*').order('sort_order'),
       sb.from('place_coords').select('*').order('place'),
       sb.from('trucks').select('*').eq('active',true).order('sort_order'),
@@ -1051,7 +1226,7 @@ async function loadRefs(){
       // else here: the panel then lists the fleet with nothing placed.
       sb.from('fleet_positions').select('*'),
       sb.from('delivery_assignment').select('*')
-    ]);
+    ]), 12000);
     ROUTES=r.data||[]; PLACES=p.data||[]; TRUCKS=t.data||[]; DEPOTS=d.data||[];
     if(s.data) SETTINGS=s.data;
     CUSTNAMES=c.data||[];
@@ -1070,12 +1245,25 @@ async function loadRefs(){
     renderFleetPanel();
     renderDeliveries();
     if(mapReady){ drawDepot(); drawFleet(); drawOrders(); }
-  }catch(e){ console.warn('refs',e); }
+    cacheRefs();
+    setLive(true);
+  }catch(e){
+    // No signal. Open with whatever was last on the phone rather than an
+    // empty shell: the loads board is the whole reason this is on a phone.
+    console.warn('refs', e);
+    setLive(false);
+    if(restoreRefs()){
+      renderRoutePicker(); renderDepots(); renderTrucks(); renderSettings();
+      fillMapRoutes(); fillPlaceSelect(); renderLayerToggles();
+      renderFleetPanel(); renderDeliveries();
+      if(mapReady){ drawDepot(); drawFleet(); drawOrders(); }
+    }
+  }
 }
 
 async function loadBoard(){
   try{
-    const {data,error}=await sb.from('app_route_board').select('*');
+    const {data,error}=await withTimeout(sb.from('app_route_board').select('*'), 10000);
     if(error) throw error;
     BOARD=data||[];
     renderRoutePicker();
@@ -1088,16 +1276,20 @@ async function loadBoard(){
 async function loadSales(){
   try{
     const from=new Date(); from.setDate(from.getDate()-60);
-    const {data,error}=await sb.from('sales')
+    const {data,error}=await withTimeout(sb.from('sales')
       .select('id,customer,customer_id,location,litres,fuel_type,sale_date,delivery_date,status,delivered_at,notes,rep_name')
       .gte('sale_date',from.toISOString().split('T')[0])
       .neq('status','cancelled')
-      .order('delivery_date',{ascending:true});
+      .order('delivery_date',{ascending:true}), 10000);
     if(error) throw error;
     SALES=data||[];
     try{localStorage.setItem('ops_sales',JSON.stringify(SALES));}catch(e){}
+    setLive(true);
   }catch(e){
+    // The loads already on the phone, which is what Munya is looking at in
+    // a lay-by. Older than live, and the badge says so.
     try{ SALES=JSON.parse(localStorage.getItem('ops_sales')||'[]'); }catch(_){ SALES=[]; }
+    setLive(false);
   }
   renderDeliveries();
   renderFleetPanel();
@@ -1107,9 +1299,9 @@ async function loadSales(){
 
 async function loadChase(){
   try{
-    const {data,error}=await sb.from('app_customer_retention')
+    const {data,error}=await withTimeout(sb.from('app_customer_retention')
       .select('customer,order_count,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,next_due_date,status,lost_last_round,lost_count')
-      .in('status',['due_now','overdue']);
+      .in('status',['due_now','overdue']), 10000);
     if(error) throw error;
     // Due now + overdue together, most ripe first — these are the ones worth
     // pairing onto a truck already heading their way.
@@ -1125,8 +1317,8 @@ async function loadChase(){
 
 async function loadBook(){
   try{
-    const {data,error}=await sb.from('app_customer_book')
-      .select('customer,order_count,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,next_due_date,status,buying_pattern,lost_last_round,lost_count');
+    const {data,error}=await withTimeout(sb.from('app_customer_book')
+      .select('customer,order_count,last_order,days_since_last,avg_cycle_days,avg_litres,total_litres,ripeness_pct,next_due_date,status,buying_pattern,lost_last_round,lost_count'), 10000);
     if(error) throw error;
     BOOK=data||[];
     renderBook();
@@ -1389,13 +1581,15 @@ const unitSeq = (prefix, used, n) => {
 async function markDelivered(id){
   const s = (SALES || []).find(x => String(x.id) === String(id));
   if (!s) return;
+  const noNet = needsSignal('Marking a load delivered');
+  if (noNet) { alert(noNet); return; }
   if (!confirm('Mark ' + s.customer + ' as delivered?')) return;
   const btns = document.querySelectorAll('.deliver-btn');
   btns.forEach(b => b.disabled = true);
   try {
-    const { error } = await sb.from('sales')
+    const { error } = await withTimeout(sb.from('sales')
       .update({ status: 'delivered', delivered_at: new Date().toISOString() })
-      .eq('id', id);
+      .eq('id', id), 8000);
     if (error) throw error;
     notifyRep(id, 'delivered');
     await loadSales();
@@ -1440,6 +1634,8 @@ function enRouteCell(saleId){
 
 async function setEnRoute(id){
   const a = FLEETMAP.assign[String(id)];
+  const noNet = needsSignal('Sending a load on its way');
+  if (noNet) { alert(noNet); return; }
   // A load is on its way ON something. With no truck assigned the rep would
   // be told their load had left with nothing to ring and no reg to look for,
   // which is worse than being told nothing - so this opens the assign dialog
@@ -1464,10 +1660,10 @@ async function setEnRoute(id){
     // .select() on purpose: row-level security refuses a write by matching
     // NO rows and reporting no error at all, so an empty result is the only
     // way to tell a refusal from a success.
-    const { data, error } = await sb.from('delivery_assignment')
+    const { data, error } = await withTimeout(sb.from('delivery_assignment')
       .update({ en_route_at: stamp, en_route_by: who })
       .eq('sale_id', Number(id))
-      .select('sale_id');
+      .select('sale_id'), 8000);
     if (error) throw error;
     if (!data || !data.length) {
       throw new Error('the database would not accept it \u2014 check you are signed in as ops or admin');
@@ -1483,14 +1679,16 @@ async function setEnRoute(id){
 
 async function clearEnRoute(id){
   const sale = (SALES || []).find(x => String(x.id) === String(id));
+  const noNet = needsSignal('Taking a load back off the road');
+  if (noNet) { alert(noNet); return; }
   if (!confirm('Take ' + (sale ? sale.customer : 'this load') + ' back off the road?' +
                String.fromCharCode(10,10) +
                'The rep will stop seeing it as on its way.')) return;
   try {
-    const { data, error } = await sb.from('delivery_assignment')
+    const { data, error } = await withTimeout(sb.from('delivery_assignment')
       .update({ en_route_at: null, en_route_by: null })
       .eq('sale_id', Number(id))
-      .select('sale_id');
+      .select('sale_id'), 8000);
     if (error) throw error;
     if (!data || !data.length) throw new Error('the database would not accept it');
     const a = FLEETMAP.assign[String(id)];
@@ -1511,6 +1709,8 @@ async function clearEnRoute(id){
    correction still lands, which matters more than the audit line. */
 async function undoDelivered(id){
   const sale = (SALES || []).find(x => String(x.id) === String(id));
+  const noNet = needsSignal('Putting a load back to not delivered');
+  if (noNet) { alert(noNet); return; }
   const who = sale ? sale.customer : 'this delivery';
   let msg = 'Put the delivery to ' + who + ' back to NOT delivered?';
   if (sale && sale.invoiced) {
@@ -1521,9 +1721,9 @@ async function undoDelivered(id){
   if (!confirm(msg)) return;
 
   try {
-    const { error } = await sb.from('sales')
+    const { error } = await withTimeout(sb.from('sales')
       .update({ status: 'pending', delivered_at: null })
-      .eq('id', id);
+      .eq('id', id), 8000);
     if (error) throw error;
   } catch (e) {
     alert('Could not change it back: ' + (e.message || e));
@@ -1836,6 +2036,9 @@ async function saveHiredTruck(){
   if (!dName) { err.textContent = 'Who is driving?'; return; }
   if (!dPhone) { err.textContent = 'A phone number for the driver \u2014 without one the rep cannot ring them.'; return; }
 
+    const noNet = needsSignal('Hiring a truck in');
+    if (noNet) { err.textContent = noNet.replace(/\n+/g, ' '); return; }
+
   err.textContent = '';
   btn.disabled = true; btn.textContent = 'Saving\u2026';
   try {
@@ -2029,6 +2232,8 @@ function closeRig(){ document.getElementById('rigm').classList.remove('on'); rig
 
 async function saveRig(){
   if (!rigSaleId) return;
+  const noNet = needsSignal('Booking a rig onto a load');
+  if (noNet) { alert(noNet); return; }
   const vehicle_id = document.getElementById('rig-vehicle').value || null;
   const trailer_id = document.getElementById('rig-trailer').value || null;
   const driver_id  = document.getElementById('rig-driver').value || null;
@@ -2061,7 +2266,8 @@ async function saveRig(){
   // still saves the truck and driver instead of refusing the whole row.
   if ((FLEETMAP.pumps || []).length) row.pump_unit_id = pump_unit_id;
   try {
-    const { error } = await sb.from('delivery_assignment').upsert(row, { onConflict: 'sale_id' });
+    const { error } = await withTimeout(
+      sb.from('delivery_assignment').upsert(row, { onConflict: 'sale_id' }), 8000);
     if (error) throw error;
     FLEETMAP.assign[rigSaleId] = row;
     notifyRep(rigSaleId, 'assigned');
@@ -2081,10 +2287,13 @@ async function saveRig(){
 
 async function clearRig(){
   if (!rigSaleId) return;
+  const noNet = needsSignal('Taking a load off its truck');
+  if (noNet) { alert(noNet); return; }
   if (!confirm('Take this delivery off its truck?')) return;
   const id = rigSaleId;
   try {
-    const { error } = await sb.from('delivery_assignment').delete().eq('sale_id', Number(id));
+    const { error } = await withTimeout(
+      sb.from('delivery_assignment').delete().eq('sale_id', Number(id)), 8000);
     if (error) throw error;
     delete FLEETMAP.assign[id];
     closeRig();
@@ -2691,16 +2900,18 @@ async function placeUnit(k,latlng,fromMarker){
   const bits=String(k).split(':');
   const kind=bits[0], id=bits[1];
   if(kind!=='vehicle'&&kind!=='pump') return;
+  const noNet = needsSignal('Moving a truck on the map');
+  if(noNet){ alert(noNet); armedUnit=null; syncArm(); return; }
   const prev=FLEETMAP.pos[k]||null;
   const stamp=new Date().toISOString();   // a stamp, not a date: UTC is right here
   FLEETMAP.pos[k]={lat:latlng.lat,lng:latlng.lng,at:stamp,by:fleetWho()};
   armedUnit=null; syncArm();
   if(!fromMarker) drawFleet();
   renderFleetPanel();
-  const {data,error}=await sb.from('fleet_positions').upsert({
+  const {data,error}=await withTimeout(sb.from('fleet_positions').upsert({
     kind:kind, unit_id:id, latitude:latlng.lat, longitude:latlng.lng,
     moved_at:stamp, moved_by:fleetWho()
-  },{onConflict:'kind,unit_id'}).select('unit_id');
+  },{onConflict:'kind,unit_id'}).select('unit_id'), 8000);
   if(error || !data || !data.length){
     if(prev) FLEETMAP.pos[k]=prev; else delete FLEETMAP.pos[k];
     drawFleet(); renderFleetPanel();
@@ -2715,11 +2926,13 @@ async function removeUnit(k){
   const kind=bits[0], id=bits[1];
   const prev=FLEETMAP.pos[k]||null;
   if(!prev) return;
+  const noNet = needsSignal('Taking a truck off the map');
+  if(noNet){ alert(noNet); return; }
   delete FLEETMAP.pos[k];
   if(map) map.closePopup();
   drawFleet(); renderFleetPanel();
-  const {data,error}=await sb.from('fleet_positions').delete()
-    .eq('kind',kind).eq('unit_id',id).select('unit_id');
+  const {data,error}=await withTimeout(sb.from('fleet_positions').delete()
+    .eq('kind',kind).eq('unit_id',id).select('unit_id'), 8000);
   if(error || !data || !data.length){
     FLEETMAP.pos[k]=prev;
     drawFleet(); renderFleetPanel();
@@ -2780,6 +2993,15 @@ function drawFleet(){
 /* ============ MAP ============ */
 function initMap(){
   if(mapReady) return;
+  // Leaflet is cached by the service worker, but a phone that has never been
+  // online will not have it. Without this the whole tab throws on `L`.
+  if(typeof L === 'undefined'){
+    const el = document.getElementById('map');
+    if(el) el.innerHTML = '<div class="empty" style="padding:40px 20px;">' +
+      'The map could not load. Open the planner once with a signal and the ' +
+      'map will work offline after that.</div>';
+    return;
+  }
   map=L.map('map',{zoomControl:true}).setView([-18.3,30.5],7);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
   pinLayer=L.layerGroup().addTo(map);
@@ -3562,7 +3784,7 @@ function flash(id){
    worker was serving the sales app in place of this one. Shown on the sign-in
    screen as well as in the bar, because that is where you are standing when
    you are trying to work out whether you have the new version. */
-const OPS_BUILD = 'Build v3 \u00b7 23 Nov 2026';
+const OPS_BUILD = 'Build v4 \u00b7 23 Nov 2026';
 ['build', 'auth-build'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.textContent = OPS_BUILD;
@@ -3578,12 +3800,69 @@ setInterval(tick,1000); tick();
 
 document.getElementById('pw').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});
 
+/* THE TRAP THIS USED TO FALL INTO, and the one it must not fall into now.
+
+   getSession() reads the session out of local storage, so it SUCCEEDS with
+   no signal. Every bit of offline handling therefore sat in a .catch() that
+   could never fire - and the profile read on the next line had no timeout,
+   so on a dying signal it hung for ever and the app never left the sign-in
+   screen.
+
+   Bounding that read was not enough either. Six seconds of sign-in screen in
+   a lay-by reads as a broken app. So: OPEN from the cached profile, THEN ask
+   the server. The check can only ever take access away, never grant it. */
 sb.auth.getSession().then(async ({data})=>{
-  if(data.session?.user){
-    const {data:p}=await sb.from('profiles').select('full_name,role,app_access,active').eq('id',data.session.user.id).single();
-    // A reload must not walk back in through a door that has since been shut.
-    if(p&&['ops','admin'].includes(p.role)&&!appDoorRefusal(p)) start(p);
+  const user = data && data.session && data.session.user;
+  if(!user) return;                       // never signed in: show sign-in
+
+  const allowed = q => !!(q && ['ops','admin'].includes(q.role) && !appDoorRefusal(q));
+
+  // 1. Open now, on the last profile we were able to read.
+  const cached = cachedProfile();
+  let opened = false;
+  if (allowed(cached)) { start(cached); opened = true; }
+
+  // 2. Then get the real answer, bounded.
+  let p = null, reached = true;
+  try{
+    const r = await withTimeout(
+      sb.from('profiles').select('full_name,role,app_access,active')
+        .eq('id', user.id).single(), 6000);
+    p = (r && r.data) || null;
+  }catch(e){ reached = false; }
+
+  if (!reached) {
+    // No signal. Whatever is on screen stays, and the badge says how old it is.
+    setLive(false);
+    if (!opened) {
+      const e1 = document.getElementById('err');
+      if (e1) e1.textContent = 'No signal, and this phone has not opened the ' +
+        'planner before. Open it once with a connection and it will work ' +
+        'offline after that.';
+    }
+    return;
   }
+
+  if (allowed(p)) {
+    cacheProfile(p);
+    document.getElementById('who').textContent = p.full_name || '';
+    if (!opened) start(p);
+    setLive(true);
+    return;
+  }
+
+  /* Access has gone since this phone last looked - a role changed, a door
+     shut, the login switched off. Shut it now even though we are already
+     open, and forget the cached profile so the next offline start cannot
+     use it either. */
+  try{ localStorage.removeItem(OPS_PROFILE_KEY); }catch(e){}
+  document.getElementById('app').classList.remove('active');
+  document.getElementById('auth').classList.remove('hidden');
+  const e2 = document.getElementById('err');
+  if (e2) e2.textContent = p
+    ? (appDoorRefusal(p) || 'Access denied \u2014 ops or admin only.')
+    : 'Your profile could not be read. Speak to Tom.';
+  try{ await sb.auth.signOut(); }catch(e){}
 }).catch(()=>{});
 
 setInterval(()=>{

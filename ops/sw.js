@@ -4,7 +4,7 @@
 // truthy, so the old `cached || net || match` never fell back),
 // caches each file individually, and includes the app's own icons.
 // ============================================================
-const CACHE = 'ops-planner-v11';
+const CACHE = 'ops-planner-v12';
 
 // THIS worker's own app, worked out from where the worker itself lives.
 //
@@ -24,15 +24,37 @@ const CORE = [
   'apple-touch-icon.png'
 ];
 
+// The borrowed libraries. These live on a file host, and the fetch handler
+// below used to SKIP them - so with no signal they never arrived, `L` and
+// `supabase` were undefined, and creating the database client threw at the
+// top of the app's script. Every line after it then never ran, which is why
+// offline was a dead page rather than a degraded one.
+//
+// The map tiles are NOT cached. They are thousands of images and the point
+// here is the loads board, not a surveyed map. Offline the map draws its
+// pins on an empty background.
+const LIBS = [
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+];
+
 self.addEventListener('install', e => {
   self.skipWaiting();
   e.waitUntil(
     caches.open(CACHE).then(async cache => {
-      await Promise.all(CORE.map(async url => {
+      // Individually, not addAll: that is atomic, so one missing icon would
+      // mean nothing at all got cached and a swallowed error would hide it.
+      await Promise.all([...CORE, ...LIBS].map(async url => {
         try {
           const res = await fetch(url, { cache: 'reload' });
           if (res && res.ok) await cache.put(url, res);
-        } catch (err) { /* skip missing file, don't fail the whole install */ }
+        } catch (err) {
+          // One missing file must not sink the rest, but it must be visible:
+          // a silently skipped library is an app that works right up until
+          // the moment it is needed offline.
+          console.warn('[sw] skipped:', url, err.message);
+        }
       }));
     })
   );
@@ -50,8 +72,12 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   const url = req.url;
 
-  if (url.includes('supabase.co') || url.includes('jsdelivr') ||
-      url.includes('cdnjs') || url.includes('unpkg') ||
+  // The DATABASE must always go to the network - it is live data, not a file.
+  // The two libraries are now ours to serve, cache-first, so they work with
+  // no signal. Fonts stay on the network: if they fail the app renders in a
+  // fallback face, which is a cosmetic loss rather than a broken app.
+  if (url.includes('supabase.co') ||
+      url.includes('cdnjs') ||
       url.includes('fonts.googleapis') || url.includes('fonts.gstatic')) {
     return;
   }
