@@ -4,7 +4,7 @@
 // truthy, so the old `cached || net || match` never fell back),
 // caches each file individually, and includes the app's own icons.
 // ============================================================
-const CACHE = 'ops-planner-v10';
+const CACHE = 'ops-planner-v11';
 
 // THIS worker's own app, worked out from where the worker itself lives.
 //

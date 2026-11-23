@@ -182,6 +182,8 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
 #map{height:100%;width:100%;background:#e8e8e6;min-height:240px;}
 .mside{border-left:1px solid var(--line);background:#fff;overflow-y:auto;display:flex;flex-direction:column;}
 @media(max-width:1000px){.mside{border-left:none;border-top:1px solid var(--line);}}
+
+
 .mbar{background:#fff;border-bottom:1px solid var(--line);padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex-shrink:0;}
 .tgl{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--text2);cursor:pointer;user-select:none;background:#F0F0EE;border:1.5px solid var(--line);border-radius:99px;padding:5px 11px;}
 .tgl.on{background:var(--purple-light);border-color:var(--purple);color:var(--purple);}
@@ -329,7 +331,16 @@ td{padding:7px 10px;border-bottom:1px solid #f5f5f3;font-size:12px;}
 .order-name{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .order-meta{font-size:11px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .ord-late{font-weight:700;color:var(--red);}
-.ord-note{font-size:11px;color:var(--text2);margin-top:3px;background:#F4F4F2;padding:4px 6px;border-radius:4px;border-left:2px solid var(--amber);}
+/* The rep's notes live behind this button, not on the row. They can run to a
+   paragraph - a gate code, who to ask for, a maps link, what went wrong last
+   time - and one long one used to push every other load off the screen. */
+.notebtn{display:inline-flex;align-items:center;gap:5px;margin-top:5px;padding:3px 9px;
+background:var(--amber-light);color:var(--amber);border:1px solid var(--amber);
+border-radius:99px;font-family:var(--font);font-size:10.5px;font-weight:700;cursor:pointer;}
+.notebtn:hover{background:#fff;}
+.notebody{white-space:pre-wrap;word-break:break-word;font-size:13.5px;line-height:1.62;
+color:var(--text);background:#F4F4F2;border-radius:8px;padding:12px 13px;
+max-height:50vh;overflow-y:auto;}
 .ord-rig{flex-shrink:0;width:152px;}
 .ord-lit{font-size:13px;font-weight:700;font-family:var(--mono);flex-shrink:0;width:78px;text-align:right;}
 .ord-del{flex-shrink:0;width:148px;}
@@ -402,6 +413,56 @@ letter-spacing:.06em;margin:0 0 12px;}
 .hirechk{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;line-height:1.45;
 margin:2px 0 12px;cursor:pointer;color:var(--text);}
 .hirechk input{margin:1px 0 0;flex:0 0 auto;width:15px;height:15px;}
+
+/* ============ THE LOADS BOARD ON A PHONE ============
+
+   Munya reads this on the road. The row is five fixed cells built for a
+   desk, so on a phone it wraps into a card instead: the customer name gets
+   to wrap rather than truncate - on a phone that name is the whole point of
+   the row - and the buttons grow to something a thumb can hit.
+
+   Everything here is inside the width rule. The desk and TV layouts above
+   are untouched. */
+@media(max-width:700px){
+  .scroll{padding:9px;}
+  .ph{padding:8px 11px;}
+  .ph h2{font-size:12.5px;}
+  /* Useful once, then clutter. */
+  .ph .hint{display:none;}
+  .ph .cnt{margin-left:auto;}
+
+  .order-row{flex-wrap:wrap;row-gap:8px;column-gap:8px;padding:10px 11px;}
+  .ord-mid{flex:1 1 calc(100% - 134px);min-width:0;}
+  .order-name{font-size:14px;white-space:normal;line-height:1.3;}
+  .order-meta{font-size:11px;white-space:normal;line-height:1.45;}
+  .ord-lit{width:auto;flex:0 0 auto;margin-left:auto;font-size:14px;}
+  .ord-rig{width:auto;flex:1 1 100%;}
+  .rigbtn{padding:8px 9px;font-size:12px;}
+  .ord-del{width:auto;flex:1 1 100%;display:flex;gap:7px;}
+  .ord-del>*{flex:1;}
+  .enroute-btn,.enroute-on{margin-bottom:0;padding:10px 8px;font-size:12px;}
+  .deliver-btn,.undo-btn{padding:10px 8px;font-size:12.5px;}
+  .notebtn{font-size:11.5px;padding:5px 11px;}
+
+  /* Five tabs will not fit across 390px. .mtabs already scrolls; this stops
+     the tabs inside it being squashed to fit instead, and hides the bar. */
+  .mtabs{-webkit-overflow-scrolling:touch;}
+  .mtabs::-webkit-scrollbar{display:none;}
+  .mtab{flex:0 0 auto;padding:9px 11px;font-size:11.5px;}
+
+  /* A phone is exactly where you need to check which build you have, so this
+     one beats the rule above that hides the clock. */
+  .top{padding:7px 11px;gap:8px;}
+  .top h1{font-size:14px;}
+  .top #build{display:inline-block;}
+}
+
+/* One button, two labels: the long one on a desk, the short one on a phone. */
+.lbl-short{display:none;}
+@media(max-width:700px){
+  .lbl-long{display:none;}
+  .lbl-short{display:inline;}
+}
 </style>
 </head>
 <body>
@@ -447,7 +508,7 @@ margin:2px 0 12px;cursor:pointer;color:var(--text);}
       <div class="panel">
         <div class="ph"><h2>&#128666; Still to deliver</h2>
           <span class="cnt" id="loads-count">&mdash;</span>
-          <span style="margin-left:auto;font-size:10px;color:var(--muted);">soonest first &middot; nothing drops off until it is delivered</span>
+          <span class="hint" style="margin-left:auto;font-size:10px;color:var(--muted);">soonest first &middot; nothing drops off until it is delivered</span>
         </div>
         <div id="loads-list"><div class="empty">Loading&hellip;</div></div>
       </div>
@@ -455,7 +516,7 @@ margin:2px 0 12px;cursor:pointer;color:var(--text);}
       <div class="panel">
         <div class="ph"><h2 style="color:var(--green-dark);">&#9989; Delivered</h2>
           <span class="cnt" id="done-count">0</span>
-          <span style="margin-left:auto;font-size:10px;color:var(--muted);">the last seven days</span>
+          <span class="hint" style="margin-left:auto;font-size:10px;color:var(--muted);">the last seven days</span>
         </div>
         <div id="done-list"><div class="empty">Nothing delivered in the last week.</div></div>
       </div>
@@ -465,7 +526,7 @@ margin:2px 0 12px;cursor:pointer;color:var(--text);}
            this and has never had anywhere to put it. -->
       <div class="panel">
         <div class="ph"><h2 style="color:var(--purple);">&#128222; Ripe to ring</h2>
-          <span style="margin-left:auto;font-size:10px;color:var(--muted);">no order yet &mdash; a prompt, not a forecast</span>
+          <span class="hint" style="margin-left:auto;font-size:10px;color:var(--muted);">no order yet &mdash; a prompt, not a forecast</span>
         </div>
         <div id="ripe-list"><div class="empty">Loading&hellip;</div></div>
       </div>
@@ -728,6 +789,26 @@ margin:2px 0 12px;cursor:pointer;color:var(--text);}
     <textarea class="rigwa" id="rig-wa-text" readonly style="display:none;"></textarea>
     <div class="rigrow" id="rig-clear" style="display:none;">
       <button class="dgr" onclick="clearRig()">Take off this truck</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- THE REP'S NOTES ON A LOAD.
+     Off the row on purpose: they can be long, and on a phone one long note
+     buried every other load. Shown with its links tappable, copied as the
+     plain text the rep typed. -->
+<div class="rigm" id="notem" onclick="if(event.target===this)closeNote()">
+  <div class="rigbox" style="max-width:460px;">
+    <h2>&#128221; Notes from the rep</h2>
+    <div class="sub" id="note-who">&mdash;</div>
+    <div class="notebody" id="note-body"></div>
+    <textarea class="rigwa" id="note-raw" readonly style="display:none;min-height:120px;"></textarea>
+    <div class="rigrow" style="margin-top:12px;">
+      <button class="wha" id="note-copy" onclick="copyNote()">&#128203; Copy the note</button>
+    </div>
+    <div class="rigrow">
+      <button class="sec" onclick="closeNote()">Close</button>
     </div>
   </div>
 </div>
@@ -1202,7 +1283,9 @@ function loadRow(s, t0, isDone){
   const act = isDone
     ? '<button class="undo-btn" onclick="undoDelivered(\'' + s.id + '\')">↩ Not delivered</button>'
     : enRouteCell(s.id) +
-      '<button class="deliver-btn" onclick="markDelivered(\'' + s.id + '\')">✓ Mark delivered</button>';
+      '<button class="deliver-btn" onclick="markDelivered(\'' + s.id + '\')">' +
+        '<span class="lbl-long">\u2713 Mark delivered</span>' +
+        '<span class="lbl-short">\u2713 Delivered</span></button>';
 
   return '<div class="order-row' + (isDone ? ' done' : '') + '">' +
     '<div class="date-box" style="background:' + box[0] + ';border:1px solid ' + box[1] + ';" ' +
@@ -1216,7 +1299,14 @@ function loadRow(s, t0, isDone){
       '<div class="order-name">' + esc(s.customer || '—') + fuelPill(s.fuel_type) + '</div>' +
       '<div class="order-meta">' + esc(s.location || '—') +
         (s.rep_name ? '  ·  ' + esc(s.rep_name) : '') + urg + '</div>' +
-      (s.notes ? '<div class="ord-note">📝 ' + noteHtml(s.notes) + '</div>' : '') +
+            // A button, not the note. A pin as well when there is a link in it, so
+      // a location worth opening is visible without tapping through.
+      (String(s.notes || '').trim()
+        ? '<button class="notebtn" onclick="event.stopPropagation();openNote(\'' + s.id + '\')">' +
+            '\ud83d\udcdd Notes' +
+            (/https?:\/\//.test(String(s.notes)) ? '  \ud83d\udccd' : '') +
+          '</button>'
+        : '') +
     '</div>' +
     '<div class="ord-rig">' + rigBadge(s.id) + '</div>' +
     '<div class="ord-lit">' + (+s.litres || 0).toLocaleString() + ' L</div>' +
@@ -1224,6 +1314,60 @@ function loadRow(s, t0, isDone){
   '</div>';
 }
 
+
+/* ---- the rep's notes on a load ----
+
+   They used to sit on the row. They can run to a paragraph and on a phone one
+   long note pushed every other load off the screen, so the row carries a
+   button and the note lives in a sheet.
+
+   Shown with its links tappable, COPIED as the plain text the rep typed: a
+   maps link reads as "Open in Maps" on screen, which is no use at all pasted
+   into WhatsApp. */
+
+function openNote(id){
+  const sale = (SALES || []).find(x => String(x.id) === String(id));
+  if (!sale) return;
+  const who = document.getElementById('note-who');
+  if (who) who.textContent = (sale.customer || '\u2014') + '  \u00b7  ' +
+    (+sale.litres || 0).toLocaleString() + ' L' +
+    (sale.fuel_type ? ' ' + sale.fuel_type : '') +
+    (delDay(sale) ? '  \u00b7  ' + fmDay(sale.delivery_date) : '');
+  const body = document.getElementById('note-body');
+  if (body) body.innerHTML = noteHtml(sale.notes || '');
+  const raw = document.getElementById('note-raw');
+  if (raw) { raw.value = String(sale.notes || ''); raw.style.display = 'none'; }
+  const btn = document.getElementById('note-copy');
+  if (btn) btn.innerHTML = '&#128203; Copy the note';
+  document.getElementById('notem').classList.add('on');
+}
+
+function closeNote(){
+  const m = document.getElementById('notem');
+  if (m) m.classList.remove('on');
+}
+
+async function copyNote(){
+  const raw = document.getElementById('note-raw');
+  const btn = document.getElementById('note-copy');
+  if (!raw) return;
+  const done = ok => {
+    if (!btn) return;
+    btn.textContent = ok ? '\u2713 Copied \u2014 paste it anywhere'
+                         : 'Press Ctrl+C to copy';
+    setTimeout(() => { btn.innerHTML = '&#128203; Copy the note'; }, 2600);
+  };
+  try {
+    await navigator.clipboard.writeText(raw.value);
+    done(true);
+  } catch (e) {
+    // The clipboard is refused on some phones and over plain http. Show the
+    // text and select it, so the button is never a dead end.
+    raw.style.display = '';
+    raw.focus(); raw.select();
+    done(false);
+  }
+}
 /* ---- the bits the assign dialog needs that ops did not have ---- */
 
 const hv = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
@@ -3418,7 +3562,7 @@ function flash(id){
    worker was serving the sales app in place of this one. Shown on the sign-in
    screen as well as in the bar, because that is where you are standing when
    you are trying to work out whether you have the new version. */
-const OPS_BUILD = 'Build v2 · 23 Nov 2026';
+const OPS_BUILD = 'Build v3 \u00b7 23 Nov 2026';
 ['build', 'auth-build'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.textContent = OPS_BUILD;

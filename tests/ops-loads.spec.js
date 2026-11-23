@@ -170,7 +170,11 @@ test('each row carries the three things the office does to a load', async ({ pag
       enroute: !!r.querySelector('.enroute-btn'),
       onRoad: !!r.querySelector('.enroute-on'),
       deliver: !!r.querySelector('.deliver-btn'),
-      note: (r.querySelector('.ord-note') || {}).textContent || '',
+      // The note itself is NOT on the row any more - it can run to a
+      // paragraph. The row offers a button and the note opens in a sheet.
+      // ops-notes-phone.spec.js covers that.
+      noteBtn: (r.querySelector('.notebtn') || {}).textContent || '',
+      noteInline: !!r.querySelector('.ord-note'),
     })));
   console.log(JSON.stringify(rows, null, 1));
 
@@ -186,7 +190,11 @@ test('each row carries the three things the office does to a load', async ({ pag
   const border = rows.find(r => r.who === 'Border Timbers');
   expect(border.onRoad, 'already on the road, so it says so').toBe(true);
   expect(border.enroute).toBe(false);
-  expect(border.note).toContain('ask for Joseph');
+  expect(border.noteBtn, 'it has a note, so it offers one').toContain('Notes');
+  expect(border.noteInline, 'but the note text is never on the row').toBe(false);
+  expect(rows.every(r => !r.noteInline)).toBe(true);
+  // No note, no button.
+  expect(rows.find(r => r.who === 'Khaya Cement').noteBtn).toBe('');
 
   const khaya = rows.find(r => r.who === 'Khaya Cement');
   expect(khaya.rig).toContain('Assign');
