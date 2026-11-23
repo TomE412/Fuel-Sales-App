@@ -177,6 +177,10 @@ test.describe('the service worker shows something useful', () => {
       const made = [];
       const listeners = {};
       const fakeSelf = {
+        // A real worker always has this, and sw.js reads it at the top to work
+        // out which app it belongs to — its scope covers every sub-app, so it
+        // has to know which page loads are its own. See sw-scope.spec.js.
+        location: new URL('sw.js', window.location.href).href,
         addEventListener: (k, fn) => { listeners[k] = fn; },
         registration: { showNotification: (title, opts) => { made.push({ title, opts });
                                                              return Promise.resolve(); } },

@@ -3,7 +3,17 @@
 // Adapted from ops/sw.js — same cache-first strategy with an
 // offline-navigate fallback.
 // ============================================================
-const CACHE = 'admin-v31';
+const CACHE = 'admin-v32';
+
+// THIS worker's own app, worked out from where the worker itself lives.
+//
+// A worker registered at the repository root is scoped to the WHOLE site,
+// so every sub-app - /ops/, /admin/, /accounts/, /dashboard/ - sits inside
+// its scope and it sees their page loads too, at least until each one's own
+// worker is registered. Treating those as this app's page is what made the
+// ops planner and the sales app open each other: see the navigate handler.
+const SCOPE = new URL('./', self.location).pathname;
+const OWN_PAGE = p => p === SCOPE || p === SCOPE + 'index.html';
 const CORE = [
   './',
   'index.html',
@@ -48,6 +58,16 @@ self.addEventListener('fetch', e => {
 
   // Page loads: serve the shell from cache when offline.
   if (req.mode === 'navigate') {
+    // Only ever answer for, or cache, THIS app's own page.
+    //
+    // Without this the handler below wrote every page load it saw into the
+    // key 'index.html' - its own shell - so opening a DIFFERENT app in this
+    // worker's scope replaced this app's saved page with that one. The next
+    // offline start then served the wrong app, and the two home-screen
+    // icons opened the same thing. Anything that is not ours is handed back
+    // to the browser, which gives it to that app's own worker instead.
+    if (!OWN_PAGE(new URL(req.url).pathname)) return;
+
     e.respondWith((async () => {
       try {
         const fresh = await fetch(req);
@@ -80,7 +100,10 @@ self.addEventListener('fetch', e => {
       if (res && res.ok) cache.put(req, res.clone());
       return res;
     } catch (err) {
-      return (await cache.match('index.html')) || new Response('', { status: 504 });
+      // Deliberately NOT the app shell. This branch is a missing image,
+      // script or stylesheet, and handing back a page of HTML turns a clear
+      // "could not load" into a parse error three steps later.
+      return new Response('', { status: 504, statusText: 'Offline' });
     }
   })());
 });
