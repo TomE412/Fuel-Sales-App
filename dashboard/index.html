@@ -168,6 +168,15 @@ font-family:var(--mono);font-size:11.5px;line-height:1.55;color:var(--text);}
 .order-row{display:flex;align-items:center;gap:9px;padding:6px 12px;border-bottom:1px solid var(--gray-light);}
 .order-row:last-child{border-bottom:none;}
 .order-row.delivered{opacity:0.5;}
+/* A NEW ORDER, for its first half hour.
+
+   This is read from across a room, so it is a tinted row and a solid bar
+   down the near edge rather than a badge somebody has to go looking for.
+   The bar is inset so it cannot be clipped by the panel's rounded corner,
+   and it survives a page reload because it is worked out from the time the
+   order was logged, not from what this tab happens to remember. */
+.order-row.fresh{background:var(--red-light);box-shadow:inset 4px 0 0 var(--red);}
+.order-row.fresh .order-name{color:var(--red-dark);}
 .deliver-btn{padding:6px 12px;background:var(--green,#2e7d32);color:#fff;border:none;border-radius:7px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
 .deliver-btn:hover{filter:brightness(1.08);}
 .undo-btn{padding:4px 9px;background:#fff;color:var(--amber);border:1px solid var(--amber);
@@ -213,7 +222,8 @@ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .p-petrol{background:var(--red-light);color:var(--red-dark);}
 .p-paraffin{background:var(--amber-light);color:var(--amber);}
 .p-del{background:var(--green-light);color:var(--green-dark);}
-.p-new{background:var(--text);color:#fff;}
+/* Red, not near-black: on a wall the old one read as just another pill. */
+.p-new{background:var(--red);color:#fff;font-variant-numeric:tabular-nums;}
 
 .chart-wrap{display:flex;align-items:flex-end;gap:3px;padding:10px 12px 0;height:120px;}
 .bar-col{display:flex;flex-direction:column;align-items:center;flex:1;gap:2px;}
@@ -362,6 +372,23 @@ const AV_COLORS = [['#FCEBEB','#A32D2D'],['#EAF3DE','#3B6D11'],['#FAEEDA','#6338
 const RANK_COLS = ['#F5C400','#C0C0C0','#CD7F32'];
 
 let allSales = [];
+/* How long an order stays highlighted on the board.
+
+   Worked out from created_at every time the board is drawn, which the
+   30-second refresh does anyway - so the highlight clears itself within
+   half a minute of running out, with no timer to go wrong. */
+const FRESH_MINS = 30;
+
+// Minutes left of the highlight, or null when it is not a new order at all.
+function freshLeft(sale){
+  if (!sale || !sale.created_at) return null;
+  const t = new Date(sale.created_at).getTime();
+  if (!isFinite(t)) return null;
+  const mins = (Date.now() - t) / 60000;
+  if (mins < 0 || mins >= FRESH_MINS) return null;   // a clock ahead of ours is not new
+  return Math.max(1, Math.ceil(FRESH_MINS - mins));
+}
+
 let lastKnownIds = new Set();
 let isFirstLoad = true;
 
@@ -1569,10 +1596,14 @@ function renderAll() {
         : kind === 'none'
           ? ' · no delivery date'
         : '';
-      const isNew = !lastKnownIds.has(String(s.id)) && !isFirstLoad;
+      // Not "arrived while this tab was open", which a reload forgets, but
+      // "logged in the last half hour", which it cannot.
+      const freshMins = freshLeft(s);
       const fp = s.fuelType ? `<span class="pill ${s.fuelType==='Petrol'?'p-petrol':s.fuelType==='Paraffin'?'p-paraffin':'p-diesel'}">${s.fuelType}</span>` : '';
-      const np = isNew ? `<span class="pill p-new">NEW</span>` : '';
-      return `<div class="order-row">
+      // The minutes left tell whoever is at the wall which one came in most
+      // recently, and say what the highlight means without anyone explaining.
+      const np = freshMins ? `<span class="pill p-new">NEW \u00b7 ${freshMins}m</span>` : '';
+      return `<div class="order-row${freshMins ? ' fresh' : ''}">
         <div class="date-box" style="background:${box[0]};border-color:${box[1]};" title="Delivery: ${fmtDate(s.deliveryDate)}">
           <div class="date-num" style="color:${box[2]};">${d?String(d.getDate()).padStart(2,'0'):'—'}</div>
           <div class="date-mon" style="color:${box[2]};">${d?MN[d.getMonth()]:'TBC'}</div>
