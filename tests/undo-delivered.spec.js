@@ -72,7 +72,18 @@ test('undoing clears the delivered stamp and warns when already invoiced', async
     window.alert = m => { seen.alert = m; };
 
     const sent = [];
-    sb.from = () => ({ update: p => { sent.push(p); return { eq: () => Promise.resolve({ error: null }) }; } });
+    // .eq() returns a FILTER BUILDER in supabase-js: awaitable on its own,
+    // and carrying .select() for when the caller needs the changed rows back.
+    // The main write asks for them, because zero rows is how row-level
+    // security refuses; the audit trail below just awaits it. The stub has to
+    // offer both or it only exercises half the code.
+    const built = () => {
+      const res = { data: [{ id: 1 }], error: null };
+      const p = Promise.resolve(res);
+      p.select = () => Promise.resolve(res);
+      return p;
+    };
+    sb.from = () => ({ update: p => { sent.push(p); return { eq: built }; } });
     loadSales = async () => {};
 
     await undoDelivered(1);
@@ -113,7 +124,18 @@ test('marking delivered now names the customer before it commits', async ({ page
     let msg = null;
     window.confirm = m => { msg = m; return false; };   // decline - nothing should change
     const sent = [];
-    sb.from = () => ({ update: p => { sent.push(p); return { eq: () => Promise.resolve({ error: null }) }; } });
+    // .eq() returns a FILTER BUILDER in supabase-js: awaitable on its own,
+    // and carrying .select() for when the caller needs the changed rows back.
+    // The main write asks for them, because zero rows is how row-level
+    // security refuses; the audit trail below just awaits it. The stub has to
+    // offer both or it only exercises half the code.
+    const built = () => {
+      const res = { data: [{ id: 1 }], error: null };
+      const p = Promise.resolve(res);
+      p.select = () => Promise.resolve(res);
+      return p;
+    };
+    sb.from = () => ({ update: p => { sent.push(p); return { eq: built }; } });
     await markDelivered(3);
     return { msg, sentCount: sent.length };
   }, SALES);
@@ -145,7 +167,18 @@ test('the Overview board can put a delivery back too', async ({ page }) => {
     const seen = [];
     window.confirm = m => { seen.push(m); return true; };
     const sent = [];
-    sb.from = () => ({ update: p => { sent.push(p); return { eq: () => Promise.resolve({ error: null }) }; } });
+    // .eq() returns a FILTER BUILDER in supabase-js: awaitable on its own,
+    // and carrying .select() for when the caller needs the changed rows back.
+    // The main write asks for them, because zero rows is how row-level
+    // security refuses; the audit trail below just awaits it. The stub has to
+    // offer both or it only exercises half the code.
+    const built = () => {
+      const res = { data: [{ id: 1 }], error: null };
+      const p = Promise.resolve(res);
+      p.select = () => Promise.resolve(res);
+      return p;
+    };
+    sb.from = () => ({ update: p => { sent.push(p); return { eq: built }; } });
     fetchData = async () => {};
 
     await undoDelivered('2');   // the invoiced one

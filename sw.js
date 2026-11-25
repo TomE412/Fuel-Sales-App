@@ -19,7 +19,7 @@
 //   - navigate requests fall back to the cached shell.
 //   - We AWAIT the network before returning (no truthy-promise bug).
 // ============================================================
-const CACHE = 'fuel-v40';
+const CACHE = 'fuel-v41';
 
 // THIS worker's own app, worked out from where the worker itself lives.
 //

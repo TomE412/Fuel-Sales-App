@@ -981,7 +981,7 @@ let allSales = [];
 // Bump this on every release. It shows in the More tab, so when a rep
 // reports a problem you can ask what it says and know instantly whether
 // they are on the current build or a stale cached one.
-const APP_VERSION = 'v26 — 25 Nov 2026 (rep accounts, queued payments count)';
+const APP_VERSION = 'v27 — 25 Nov 2026 (refused writes now report themselves)';
 
 let curFuel = 'Diesel';
 let curTerm = 'COD';
@@ -1905,16 +1905,46 @@ async function ensureCanonicalCustomerAndSite(name, place){
 
 // ---- SALES ----
 
+/* Every write to a sale goes through this.
+
+   A write that row-level security REFUSES comes back as zero rows with
+   error: null. It is indistinguishable from success unless you ask for the
+   changed rows and count them, which is why .select('id') is not optional.
+
+   Leaving it out is what made "reps cannot delete sales" look like nothing
+   happening at all: the rep confirmed the delete, no error appeared, the
+   list reloaded, and the sale was still sitting there. The edit path had
+   already learned this; delete and the delivery ticks had not. */
+async function writeSale(builder, what) {
+  try {
+    const { data, error } = await withTimeout(builder.select('id'), 8000);
+    if (error) return { ok: false, why: error.message || String(error) };
+    if (!data || !data.length) {
+      return { ok: false, why:
+        'The system would not let you ' + what + '.\n\n' +
+        'The request went through but changed nothing, which almost always ' +
+        'means this account does not have permission for it. Nothing has ' +
+        'been lost — the sale is exactly as it was.' };
+    }
+    return { ok: true };
+  } catch (e) {
+    const msg = (e && e.message) || String(e);
+    return { ok: false, why: /timeout|fetch|network/i.test(msg)
+      ? 'No answer from the system. Check your signal and try again.'
+      : msg };
+  }
+}
+
 async function cancelSale(id) {
-  const sale = allSales.find(s => s.id === id);
+  const sale = allSales.find(s => String(s.id) === String(id));
   if (!sale) return;
   // Permanent delete — removes the row entirely so litres/values stop
   // counting everywhere (rep app AND ops dashboard). Cannot be undone.
   if (!confirm('DELETE this sale for ' + sale.customer + '?\n\n' +
     (sale.litres||0).toLocaleString() + ' L will be removed from all totals ' +
     'and graphs permanently. This cannot be undone.')) return;
-  const { error } = await sb.from('sales').delete().eq('id', id);
-  if (error) { alert('Error: ' + error.message); return; }
+  const r = await writeSale(sb.from('sales').delete().eq('id', id), 'delete this sale');
+  if (!r.ok) { alert('Sale NOT deleted.\n\n' + r.why); return; }
   await loadSales();
 }
 
@@ -2538,12 +2568,15 @@ async function markDelivered(id) {
     ? sale.customer + '  ·  ' + (sale.litres || 0).toLocaleString() + ' L'
     : 'this delivery';
   if (!confirm('Mark as DELIVERED?' + String.fromCharCode(10,10) + what)) return;
-  const { error } = await sb.from('sales').update({
+  const r = await writeSale(sb.from('sales').update({
     status: 'delivered',
     delivered_at: new Date().toISOString()
-  }).eq('id', id);
-
-  if (!error) await loadSales();
+  }).eq('id', id), 'mark this delivered');
+  // Was `if (!error) await loadSales();` - which said nothing at all when
+  // the write was refused, so the tick simply never appeared and the rep
+  // was left tapping it again.
+  if (!r.ok) { alert('NOT marked as delivered.\n\n' + r.why); return; }
+  await loadSales();
 }
 
 /* Marking a sale paid is a money record, so it says who did it and when.
@@ -2564,10 +2597,11 @@ async function markPaid(id) {
     paid_by: (currentProfile && currentProfile.full_name) ||
              (currentUser && currentUser.email) || null,
   };
-  const { error } = await sb.from('sales').update(stamp).eq('id', id);
-  if (error) {
-    alert('Could not mark it paid.\n\n' + (error.message || error) +
-          '\n\nIf you are offline, try again once you have signal.');
+  // This already surfaced a real error; what it could not see was a refusal,
+  // which arrives as zero rows and no error at all.
+  const r = await writeSale(sb.from('sales').update(stamp).eq('id', id), 'mark this paid');
+  if (!r.ok) {
+    alert('NOT marked as paid.\n\n' + r.why);
     return;
   }
   await loadSales();
@@ -2592,14 +2626,11 @@ async function undoDelivered(id) {
   }
   if (!confirm(msg)) return;
 
-  try {
-    const { error } = await sb.from('sales')
-      .update({ status: 'pending', delivered_at: null })
-      .eq('id', id);
-    if (error) throw error;
-  } catch (e) {
-    alert('Could not change it back.' + String.fromCharCode(10,10) + (e.message || e) +
-          String.fromCharCode(10,10) + 'If you are offline, try again once you have signal.');
+  const r = await writeSale(sb.from('sales')
+    .update({ status: 'pending', delivered_at: null })
+    .eq('id', id), 'put this back to not delivered');
+  if (!r.ok) {
+    alert('NOT changed back.' + String.fromCharCode(10,10) + r.why);
     return;
   }
 

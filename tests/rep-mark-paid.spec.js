@@ -64,18 +64,32 @@ test('marking paid records who did it, and surfaces a refusal', async ({ page })
     window.alert = msg => { seen.alert = msg; };
 
     let sent = null;
-    let fail = false;
+    let mode = 'ok';   // ok | error | refused
     // sb is a const, but its from() is not.
+    //
+    // .eq() returns a filter builder, not a promise: the app calls .select()
+    // on it so it can count the changed rows. That is the only way to tell a
+    // write row-level security REFUSED (zero rows, no error) from one that
+    // worked, and the stub has to offer the same shape as the real client.
     sb.from = () => ({ update: payload => { sent = payload; return {
-      eq: async () => (fail ? { error: { message: 'permission denied for table sales' } } : { error: null }) }; } });
+      eq: () => ({ select: async () => {
+        if (mode === 'error')   return { data: null, error: { message: 'permission denied for table sales' } };
+        if (mode === 'refused') return { data: [], error: null };
+        return { data: [{ id: 1 }], error: null };
+      } })
+    }; } });
     loadSales = async () => {};   // the reload is not what is under test
 
     await markPaid(1);
     const ok = { sent, alert: seen.alert, confirm: seen.confirm };
 
-    fail = true; sent = null; seen.alert = null;
+    mode = 'error'; sent = null; seen.alert = null;
     await markPaid(1);
-    return { ok, refused: { sent, alert: seen.alert } };
+    const errored = { sent, alert: seen.alert };
+
+    mode = 'refused'; sent = null; seen.alert = null;
+    await markPaid(1);
+    return { ok, refused: errored, silent: { sent, alert: seen.alert } };
   }, SALES);
   console.log(JSON.stringify(out, null, 1));
 
@@ -91,6 +105,12 @@ test('marking paid records who did it, and surfaces a refusal', async ({ page })
 
   // A refused write must be visible. Silently doing nothing would leave the
   // rep believing the money is logged when it is not.
-  expect(out.refused.alert).toContain('Could not mark it paid');
+  expect(out.refused.alert).toContain('NOT marked as paid');
   expect(out.refused.alert).toContain('permission denied');
+
+  // The case this test could not see before: row-level security refuses by
+  // changing ZERO ROWS and reporting NO ERROR. That is what made the Delete
+  // button appear to do nothing at all, and it must never be silent here.
+  expect(out.silent.alert).toContain('NOT marked as paid');
+  expect(out.silent.alert).toContain('permission');
 });
