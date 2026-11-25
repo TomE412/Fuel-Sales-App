@@ -981,7 +981,7 @@ let allSales = [];
 // Bump this on every release. It shows in the More tab, so when a rep
 // reports a problem you can ask what it says and know instantly whether
 // they are on the current build or a stale cached one.
-const APP_VERSION = 'v24 — 25 Nov 2026 (rep accounts)';
+const APP_VERSION = 'v25 — 25 Nov 2026 (rep accounts, from 1 Nov)';
 
 let curFuel = 'Diesel';
 let curTerm = 'COD';
@@ -2798,6 +2798,13 @@ const ACCOUNTS_REPS = ['Tom Eager', 'Tom Eager CW'];
 // further ahead. Deliberately not PAY_WARN_DAYS.
 const ACC_DUE_SOON_DAYS = 7;
 
+// Where the chase starts. Every delivered sale ever recorded was owed by
+// somebody once, so without a floor the first screen is a wall of years of
+// historic debt that was settled outside the app long ago - unusable, and
+// alarming. Only sales DELIVERED on or after this date are chased here.
+// Widening the window later is a one-line change to this date.
+const ACC_FROM = '2026-11-01';
+
 let accPayments = [];    // rep_payments rows for this rep
 let accFilter   = 'all'; // all | notinv | due | over | settled
 let accOpen     = {};    // which customer cards are expanded
@@ -2823,6 +2830,15 @@ function accNorm(n){ return String(n == null ? '' : n).trim().toLowerCase().repl
 function accRef(s){ const r = String(s.invoice_ref || '').trim(); return r || null; }
 function accValue(s){ return (parseFloat(s.litres) || 0) * (parseFloat(s.price_per_litre) || 0); }
 function accDelivered(s){ return s.status === 'delivered' || !!s.delivered_at; }
+
+// The day a sale became chaseable, which is the day it was delivered.
+// delivered_at is a timestamp and delivery_date a plain date; a sale
+// back-entered by the office may carry neither, and one of those is shown
+// rather than silently dropped - a missing date is not evidence of age.
+function accDay(s){
+  const t = s.delivered_at ? String(s.delivered_at).split('T')[0] : null;
+  return t || s.delivery_date || s.sale_date || '9999-12-31';
+}
 
 function accDueWords(d){
   if (d === null || d === undefined) return 'no due date';
@@ -2893,7 +2909,8 @@ function accBuild(){
   const mine = (allSales || []).filter(function(s){
     return String(s.rep_id || '') === String(me)
         && s.status !== 'cancelled'
-        && accDelivered(s);
+        && accDelivered(s)
+        && accDay(s) >= ACC_FROM;
   });
 
   // One customer turns up both with and without a canonical id, because a
@@ -2917,7 +2934,12 @@ function accBuild(){
     return groups[k.key];
   }
   mine.forEach(function(s){ slot(s).sales.push(s); });
-  (accPayments || []).forEach(function(p){ slot(p).pays.push(p); });
+  // Payments are filtered to the same window. A payment against a delivery
+  // we are not showing would subtract from a balance that is not there, and
+  // turn an honest customer into an apparent credit.
+  (accPayments || [])
+    .filter(function(p){ return String(p.paid_on || '') >= ACC_FROM; })
+    .forEach(function(p){ slot(p).pays.push(p); });
 
   const out = Object.keys(groups).map(function(k){
     const g = groups[k];
@@ -3069,7 +3091,12 @@ function renderAccounts(){
         '<div class="lbl">Overdue</div><div class="val">' + payMoney(over) + '</div></button>' +
     '</div>' +
     '<div class="acc-chips">' + chip('all','All') + chip('notinv','Not invoiced')
-      + chip('due','Due soon') + chip('over','Overdue') + chip('settled','Settled') + '</div>';
+      + chip('due','Due soon') + chip('over','Overdue') + chip('settled','Settled') + '</div>'
+    // Said out loud, because a balance that is missing older debt looks like
+    // lost data unless the screen explains itself.
+    + '<div style="font-size:11px;color:var(--text3);margin:-4px 0 12px;line-height:1.45;">'
+    + 'Deliveries from ' + fmtDate(ACC_FROM) + ' onwards. Anything older is '
+    + 'settled outside the app and is not chased here.</div>';
 
   if (!list.length){
     const why = all.length
@@ -3430,7 +3457,8 @@ function exportAccounts(){
       Note: { over:'overdue', due:'due soon', await:'awaiting invoice', invoiced:'invoiced' }[c.state] || '' });
     rows.push({});
   });
-  rows.push({ Customer: 'Working balances only. Adnan’s records are final.' });
+  rows.push({ Customer: 'Deliveries from ' + fmtDate(ACC_FROM) + ' onwards. '
+    + 'Working balances only — Adnan’s records are final.' });
 
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
