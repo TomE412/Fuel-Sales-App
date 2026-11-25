@@ -981,7 +981,7 @@ let allSales = [];
 // Bump this on every release. It shows in the More tab, so when a rep
 // reports a problem you can ask what it says and know instantly whether
 // they are on the current build or a stale cached one.
-const APP_VERSION = 'v25 — 25 Nov 2026 (rep accounts, from 1 Nov)';
+const APP_VERSION = 'v26 — 25 Nov 2026 (rep accounts, queued payments count)';
 
 let curFuel = 'Diesel';
 let curTerm = 'COD';
@@ -2937,9 +2937,21 @@ function accBuild(){
   // Payments are filtered to the same window. A payment against a delivery
   // we are not showing would subtract from a balance that is not there, and
   // turn an honest customer into an apparent credit.
+  const seenUid = {};
   (accPayments || [])
     .filter(function(p){ return String(p.paid_on || '') >= ACC_FROM; })
-    .forEach(function(p){ slot(p).pays.push(p); });
+    .forEach(function(p){ if (p.client_uid) seenUid[p.client_uid] = 1; slot(p).pays.push(p); });
+
+  // Payments still waiting to upload count against the balance too.
+  // Without this, a payment the database refused - or one logged with no
+  // signal - disappears the moment the screen refreshes from the server,
+  // and the rep is shown the full amount as though they never collected it.
+  getAccQueue().forEach(function(it){
+    if (it.kind !== 'pay' || !it.payload) return;
+    if (it.payload.client_uid && seenUid[it.payload.client_uid]) return;
+    if (String(it.payload.paid_on || '') < ACC_FROM) return;
+    slot(it.payload).pays.push(Object.assign({ _queued: true }, it.payload));
+  });
 
   const out = Object.keys(groups).map(function(k){
     const g = groups[k];
@@ -3162,8 +3174,11 @@ function renderAccounts(){
           const how = p.method === 'transfer'
             ? 'Transfer' + (p.pop_ref ? ' · ' + escHtml(p.pop_ref) : '')
             : 'Cash';
+          // Counted in the balance either way, but say which ones are still
+          // only on this phone so nobody treats them as filed.
+          const wait = p._queued ? ' · <span style="color:var(--amber)">waiting to upload</span>' : '';
           return '<div class="acc-row"><span>' + fmtDate(p.paid_on) + ' · <span class="dim">'
-            + how + '</span></span><span>' + payMoney(p.amount) + '</span></div>';
+            + how + '</span>' + wait + '</span><span>' + payMoney(p.amount) + '</span></div>';
         }).join('')
       : '<div class="acc-norow">None yet</div>';
 
@@ -3232,7 +3247,10 @@ async function saveInvoiceRef(saleId){
     accToast('Reference saved.');
   } catch(e){
     queueAcc({ kind:'ref', sale_id: sale.id, invoice_ref: ref });
-    accToast('Saved on this phone — will upload when back online.');
+    const msg = e.message || String(e);
+    accToast(/timeout|fetch|network/i.test(msg)
+      ? 'Saved on this phone — will upload when back online.'
+      : 'Held on this phone — ' + msg);
   }
 }
 
@@ -3341,26 +3359,48 @@ async function savePayment(){
   renderAccounts();
 
   if (!navigator.onLine || !sb){
-    queueAcc({ kind:'pay', payload: payload });
+    // heldOnPhone is declared below; a function declaration is hoisted, so
+    // this branch reaches it. It is the same path as a refusal: the money
+    // counts, and the screen says it is not filed yet.
+    heldOnPhone('Saved on this phone — will upload when back online.');
     if (refSale && refVal) queueAcc({ kind:'ref', sale_id: refSale, invoice_ref: refVal });
-    accToast('Saved on this phone — will upload when back online.');
+    renderAccounts();
     return;
   }
 
+  // A payment that did not reach the table is handed to the queue, which is
+  // the single source for unfiled money: accBuild reads it, counts it in the
+  // balance, and marks it "waiting to upload". Leaving the optimistic copy
+  // in accPayments as well would dedupe the queued one away and make an
+  // unfiled payment look filed.
+  function heldOnPhone(words){
+    accPayments = accPayments.filter(function(p){ return p.client_uid !== payload.client_uid; });
+    try { localStorage.setItem('pay_cache_' + currentUser.id, JSON.stringify(accPayments)); } catch(e){}
+    queueAcc({ kind:'pay', payload: payload });
+    accToast(words);
+  }
+
+  let landed = false;
   try {
     const { data, error } = await withTimeout(
       sb.from('rep_payments').insert(payload).select('id'), 8000
     );
     if (error) throw error;
     if (!data || !data.length){
-      queueAcc({ kind:'pay', payload: payload });
-      accToast('Kept on this phone — the system would not take it.');
+      // Refused by a policy. Zero rows with NO error is the only signature
+      // a refusal has, which is why the .select() above is not optional.
+      heldOnPhone('Held on this phone — the system refused it.');
     } else {
+      landed = true;
       accToast('Payment recorded.');
     }
   } catch(e){
-    queueAcc({ kind:'pay', payload: payload });
-    accToast('Saved on this phone — will upload when back online.');
+    const msg = e.message || String(e);
+    // Say WHAT went wrong rather than only that something did. Diagnosing a
+    // rejected write from the outside takes days; the message takes seconds.
+    heldOnPhone(/timeout|fetch|network/i.test(msg)
+      ? 'Saved on this phone — will upload when back online.'
+      : 'Held on this phone — ' + msg);
   }
 
   if (refSale && refVal){
@@ -3368,7 +3408,10 @@ async function savePayment(){
     if (inp) inp.value = refVal;
     await saveInvoiceRef(refSale);
   }
-  await loadPayments();
+  // Only re-read when the row actually landed. Re-reading after a refusal
+  // replaces the list with the server's, which does not have it - and the
+  // balance springs back up as though the payment never happened.
+  if (landed) await loadPayments();
   renderAccounts();
 }
 
