@@ -314,6 +314,98 @@ border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:poi
 .perf-cust-bar-track{height:6px;background:var(--gray);border-radius:99px;overflow:hidden;}
 .perf-cust-bar-fill{height:100%;background:var(--red);border-radius:99px;}
 .perf-cust-vol{flex-shrink:0;font-size:12.5px;font-weight:700;font-family:var(--mono);color:var(--text2);}
+/* ---------- REP ACCOUNTS (trial: two reps only) ---------- */
+.subtoggle{display:flex;background:var(--gray);border-radius:10px;padding:3px;margin-bottom:14px;}
+.subtoggle button{flex:1;border:none;background:none;font:inherit;font-weight:600;font-size:14px;
+  padding:10px;border-radius:8px;color:var(--text2);cursor:pointer;}
+.subtoggle button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,0.08);}
+
+.acc-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+.acc-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px 10px;cursor:pointer;transition:border-color .15s;text-align:left;font:inherit;}
+.acc-card.on{border-color:var(--text);}
+.acc-card .lbl{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text3);}
+.acc-card .val{font-size:17px;font-weight:700;margin-top:5px;font-family:var(--mono);}
+.acc-card.c-all .val{color:var(--blue);}
+.acc-card.c-due .val{color:var(--amber);}
+.acc-card.c-over .val{color:var(--red);}
+
+.acc-chips{display:flex;gap:7px;overflow-x:auto;margin-bottom:12px;padding-bottom:3px;}
+.acc-chip{flex:0 0 auto;border:1px solid var(--border);background:var(--surface);border-radius:99px;
+  padding:7px 13px;font-size:12.5px;font-weight:600;color:var(--text2);cursor:pointer;white-space:nowrap;font-family:inherit;}
+.acc-chip.on{background:var(--text);color:var(--surface);border-color:var(--text);}
+
+.acc-list{display:flex;flex-direction:column;gap:9px;}
+.acc-cust{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+.acc-head{display:flex;align-items:flex-start;gap:10px;padding:13px 14px;cursor:pointer;}
+.acc-main{flex:1;min-width:0;}
+.acc-name{font-weight:700;font-size:15px;word-break:break-word;}
+.acc-meta{font-size:12px;color:var(--text3);margin-top:3px;}
+.acc-right{text-align:right;flex:0 0 auto;}
+.acc-bal{font-weight:700;font-size:15px;font-family:var(--mono);}
+.acc-chev{color:var(--text3);font-size:11px;margin-top:4px;transition:transform .2s;}
+.acc-cust.open .acc-chev{transform:rotate(180deg);}
+
+.acc-badge{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;padding:2px 7px;border-radius:99px;margin-top:4px;}
+.ab-over{background:var(--red-light);color:var(--red);}
+.ab-due{background:var(--amber-light);color:var(--amber);}
+.ab-await{background:var(--blue-light);color:var(--blue);}
+.ab-inv{background:var(--gray);color:var(--text2);}
+.ab-settled{background:var(--green-light);color:var(--green-dark);}
+
+.acc-detail{border-top:1px solid var(--border);padding:12px 14px;background:var(--bg);display:none;}
+.acc-cust.open .acc-detail{display:block;}
+.acc-subh{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--text3);margin:13px 0 5px;}
+.acc-subh:first-child{margin-top:0;}
+.acc-line{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:4px 0;}
+.acc-line.tot{font-weight:700;border-top:1px solid var(--border);margin-top:4px;padding-top:7px;}
+.acc-line .neg{color:var(--green-dark);}
+.acc-row{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:6px 0;
+  border-bottom:1px solid var(--border);}
+.acc-row:last-child{border-bottom:none;}
+.acc-row .dim{color:var(--text3);}
+.acc-norow{font-size:12.5px;color:var(--text3);padding:6px 0;}
+
+.acc-refrow{display:flex;gap:6px;margin-top:7px;}
+.acc-refrow input{flex:1;min-width:0;padding:9px 10px;border:1.5px solid var(--border);
+  border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font:inherit;font-size:14px;}
+.acc-refrow button{flex:0 0 auto;border:none;background:var(--blue);color:#fff;font:inherit;
+  font-weight:600;padding:9px 14px;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;}
+
+.acc-logbtn{width:100%;margin-top:12px;border:none;background:var(--blue);color:#fff;font:inherit;
+  font-weight:600;padding:11px;border-radius:9px;cursor:pointer;font-size:14px;}
+.acc-note{font-size:11px;color:var(--text3);margin-top:10px;display:flex;gap:6px;line-height:1.4;}
+.acc-export{width:100%;margin-top:16px;border:1.5px solid var(--border);background:var(--surface);
+  color:var(--text);font:inherit;font-weight:600;padding:12px;border-radius:10px;cursor:pointer;}
+
+/* payment sheet */
+.acc-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:flex-end;
+  justify-content:center;z-index:900;}
+.acc-modal-bg.on{display:flex;}
+.acc-modal{background:var(--surface);width:100%;max-width:480px;border-radius:18px 18px 0 0;
+  padding:20px 18px calc(20px + env(safe-area-inset-bottom,0px));max-height:92vh;overflow-y:auto;}
+.acc-modal h3{margin:0 0 3px;font-size:17px;}
+.acc-osub{font-size:13px;color:var(--text3);margin-bottom:16px;}
+.acc-fld{margin-bottom:13px;}
+.acc-fld label{display:block;font-size:11px;font-weight:700;letter-spacing:.03em;
+  text-transform:uppercase;color:var(--text3);margin-bottom:5px;}
+.acc-fld input{width:100%;padding:11px 12px;border:1.5px solid var(--border);border-radius:9px;
+  background:var(--surface);color:var(--text);font:inherit;font-size:16px;}
+.acc-seg{display:flex;gap:7px;}
+.acc-seg button{flex:1;padding:10px;border:1.5px solid var(--border);background:var(--surface);
+  border-radius:9px;font:inherit;font-weight:600;color:var(--text2);cursor:pointer;}
+.acc-seg button.on{border-color:var(--blue);background:var(--blue-light);color:var(--blue);}
+.acc-mrow{display:flex;gap:9px;margin-top:4px;}
+.acc-mrow button{flex:1;padding:12px;border-radius:9px;font:inherit;font-weight:600;cursor:pointer;font-size:15px;}
+.acc-cancel{border:1.5px solid var(--border);background:var(--surface);color:var(--text);}
+.acc-save{border:none;background:var(--blue);color:#fff;}
+.acc-hint{font-size:12px;color:var(--text3);line-height:1.45;margin:-6px 0 13px;}
+
+#acc-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:950;
+  background:var(--text);color:var(--surface);font-size:13px;font-weight:600;padding:10px 16px;
+  border-radius:99px;max-width:88vw;text-align:center;display:none;}
 </style>
 </head>
 <body>
@@ -560,6 +652,11 @@ border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:poi
 
   <!-- SALES TAB -->
   <div class="tab-content" id="tab-sales">
+    <div class="subtoggle" id="acc-toggle" style="display:none;">
+      <button id="tg-pipe" class="on" onclick="showSalesView('pipe')">Pipeline</button>
+      <button id="tg-acc" onclick="showSalesView('acc')">Accounts</button>
+    </div>
+    <div id="view-pipeline">
     <div class="ssearch">
       <input id="sales-search" type="search" autocomplete="off" autocapitalize="none"
              placeholder="Search customer or place…" oninput="renderSales()">
@@ -567,6 +664,8 @@ border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:poi
     </div>
     <div id="sales-count"></div>
     <div id="sales-list"><div class="empty"><div class="empty-icon">📋</div><p>No sales yet</p></div></div>
+    </div>
+    <div id="view-accounts" style="display:none;"></div>
   </div>
 
   <!-- DASH TAB -->
@@ -801,6 +900,50 @@ border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:poi
   </div>
 </div>
 
+<div class="acc-modal-bg" id="pay-modal" onclick="if(event.target===this)closePay()">
+  <div class="acc-modal">
+    <h3 id="pay-name">Payment</h3>
+    <div class="acc-osub" id="pay-bal">Outstanding: $0</div>
+
+    <div class="acc-fld">
+      <label for="pay-amount">Amount received</label>
+      <input id="pay-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00">
+    </div>
+
+    <div class="acc-fld">
+      <label>Method</label>
+      <div class="acc-seg" id="pay-meth">
+        <button type="button" data-m="cash" class="on" onclick="pickPayMethod(this,'cash')">Cash</button>
+        <button type="button" data-m="transfer" onclick="pickPayMethod(this,'transfer')">Bank transfer</button>
+      </div>
+    </div>
+
+    <div class="acc-fld" id="pay-popfld" style="display:none;">
+      <label for="pay-pop">Proof-of-payment reference</label>
+      <input id="pay-pop" type="text" autocomplete="off" placeholder="e.g. TXN-8841">
+    </div>
+
+    <div class="acc-fld" id="pay-reffld" style="display:none;">
+      <label for="pay-ref">Invoice ref (from Adnan)</label>
+      <input id="pay-ref" type="text" autocomplete="off" placeholder="e.g. 4471">
+    </div>
+    <div class="acc-hint" id="pay-refhint" style="display:none;"></div>
+
+    <div class="acc-fld">
+      <label for="pay-date">Date received</label>
+      <input id="pay-date" type="date">
+    </div>
+
+    <div class="acc-mrow">
+      <button type="button" class="acc-cancel" onclick="closePay()">Cancel</button>
+      <button type="button" class="acc-save" onclick="savePayment()">Save payment</button>
+    </div>
+    <div class="acc-note"><span>ⓘ</span><span>Recording what you’ve collected, for your own
+      tracking. Adnan’s books remain the official record.</span></div>
+  </div>
+</div>
+<div id="acc-toast"></div>
+
 <script>
 // ---- escHtml: the one way user text reaches the page ----
 // Customer names, places and notes are typed freely by reps. Written
@@ -838,7 +981,7 @@ let allSales = [];
 // Bump this on every release. It shows in the More tab, so when a rep
 // reports a problem you can ask what it says and know instantly whether
 // they are on the current build or a stale cached one.
-const APP_VERSION = 'v23 — 20 Nov 2026 (payment due reminders)';
+const APP_VERSION = 'v24 — 25 Nov 2026 (rep accounts)';
 
 let curFuel = 'Diesel';
 let curTerm = 'COD';
@@ -1240,7 +1383,7 @@ async function loadUser(user, showLock = false) {
   document.getElementById('more-role').textContent = 'Role: ' + (profile?.role || 'rep');
 
   document.getElementById('screen-auth').classList.remove('active');
-  document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('s-date').value = todayISO();
 
   if (!localStorage.getItem(getPinKey(user.id))) {
     localStorage.setItem(getPinKey(user.id), DEFAULT_PIN);
@@ -1277,7 +1420,7 @@ function renderCal() {
 
   const firstDay = new Date(calYear, calMonth, 1).getDay();
   const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayISO();
 
   // Build event map
   const events = {};
@@ -1793,7 +1936,7 @@ function setEditMode(saleLabel) {
 }
 
 function clearForm() {
-  document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('s-date').value = todayISO();
   document.getElementById('s-customer').value = '';
   selectedCustomerId = null;
   document.getElementById('cust-matched').classList.remove('show');
@@ -1913,6 +2056,7 @@ async function loadSales() {
       rigLoadCached();
       renderSales();
       renderDash();
+      renderAccounts();
     }
   } catch(e) {}
 
@@ -1934,6 +2078,9 @@ async function loadSales() {
     await loadRigInfo();
     renderSales();
     renderDash();
+    await loadPayments();
+    renderAccounts();
+    syncAccQueue();
     // If there are queued offline sales, try to sync them now that we're online
     if (getQueue().length > 0) {
       setSyncBadge('queued');
@@ -2218,7 +2365,7 @@ async function recordSale() {
   document.getElementById('s-delivery').value = '';
   document.getElementById('s-notes').value = '';
   setRoundTrip(false);   // the next sale is a fresh question
-  document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('s-date').value = todayISO();
   selectFuel('Diesel', document.getElementById('fuel-diesel'));
   curTerm = 'COD';
   document.querySelectorAll('#terms-grid .term-btn').forEach((b,i) => b.classList.toggle('selected', i===0));
@@ -2511,6 +2658,7 @@ function escSearch(s){
 }
 
 function renderSales() {
+  syncAccToggle();
   const el = document.getElementById('sales-list');
 
   const q = salesQuery();
@@ -2541,17 +2689,26 @@ function renderSales() {
     </div>`;
   }).join('');
 
-  const shown = allSales.filter(s => saleMatches(q, s.customer, s.location));
+  // For the trial reps the Sales tab is two views of one body of sales: a
+  // sale leaves Pipeline the moment it is delivered and turns up under
+  // Accounts instead. For every other rep this list is exactly as it was.
+  const base = accEnabled()
+    ? allSales.filter(s => !accDelivered(s))
+    : allSales;
+  const shown = base.filter(s => saleMatches(q, s.customer, s.location));
 
   const countEl = document.getElementById('sales-count');
   if (countEl) countEl.textContent = q
-    ? (queued.length + shown.length) + ' of ' + (allQueued.length + allSales.length) + ' sales'
+    ? (queued.length + shown.length) + ' of ' + (allQueued.length + base.length) + ' sales'
     : '';
 
   if (!shown.length && !queued.length) {
     el.innerHTML = q
       ? '<div class="empty"><div class="empty-icon">🔍</div><p>No sale matches “' + escSearch(q) + '”</p></div>'
-      : '<div class="empty"><div class="empty-icon">📋</div><p>No sales recorded yet</p></div>';
+      : (accEnabled()
+          ? '<div class="empty"><div class="empty-icon">📋</div><p>Nothing waiting to go out</p>'
+            + '<p style="font-size:13px;">Delivered sales are under <b>Accounts</b>.</p></div>'
+          : '<div class="empty"><div class="empty-icon">📋</div><p>No sales recorded yet</p></div>');
     // The badge is drawn on every path out of this function. Before the search
     // existed this return was only hit by a brand-new rep; now any term that
     // matches nothing lands here, and a rep's notifications must not vanish
@@ -2608,6 +2765,678 @@ function renderSales() {
   // Drawn here because renderSales() is called on every path that changes
   // the data - cached start, fresh load, and after saving a sale.
   renderNotifBadge();
+}
+
+/* ================= REP ACCOUNTS =================
+
+   A chase tool for the rep, living inside the Sales tab as a second view
+   of the same sales. Nothing here issues or invoices anything: Adnan
+   reconciles against delivery notes and stock, and his books are the
+   record. This is the rep's own working estimate of what they are owed,
+   so every screen that shows a balance says so.
+
+   A sale is in Pipeline until it is delivered, and in Accounts after.
+   It is never in both - that is what keeps the sales list clean, which
+   is the problem this whole view exists to solve.
+
+   Money is grouped by CUSTOMER, not by sale, because that is how it
+   actually arrives: a rolling balance paid down in lump sums. A payment
+   is therefore never assigned to one invoice. It is spent against the
+   oldest open invoice first, which is only used to decide WHICH invoice
+   the rep is chasing and therefore what the badge says.
+*/
+
+// The trial. Only these two profiles get the toggle; everyone else sees
+// the Sales tab exactly as it was. Matched on full_name because that is
+// what the profile carries and what sales.rep_name is backfilled
+// against - "Tom Eager CW" is Carrie Watson, and renaming either of
+// these orphans their sales, so they are not safe to tidy up.
+const ACCOUNTS_REPS = ['Tom Eager', 'Tom Eager CW'];
+
+// The notification bell warns 2 days out because it interrupts. This
+// screen is opened on purpose to plan a week of chasing, so it looks
+// further ahead. Deliberately not PAY_WARN_DAYS.
+const ACC_DUE_SOON_DAYS = 7;
+
+let accPayments = [];    // rep_payments rows for this rep
+let accFilter   = 'all'; // all | notinv | due | over | settled
+let accOpen     = {};    // which customer cards are expanded
+let salesView   = 'pipe';
+let payTarget   = null;  // the customer group the sheet is working on
+let payMethod   = 'cash';
+
+function accEnabled(){
+  return !!(currentProfile && ACCOUNTS_REPS.indexOf(currentProfile.full_name) !== -1);
+}
+
+// Today, from LOCAL date parts. Never toISOString(): Harare is UTC+2, so
+// between midnight and 02:00 that returns yesterday - which is how
+// payment_due was once a day early everywhere, and why the date box on
+// the Record tab used to pre-fill the wrong day for a late-night sale.
+function todayISO(){
+  const n = new Date();
+  return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0')
+       + '-' + String(n.getDate()).padStart(2, '0');
+}
+
+function accNorm(n){ return String(n == null ? '' : n).trim().toLowerCase().replace(/\s+/g,' '); }
+function accRef(s){ const r = String(s.invoice_ref || '').trim(); return r || null; }
+function accValue(s){ return (parseFloat(s.litres) || 0) * (parseFloat(s.price_per_litre) || 0); }
+function accDelivered(s){ return s.status === 'delivered' || !!s.delivered_at; }
+
+function accDueWords(d){
+  if (d === null || d === undefined) return 'no due date';
+  if (d < -1)   return (-d) + ' days late';
+  if (d === -1) return '1 day late';
+  if (d === 0)  return 'due today';
+  if (d === 1)  return 'due tomorrow';
+  return 'due in ' + d + ' days';
+}
+
+/* ---------- offline queue ----------
+   Payments and invoice references both go through one queue, because
+   both are written from a phone that may have no signal and neither
+   may be lost. A refused write is NOT retried forever: see syncAccQueue. */
+function accQueueKey(){ return 'acc_queue_' + ((currentUser && currentUser.id) || 'x'); }
+function getAccQueue(){
+  try { return JSON.parse(localStorage.getItem(accQueueKey()) || '[]'); } catch(e){ return []; }
+}
+function saveAccQueue(q){
+  try { localStorage.setItem(accQueueKey(), JSON.stringify(q)); } catch(e){}
+}
+function queueAcc(item){ const q = getAccQueue(); q.push(item); saveAccQueue(q); }
+
+function cacheSales(){
+  try {
+    localStorage.setItem('sales_cache_' + ((currentUser && currentUser.id) || 'x'),
+      JSON.stringify(allSales));
+  } catch(e){}
+}
+
+function accToast(msg){
+  let t = document.getElementById('acc-toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(accToast._t);
+  accToast._t = setTimeout(function(){ t.style.display = 'none'; }, 3600);
+}
+
+/* ---------- loading what the rep has collected ---------- */
+async function loadPayments(){
+  if (!accEnabled()) return;
+  const key = 'pay_cache_' + ((currentUser && currentUser.id) || 'x');
+  try {
+    const cached = localStorage.getItem(key);
+    if (cached) accPayments = JSON.parse(cached);
+  } catch(e){}
+  if (!sb || !currentUser) return;
+  try {
+    const { data, error } = await withTimeout(
+      sb.from('rep_payments').select('*')
+        .eq('rep_id', currentUser.id)
+        .order('paid_on', { ascending: false }),
+      8000
+    );
+    if (error) throw error;
+    accPayments = data || [];
+    try { localStorage.setItem(key, JSON.stringify(accPayments)); } catch(e){}
+  } catch(e){
+    // Already painted from cache above; a dead signal must not empty the screen.
+    console.log('Using cached payments:', e.message);
+  }
+}
+
+/* ---------- the numbers ---------- */
+function accBuild(){
+  const me = currentUser && currentUser.id;
+  const mine = (allSales || []).filter(function(s){
+    return String(s.rep_id || '') === String(me)
+        && s.status !== 'cancelled'
+        && accDelivered(s);
+  });
+
+  // One customer turns up both with and without a canonical id, because a
+  // sale typed as a new name has none. Learn the id from any sale that
+  // carries one so the same customer does not split into two cards.
+  const nameToId = {};
+  mine.forEach(function(s){ if (s.customer_id) nameToId[accNorm(s.customer)] = s.customer_id; });
+  (accPayments || []).forEach(function(p){
+    if (p.customer_id) nameToId[accNorm(p.customer)] = p.customer_id;
+  });
+
+  function keyOf(row){
+    const id = row.customer_id || nameToId[accNorm(row.customer)] || null;
+    return { key: id ? ('id:' + id) : ('nm:' + accNorm(row.customer)), id: id };
+  }
+
+  const groups = {};
+  function slot(row){
+    const k = keyOf(row);
+    if (!groups[k.key]) groups[k.key] = { key:k.key, id:k.id, name:row.customer, sales:[], pays:[] };
+    return groups[k.key];
+  }
+  mine.forEach(function(s){ slot(s).sales.push(s); });
+  (accPayments || []).forEach(function(p){ slot(p).pays.push(p); });
+
+  const out = Object.keys(groups).map(function(k){
+    const g = groups[k];
+
+    // Oldest money first, so the walk below chases the right invoice.
+    g.sales.sort(function(a,b){
+      return String(payDueDay(a) || '9999-99-99').localeCompare(String(payDueDay(b) || '9999-99-99'));
+    });
+    g.pays.sort(function(a,b){ return String(b.paid_on).localeCompare(String(a.paid_on)); });
+
+    let invoiced = 0, awaiting = 0, tba = 0;
+    g.sales.forEach(function(s){
+      if (s.price_tba) { tba++; return; }   // no price yet, so no claim yet
+      if (accRef(s)) invoiced += accValue(s); else awaiting += accValue(s);
+    });
+    const paid = g.pays.reduce(function(a,p){ return a + (parseFloat(p.amount) || 0); }, 0);
+    const outstanding = invoiced + awaiting - paid;
+
+    // Spend the pool against invoiced lines, oldest due date first. The
+    // first line it does not cover is the one actually being chased.
+    let pool = paid, chase = null;
+    for (let i = 0; i < g.sales.length; i++){
+      const s = g.sales[i];
+      if (s.price_tba || !accRef(s)) continue;
+      const v = accValue(s);
+      if (pool >= v) { pool -= v; continue; }
+      chase = s; break;
+    }
+
+    // Order matters, and "settled" is deliberately LAST of the real states.
+    // A customer whose only delivered load is Price TBA owes nothing yet, so
+    // a zero balance would mark them settled and drop them off the list -
+    // and that load has already left Pipeline for being delivered. It would
+    // be visible nowhere. Anything undelivered-in-spirit outranks zero.
+    const waiting = tba > 0 || awaiting > 0.005;
+    let state, days = null;
+    if (chase) {
+      const day = payDueDay(chase);
+      days = day ? payDaysLeft(day) : null;
+      if (days !== null && days < 0)                      state = 'over';
+      else if (days !== null && days <= ACC_DUE_SOON_DAYS) state = 'due';
+      else if (waiting)                                   state = 'await';
+      else                                                state = 'invoiced';
+    } else if (waiting) {
+      state = 'await';
+    } else if (outstanding <= 0.005) {
+      state = 'settled';
+    } else {
+      state = 'invoiced';
+    }
+
+    const nInv = g.sales.filter(function(s){ return accRef(s) && !s.price_tba; }).length;
+    let meta;
+    // Money being chased is the headline wherever there is any, even when
+    // the customer also has a load still waiting on a reference.
+    if (state === 'settled') {
+      meta = 'Fully paid' + (g.pays[0] ? ' · ' + fmtDate(g.pays[0].paid_on) : '');
+    } else if (chase) {
+      meta = nInv + (nInv === 1 ? ' invoice' : ' invoices') + ' · '
+           + (nInv > 1 ? 'oldest ' : '') + accDueWords(days);
+      const nAwait = g.sales.filter(function(s){ return !accRef(s) && !s.price_tba; }).length;
+      if (nAwait) meta += ' · ' + nAwait + ' awaiting invoice';
+    } else if (state === 'await') {
+      meta = 'Delivered · not invoiced yet';
+    } else {
+      meta = nInv + (nInv === 1 ? ' invoice' : ' invoices');
+    }
+    if (tba) meta += ' · ' + tba + ' price TBA';
+
+    g.invoiced = invoiced; g.awaiting = awaiting; g.tba = tba;
+    g.paid = paid; g.outstanding = outstanding;
+    g.state = state; g.days = days; g.meta = meta; g.nInv = nInv;
+    return g;
+  });
+
+  // Worst first: overdue, then due soon, then the rest, biggest balance up.
+  const rank = { over:0, due:1, await:2, invoiced:3, settled:4 };
+  out.sort(function(a,b){
+    if (rank[a.state] !== rank[b.state]) return rank[a.state] - rank[b.state];
+    return b.outstanding - a.outstanding;
+  });
+  return out;
+}
+
+/* ---------- the view ---------- */
+function showSalesView(v){
+  salesView = v;
+  const pipe = document.getElementById('view-pipeline');
+  const acc  = document.getElementById('view-accounts');
+  if (pipe) pipe.style.display = (v === 'acc') ? 'none' : 'block';
+  if (acc)  acc.style.display  = (v === 'acc') ? 'block' : 'none';
+  const tp = document.getElementById('tg-pipe'), ta = document.getElementById('tg-acc');
+  if (tp) tp.classList.toggle('on', v !== 'acc');
+  if (ta) ta.classList.toggle('on', v === 'acc');
+  if (v === 'acc') renderAccounts();
+}
+
+function syncAccToggle(){
+  const tg = document.getElementById('acc-toggle');
+  if (!tg) return;
+  const on = accEnabled();
+  tg.style.display = on ? 'flex' : 'none';
+  if (!on && salesView === 'acc') showSalesView('pipe');
+}
+
+function accSetFilter(f){
+  accFilter = f;
+  renderAccounts();
+}
+
+function accToggleCust(key){
+  accOpen[key] = !accOpen[key];
+  renderAccounts();
+}
+
+function renderAccounts(){
+  const box = document.getElementById('view-accounts');
+  if (!box) return;
+  if (!accEnabled()) { box.innerHTML = ''; return; }
+
+  const all = accBuild();
+  const active = all.filter(function(c){ return c.state !== 'settled'; });
+
+  const sum  = active.reduce(function(a,c){ return a + c.outstanding; }, 0);
+  const due  = active.filter(function(c){ return c.state === 'due';  })
+                     .reduce(function(a,c){ return a + c.outstanding; }, 0);
+  const over = active.filter(function(c){ return c.state === 'over'; })
+                     .reduce(function(a,c){ return a + c.outstanding; }, 0);
+
+  let list;
+  if (accFilter === 'settled')     list = all.filter(function(c){ return c.state === 'settled'; });
+  else if (accFilter === 'notinv') list = active.filter(function(c){ return c.state === 'await'; });
+  else if (accFilter === 'due')    list = active.filter(function(c){ return c.state === 'due';   });
+  else if (accFilter === 'over')   list = active.filter(function(c){ return c.state === 'over';  });
+  else                             list = active;
+
+  const chip = function(f, label){
+    return '<button class="acc-chip' + (accFilter === f ? ' on' : '') + '" onclick="accSetFilter(\''
+      + f + '\')">' + label + '</button>';
+  };
+
+  const head =
+    '<div class="acc-cards">' +
+      '<button class="acc-card c-all' + (accFilter === 'all' ? ' on' : '') + '" onclick="accSetFilter(\'all\')">' +
+        '<div class="lbl">Outstanding</div><div class="val">' + payMoney(sum) + '</div></button>' +
+      '<button class="acc-card c-due' + (accFilter === 'due' ? ' on' : '') + '" onclick="accSetFilter(\'due\')">' +
+        '<div class="lbl">Due soon</div><div class="val">' + payMoney(due) + '</div></button>' +
+      '<button class="acc-card c-over' + (accFilter === 'over' ? ' on' : '') + '" onclick="accSetFilter(\'over\')">' +
+        '<div class="lbl">Overdue</div><div class="val">' + payMoney(over) + '</div></button>' +
+    '</div>' +
+    '<div class="acc-chips">' + chip('all','All') + chip('notinv','Not invoiced')
+      + chip('due','Due soon') + chip('over','Overdue') + chip('settled','Settled') + '</div>';
+
+  if (!list.length){
+    const why = all.length
+      ? 'Nothing in this filter.'
+      : 'Nothing here yet. A sale appears once it is marked delivered.';
+    box.innerHTML = head + '<div class="empty"><div class="empty-icon">💵</div><p>' + why + '</p></div>'
+      + (all.length ? accExportBtn() : '');
+    return;
+  }
+
+  const badgeWords = { over:'Overdue', due:'Due soon', await:'Awaiting inv.',
+                       invoiced:'Invoiced', settled:'Settled' };
+  const badgeClass = { over:'ab-over', due:'ab-due', await:'ab-await',
+                       invoiced:'ab-inv', settled:'ab-settled' };
+  const balColour  = { over:'var(--red)', due:'var(--amber)', await:'var(--text)',
+                       invoiced:'var(--text)', settled:'var(--green-dark)' };
+
+  const rows = list.map(function(c){
+    const open = !!accOpen[c.key];
+    const esc = escHtml(c.name);
+
+    let detail = '<div class="acc-subh">Balance</div>';
+    if (c.invoiced > 0)
+      detail += '<div class="acc-line"><span>Delivered &amp; invoiced</span><span>' + payMoney(c.invoiced) + '</span></div>';
+    if (c.awaiting > 0)
+      detail += '<div class="acc-line"><span>Delivered (awaiting invoice)</span><span>' + payMoney(c.awaiting) + '</span></div>';
+    if (c.paid > 0)
+      detail += '<div class="acc-line"><span>Paid so far</span><span class="neg">−' + payMoney(c.paid) + '</span></div>';
+    detail += '<div class="acc-line tot"><span>Outstanding</span><span style="color:' + balColour[c.state] + '">'
+           + payMoney(c.outstanding) + '</span></div>';
+    if (c.tba)
+      detail += '<div class="acc-norow">' + c.tba + (c.tba === 1 ? ' delivered sale has' : ' delivered sales have')
+             + ' no price yet, so ' + (c.tba === 1 ? 'it is' : 'they are') + ' not counted above.</div>';
+
+    detail += '<div class="acc-subh">Delivered sales</div>';
+    if (!c.sales.length){
+      detail += '<div class="acc-norow">None — this is a payment with no delivered sale against it.</div>';
+    } else {
+      detail += c.sales.map(function(s){
+        const litres = (s.litres || 0).toLocaleString() + ' L';
+        const val = s.price_tba ? 'Price TBA' : payMoney(accValue(s));
+        const ref = accRef(s);
+        if (ref){
+          return '<div class="acc-row"><span>#' + escHtml(ref) + ' · <span class="dim">' + litres
+            + '</span></span><span>' + val + ' · <span class="dim">due ' + fmtDate(payDueDay(s))
+            + '</span></span></div>';
+        }
+        return '<div class="acc-row" style="display:block">'
+          + '<div style="display:flex;justify-content:space-between;gap:10px;">'
+          +   '<span>' + litres + ' · <span class="dim">del ' + fmtDate(s.delivery_date) + '</span></span>'
+          +   '<span>' + val + '</span></div>'
+          + '<div class="acc-refrow">'
+          +   '<input id="ref-' + s.id + '" type="text" autocomplete="off" '
+          +     'placeholder="Invoice ref from Adnan" onclick="event.stopPropagation()">'
+          +   '<button onclick="event.stopPropagation();saveInvoiceRef(\'' + s.id + '\')">Save ref</button>'
+          + '</div></div>';
+      }).join('');
+    }
+
+    detail += '<div class="acc-subh">Payments logged</div>';
+    detail += c.pays.length
+      ? c.pays.map(function(p){
+          const how = p.method === 'transfer'
+            ? 'Transfer' + (p.pop_ref ? ' · ' + escHtml(p.pop_ref) : '')
+            : 'Cash';
+          return '<div class="acc-row"><span>' + fmtDate(p.paid_on) + ' · <span class="dim">'
+            + how + '</span></span><span>' + payMoney(p.amount) + '</span></div>';
+        }).join('')
+      : '<div class="acc-norow">None yet</div>';
+
+    detail += '<button class="acc-logbtn" onclick="event.stopPropagation();openPay(\'' + c.key + '\')">'
+           + '＋ Log payment</button>'
+           + '<div class="acc-note"><span>ⓘ</span><span>This is your working balance to chase with. '
+           + 'Adnan’s records are final.</span></div>';
+
+    return '<div class="acc-cust' + (open ? ' open' : '') + '">'
+      + '<div class="acc-head" onclick="accToggleCust(\'' + c.key + '\')">'
+      +   '<div class="acc-main"><div class="acc-name">' + esc + '</div>'
+      +     '<div class="acc-meta">' + escHtml(c.meta) + '</div></div>'
+      +   '<div class="acc-right"><div class="acc-bal" style="color:' + balColour[c.state] + '">'
+      +     payMoney(c.outstanding) + '</div>'
+      +     '<span class="acc-badge ' + badgeClass[c.state] + '">' + badgeWords[c.state] + '</span></div>'
+      +   '<div class="acc-chev">▼</div>'
+      + '</div><div class="acc-detail">' + detail + '</div></div>';
+  }).join('');
+
+  box.innerHTML = head + '<div class="acc-list">' + rows + '</div>' + accExportBtn();
+}
+
+function accExportBtn(){
+  return '<button class="acc-export" onclick="exportAccounts()">⬇ Export my accounts to Excel</button>'
+    + '<div class="acc-note" style="justify-content:center;text-align:center;">'
+    + '<span>Your working balances. Adnan’s records are final.</span></div>';
+}
+
+/* ---------- recording the reference Adnan gave ---------- */
+async function saveInvoiceRef(saleId){
+  const inp = document.getElementById('ref-' + saleId);
+  if (!inp) return;
+  const ref = inp.value.trim();
+  if (!ref){ alert('Type the reference Adnan gave you for this delivery.'); return; }
+
+  const sale = (allSales || []).find(function(x){ return String(x.id) === String(saleId); });
+  if (!sale){ alert('That sale is no longer on this phone. Pull down to refresh and try again.'); return; }
+
+  // Paint it immediately. Whether the write lands now or from the queue
+  // later, the rep has recorded it and the card must say so.
+  sale.invoice_ref = ref;
+  sale.invoiced = true;
+  cacheSales();
+  renderAccounts();
+
+  if (!navigator.onLine || !sb){
+    queueAcc({ kind:'ref', sale_id: sale.id, invoice_ref: ref });
+    accToast('Saved on this phone — will upload when back online.');
+    return;
+  }
+
+  try {
+    const { data, error } = await withTimeout(
+      sb.from('sales').update({ invoice_ref: ref, invoiced: true })
+        .eq('id', sale.id).select('id'),
+      8000
+    );
+    if (error) throw error;
+    // A write the policy refuses comes back as zero rows with NO error, so
+    // an empty result is the only way to tell refusal from success.
+    if (!data || !data.length){
+      queueAcc({ kind:'ref', sale_id: sale.id, invoice_ref: ref });
+      accToast('Kept on this phone — the system would not take it.');
+      return;
+    }
+    accToast('Reference saved.');
+  } catch(e){
+    queueAcc({ kind:'ref', sale_id: sale.id, invoice_ref: ref });
+    accToast('Saved on this phone — will upload when back online.');
+  }
+}
+
+/* ---------- the payment sheet ---------- */
+function openPay(key){
+  const c = accBuild().filter(function(x){ return x.key === key; })[0];
+  if (!c) return;
+  payTarget = c;
+  payMethod = 'cash';
+
+  document.getElementById('pay-name').textContent = 'Payment — ' + c.name;
+  document.getElementById('pay-bal').textContent  = 'Outstanding: ' + payMoney(c.outstanding);
+  document.getElementById('pay-amount').value = '';
+  document.getElementById('pay-pop').value = '';
+  document.getElementById('pay-date').value = todayISO();
+  document.getElementById('pay-popfld').style.display = 'none';
+  document.querySelectorAll('#pay-meth button').forEach(function(b){
+    b.classList.toggle('on', b.getAttribute('data-m') === 'cash');
+  });
+
+  // The reference belongs to a sale, not to a payment. Offer it here only
+  // when there is exactly one delivered sale still missing one, so it can
+  // never be filed against the wrong delivery. Otherwise point at the list.
+  const noRef = c.sales.filter(function(s){ return !accRef(s) && !s.price_tba; });
+  const fld  = document.getElementById('pay-reffld');
+  const hint = document.getElementById('pay-refhint');
+  const inp  = document.getElementById('pay-ref');
+  inp.value = '';
+  if (noRef.length === 1){
+    fld.style.display = 'block';
+    hint.style.display = 'none';
+    inp.setAttribute('data-sale', noRef[0].id);
+  } else if (noRef.length > 1){
+    fld.style.display = 'none';
+    hint.style.display = 'block';
+    hint.textContent = c.name + ' has ' + noRef.length + ' deliveries with no reference yet. '
+      + 'Add each one on its own line in the list, so the right ref lands on the right delivery.';
+    inp.removeAttribute('data-sale');
+  } else {
+    fld.style.display = 'none';
+    hint.style.display = 'none';
+    inp.removeAttribute('data-sale');
+  }
+
+  document.getElementById('pay-modal').classList.add('on');
+}
+
+function closePay(){
+  document.getElementById('pay-modal').classList.remove('on');
+  payTarget = null;
+}
+
+function pickPayMethod(btn, m){
+  payMethod = m;
+  document.querySelectorAll('#pay-meth button').forEach(function(b){ b.classList.remove('on'); });
+  btn.classList.add('on');
+  document.getElementById('pay-popfld').style.display = (m === 'transfer') ? 'block' : 'none';
+}
+
+async function savePayment(){
+  if (!payTarget) return;
+  const c = payTarget;
+
+  const amount = parseFloat(String(document.getElementById('pay-amount').value).replace(/[^0-9.\-]/g,''));
+  if (!amount || amount <= 0){ alert('Type how much you received.'); return; }
+
+  const paidOn = document.getElementById('pay-date').value;
+  if (!paidOn){ alert('Pick the date the money came in.'); return; }
+
+  const pop = document.getElementById('pay-pop').value.trim();
+  if (payMethod === 'transfer' && !pop){
+    if (!confirm('No proof-of-payment reference. Save the transfer anyway?')) return;
+  }
+
+  // The reference, when the sheet offered one, belongs to its own sale.
+  const refInp = document.getElementById('pay-ref');
+  const refSale = refInp.getAttribute('data-sale');
+  const refVal = refInp.value.trim();
+
+  const payload = {
+    // Decided here, before sending, so a retry on a bad line cannot file
+    // the same money twice. The unique index on the column is what enforces it.
+    client_uid: 'pay_' + Date.now() + '_' + Math.random().toString(36).slice(2,10),
+    rep_id: currentUser.id,
+    rep_name: (currentProfile && currentProfile.full_name) || null,
+    customer_id: c.id || null,
+    customer: c.name,
+    amount: amount,
+    method: payMethod,
+    pop_ref: payMethod === 'transfer' ? (pop || null) : null,
+    paid_on: paidOn
+  };
+
+  closePay();
+
+  // Show it straight away, from the same shape the server will return.
+  accPayments.unshift(Object.assign({ id: payload.client_uid }, payload));
+  try {
+    localStorage.setItem('pay_cache_' + currentUser.id, JSON.stringify(accPayments));
+  } catch(e){}
+
+  if (refSale && refVal){
+    const sale = (allSales || []).find(function(x){ return String(x.id) === String(refSale); });
+    if (sale){ sale.invoice_ref = refVal; sale.invoiced = true; cacheSales(); }
+  }
+  renderAccounts();
+
+  if (!navigator.onLine || !sb){
+    queueAcc({ kind:'pay', payload: payload });
+    if (refSale && refVal) queueAcc({ kind:'ref', sale_id: refSale, invoice_ref: refVal });
+    accToast('Saved on this phone — will upload when back online.');
+    return;
+  }
+
+  try {
+    const { data, error } = await withTimeout(
+      sb.from('rep_payments').insert(payload).select('id'), 8000
+    );
+    if (error) throw error;
+    if (!data || !data.length){
+      queueAcc({ kind:'pay', payload: payload });
+      accToast('Kept on this phone — the system would not take it.');
+    } else {
+      accToast('Payment recorded.');
+    }
+  } catch(e){
+    queueAcc({ kind:'pay', payload: payload });
+    accToast('Saved on this phone — will upload when back online.');
+  }
+
+  if (refSale && refVal){
+    const inp = document.getElementById('ref-' + refSale);
+    if (inp) inp.value = refVal;
+    await saveInvoiceRef(refSale);
+  }
+  await loadPayments();
+  renderAccounts();
+}
+
+/* ---------- uploading what was kept on the phone ---------- */
+async function syncAccQueue(){
+  const q = getAccQueue();
+  if (!q.length || !sb || !currentUser) return;
+
+  const left = [];
+  let netDown = false, lastErr = null;
+
+  for (let i = 0; i < q.length; i++){
+    const item = q[i];
+    if (netDown) { left.push(item); continue; }
+    try {
+      let res;
+      if (item.kind === 'ref'){
+        res = await withTimeout(
+          sb.from('sales').update({ invoice_ref: item.invoice_ref, invoiced: true })
+            .eq('id', item.sale_id).select('id'), 8000);
+      } else {
+        res = await withTimeout(
+          sb.from('rep_payments').insert(item.payload).select('id'), 8000);
+      }
+      if (res.error) throw res.error;
+      if (!res.data || !res.data.length){
+        left.push(item);
+        lastErr = 'the system refused it';
+      }
+    } catch(e){
+      const msg = e.message || String(e);
+      // Already uploaded on an earlier attempt: the unique client_uid did
+      // its job. That is a success, not something to keep retrying.
+      if (e.code === '23505' || /duplicate key/i.test(msg)) continue;
+      left.push(item);
+      // A timeout is the network, so stop and keep the rest. Anything else
+      // is this one record being refused, and retrying it never fixes it.
+      if (/timeout/i.test(msg)) netDown = true; else lastErr = msg;
+    }
+  }
+
+  saveAccQueue(left);
+  if (!left.length){
+    await loadPayments();
+    if (salesView === 'acc') renderAccounts();
+  } else if (lastErr){
+    console.log('Accounts queue held ' + left.length + ': ' + lastErr);
+  }
+}
+
+/* ---------- export ---------- */
+function exportAccounts(){
+  if (typeof XLSX === 'undefined'){
+    alert('Spreadsheet library still loading — check your connection and try again.');
+    return;
+  }
+  const all = accBuild().filter(function(c){ return c.state !== 'settled'; });
+  if (!all.length){ alert('Nothing outstanding to export.'); return; }
+
+  const rows = [];
+  all.forEach(function(c){
+    c.sales.forEach(function(s){
+      rows.push({
+        Customer: c.name,
+        Line: accRef(s) ? ('Invoice ' + accRef(s)) : 'Delivered, awaiting invoice',
+        Litres: s.litres || 0,
+        Amount: s.price_tba ? '' : Math.round(accValue(s)),
+        Delivered: fmtDate(s.delivery_date),
+        Due: fmtDate(payDueDay(s)),
+        Note: s.price_tba ? 'price TBA' : ''
+      });
+    });
+    c.pays.forEach(function(p){
+      rows.push({
+        Customer: c.name,
+        Line: 'Payment received — ' + (p.method === 'transfer' ? 'transfer' : 'cash'),
+        Litres: '',
+        Amount: -Math.round(parseFloat(p.amount) || 0),
+        Delivered: '',
+        Due: fmtDate(p.paid_on),
+        Note: p.pop_ref || ''
+      });
+    });
+    rows.push({ Customer: c.name, Line: 'OUTSTANDING', Litres: '',
+      Amount: Math.round(c.outstanding), Delivered: '', Due: '',
+      Note: { over:'overdue', due:'due soon', await:'awaiting invoice', invoiced:'invoiced' }[c.state] || '' });
+    rows.push({});
+  });
+  rows.push({ Customer: 'Working balances only. Adnan’s records are final.' });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'My accounts');
+  const who = ((currentProfile && currentProfile.full_name) || 'rep').replace(/[^A-Za-z0-9]+/g, '-');
+  XLSX.writeFile(wb, 'My-Accounts-' + who + '-' + todayISO() + '.xlsx');
 }
 
 /* ================= PAYMENT DUE =================
@@ -3554,6 +4383,7 @@ function showTab(id, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   if (btn) btn.classList.add('active');
+  if (id === 'sales') { syncAccToggle(); if (salesView === 'acc') renderAccounts(); }
   if (id === 'cal') renderCal();
   if (id === 'dash') loadMyRipeness();
   if (id === 'more') {
@@ -4734,7 +5564,7 @@ function startupFromCache() {
       document.getElementById('more-name').textContent = currentProfile.full_name || '—';
       document.getElementById('more-role').textContent = 'Role: ' + (currentProfile.role || 'rep');
     }
-    document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('s-date').value = todayISO();
 
     // Paint the PIN screen FIRST — before anything that could reach out.
     showLockScreen();
