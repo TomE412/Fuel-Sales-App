@@ -3448,67 +3448,142 @@ const OverviewApp = (() => {
 
     await fetchData();
   }
+  /* ================= INCREMENTAL SYNC =================
+
+     This board used to re-download 90 days of sales and every delivery
+     assignment EVERY 30 SECONDS, whether anything had changed or not. On a
+     wall display that runs around the clock it came to roughly 19 GB a
+     month against a 5 GB allowance, and it is what put the Supabase
+     account over its quota.
+
+     Now it asks "what changed since?" and almost always gets nothing back.
+
+     THE FULL RELOAD IS NOT OPTIONAL. An incremental poll can never learn
+     that a row was DELETED - it only ever hears about rows that still
+     exist. A sale that stayed on the board after being deleted would be a
+     worse problem than the bill, so every 10 minutes the board reloads
+     properly and reconciles.
+
+     THE WATERMARK COMES FROM THE DATABASE, never from this screen's clock.
+     A TV whose clock runs fast would skip rows for ever; one running slow
+     would re-download everything on every poll. Only timestamps that
+     arrived in the data are ever used. */
+
+  const FULL_RELOAD_MS = 10 * 60 * 1000;
+
+  const SYNC = {
+    sales:  { rows: [], mark: null, lastFull: 0 },
+    assign: { rows: [], mark: null, lastFull: 0 }
+  };
+
+  // Local date parts. NOT toISOString(), which converts to UTC first and in
+  // Harare (UTC+2) lands on the previous day.
+  function daysAgoISO(n){
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+         + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  async function syncTable(spec){
+    const st = SYNC[spec.key];
+    const full = !st.mark || (Date.now() - st.lastFull) > FULL_RELOAD_MS;
+
+    let q = sb.from(spec.table).select(spec.cols);
+    if (spec.filter) q = spec.filter(q);
+    // gte, not gt: two rows written in the same millisecond must not let one
+    // slip through unseen. The overlap is a single row, and the merge below
+    // replaces it by id rather than duplicating it.
+    if (!full) q = q.gte('updated_at', st.mark);
+
+    const { data, error } = await q;
+    if (error) throw error;
+    const rows = data || [];
+
+    if (full) {
+      st.rows = rows;
+      st.lastFull = Date.now();
+    } else if (rows.length) {
+      const by = new Map(st.rows.map(r => [String(r[spec.idField]), r]));
+      rows.forEach(r => by.set(String(r[spec.idField]), r));
+      st.rows = Array.from(by.values());
+    }
+
+    rows.forEach(r => {
+      if (r.updated_at && (!st.mark || r.updated_at > st.mark)) st.mark = r.updated_at;
+    });
+
+    return { rows: st.rows, changed: full || rows.length > 0, fetched: rows.length, full: full };
+  }
+
+  // Anything at all going wrong puts both tables back to a full reload on the
+  // next poll. A half-applied incremental must never quietly become the
+  // permanent state of the board.
+  function resetSync(){
+    SYNC.sales.mark = null;  SYNC.sales.lastFull = 0;
+    SYNC.assign.mark = null; SYNC.assign.lastFull = 0;
+  }
+
+  const SALES_COLS = 'id,sale_date,delivery_date,payment_due,payment_term,' +
+    'followup_date,created_at,updated_at,customer,location,litres,fuel_type,' +
+    'rep_name,status,paid,invoiced,notes';
+
+  // Pulled out of fetchData so the incremental merge and the full reload
+  // map rows exactly the same way.
+  function mapSale(s){
+    return {
+      id: s.id,
+      litres: parseFloat(s.litres) || 0,
+      date: (s.sale_date || '').split('T')[0],
+      deliveryDate: (s.delivery_date || '').split('T')[0],
+      payment_due: s.payment_due,
+      payment_term: s.payment_term || 'COD',
+      paymentTerm: s.payment_term || 'COD',
+      followup_date: s.followup_date,
+      customer: s.customer,
+      location: s.location || '',
+      fuelType: s.fuel_type || '',
+      rep: s.rep_name || '',
+      rep_name: s.rep_name || '',
+      delivered: s.status === 'delivered',
+      status: s.status,
+      paid: s.paid,
+      invoiced: !!s.invoiced,
+      notes: s.notes || '',
+      created_at: s.created_at
+    };
+  }
+
   async function fetchData() {
     try {
-      // SECURITY: Only fetch fields needed for dashboard, limit to last 90 days
-      const daysBack = 90;
-      const fromDate = new Date();
-      fromDate.setDate(fromDate.getDate() - daysBack);
+      const s = await syncTable({
+        key: 'sales', table: 'sales', cols: SALES_COLS, idField: 'id',
+        filter: q => q.gte('sale_date', daysAgoISO(90))
+      });
 
-      const { data, error } = await sb.from('sales')
-        .select(`
-          id,
-          sale_date,
-          delivery_date,
-          payment_due,
-          payment_term,
-          followup_date,
-          created_at,
-          customer,
-          location,
-          litres,
-          fuel_type,
-          rep_name,
-          status,
-          paid,
-          invoiced,
-          notes
-        `)
-        .gte('sale_date', fromDate.toISOString().split('T')[0])
-        .order('created_at', { ascending: false });
+      // A little wider than the sales window, so a load assigned just
+      // before the cutoff still shows its truck.
+      const a = await syncTable({
+        key: 'assign', table: 'delivery_assignment', cols: '*', idField: 'sale_id',
+        filter: q => q.gte('assigned_at', daysAgoISO(100))
+      });
 
-      if (error) throw error;
+      if (s.changed) {
+        allSales = s.rows.map(mapSale);
+        try { localStorage.setItem('admin_overview_cache', JSON.stringify(allSales)); } catch(e) {}
+      }
+      if (a.changed) {
+        ASSIGN = {};
+        a.rows.forEach(x => { ASSIGN[String(x.sale_id)] = x; });
+      }
 
-      allSales = (data || []).map(s => ({
-        id: s.id,
-        litres: parseFloat(s.litres) || 0,
-        date: (s.sale_date || '').split('T')[0],
-        deliveryDate: (s.delivery_date || '').split('T')[0],
-        payment_due: s.payment_due,
-        payment_term: s.payment_term || 'COD',
-        paymentTerm: s.payment_term || 'COD',
-        followup_date: s.followup_date,
-        customer: s.customer,
-        location: s.location || '',
-        fuelType: s.fuel_type || '',
-        rep: s.rep_name || '',
-        rep_name: s.rep_name || '',
-        delivered: s.status === 'delivered',
-        status: s.status,
-        paid: s.paid,
-        invoiced: !!s.invoiced,
-        notes: s.notes || '',
-        created_at: s.created_at
-      }));
-
-      // Cache for offline
-      try { localStorage.setItem('admin_overview_cache', JSON.stringify(allSales)); } catch(e) {}
-      document.getElementById('last-sync').textContent = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
       await loadFleet();
-      await loadAssignments();
+      document.getElementById('last-sync').textContent =
+        new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       renderAll();
     } catch(e) {
       console.log('Fetch error:', e);
+      resetSync();
       loadCachedData();
     }
   }
@@ -4508,9 +4583,15 @@ const OverviewApp = (() => {
     updateClock();
     setInterval(updateClock, 1000);
     fetchData();
-    setInterval(fetchData, 30000);
+    setInterval(() => {
+      // A tab nobody is looking at does not need refreshing. The TV is
+      // always visible so this never fires there; an admin window left
+      // open behind something else stops costing anything.
+      if (document.hidden) return;
+      fetchData();
+    }, 30000);
     loadDueSoon();
-    setInterval(loadDueSoon, 30000);
+    setInterval(() => { if (!document.hidden) loadDueSoon(); }, 300000);
   }
 
   return { init, markDelivered, undoDelivered, setEnRoute, clearEnRoute, enRouteCell,
