@@ -1,5 +1,9 @@
-// Deleting a sale, and the silent-refusal class of bug behind the report
-// that reps could not delete.
+// Hard deletion (admins only) and the silent-refusal class of bug behind
+// the report that reps could not delete.
+//
+// A REP no longer deletes at all - their button cancels, which is an UPDATE
+// they are actually allowed to make. See cancel-order.spec.js. What is left
+// here is the admin route and the refusal reporting that applies to both.
 //
 // Row-level security refuses a write by changing ZERO ROWS and reporting
 // NO ERROR. Without .select() the app cannot tell that apart from success,
@@ -86,8 +90,8 @@ test('a refused delete tells the rep instead of doing nothing', async ({ page })
   const seen = [];
   catchDialogs(page, seen);
 
-  await page.evaluate(`setUp(); window.__refuse = true;`);
-  await page.evaluate(`cancelSale(77)`);
+  await page.evaluate(`setUp(); currentProfile.role='admin'; window.__refuse = true;`);
+  await page.evaluate(`deleteSaleForever(77)`);
   await page.waitForTimeout(400);
 
   expect(seen.length).toBe(2);
@@ -105,8 +109,8 @@ test('a delete that works still works', async ({ page }) => {
   const seen = [];
   catchDialogs(page, seen);
 
-  await page.evaluate(`setUp()`);
-  await page.evaluate(`cancelSale(77)`);
+  await page.evaluate(`setUp(); currentProfile.role='admin';`);
+  await page.evaluate(`deleteSaleForever(77)`);
   await page.waitForTimeout(400);
 
   // The confirm, and no alert after it.
@@ -119,8 +123,8 @@ test('declining the confirm deletes nothing', async ({ page }) => {
   const errs = await boot(page);
   page.on('dialog', async d => await d.dismiss());
 
-  await page.evaluate(`setUp()`);
-  await page.evaluate(`cancelSale(77)`);
+  await page.evaluate(`setUp(); currentProfile.role='admin';`);
+  await page.evaluate(`deleteSaleForever(77)`);
   await page.waitForTimeout(300);
 
   expect(await page.evaluate('window.__deleted')).toEqual([]);
@@ -132,8 +136,8 @@ test('a real database error is quoted back, not swallowed', async ({ page }) => 
   const seen = [];
   catchDialogs(page, seen);
 
-  await page.evaluate(`setUp(); window.__err = 'violates foreign key constraint "delivery_assignment_sale_id_fkey"';`);
-  await page.evaluate(`cancelSale(77)`);
+  await page.evaluate(`setUp(); currentProfile.role='admin'; window.__err = 'violates foreign key constraint "delivery_assignment_sale_id_fkey"';`);
+  await page.evaluate(`deleteSaleForever(77)`);
   await page.waitForTimeout(400);
 
   expect(seen[1].text).toContain('NOT deleted');

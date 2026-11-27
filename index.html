@@ -838,7 +838,7 @@ let allSales = [];
 // Bump this on every release. It shows in the More tab, so when a rep
 // reports a problem you can ask what it says and know instantly whether
 // they are on the current build or a stale cached one.
-const APP_VERSION = 'v28 — 26 Nov 2026 (accounts removed; refused writes report)';
+const APP_VERSION = 'v29 — 27 Nov 2026 (reps cancel orders instead of deleting)';
 
 let curFuel = 'Diesel';
 let curTerm = 'COD';
@@ -1792,14 +1792,56 @@ async function writeSale(builder, what) {
   }
 }
 
+/* Cancelling an order.
+
+   This used to run a DELETE, and for a rep that could never work: the only
+   DELETE policy on sales is admin_delete_sales. The write was refused, the
+   old code did not check, and the sale simply stayed on the list with
+   nothing said. That is the bug Carrie reported.
+
+   Cancelling is an UPDATE, which rep_update_own_sales already allows on a
+   rep's own sales, so it works without any new permission. The order keeps
+   its place in the record, drops out of every total and graph, and can be
+   put back. */
 async function cancelSale(id) {
-  const sale = allSales.find(s => s.id === id);
+  const sale = allSales.find(s => String(s.id) === String(id));
   if (!sale) return;
-  // Permanent delete — removes the row entirely so litres/values stop
-  // counting everywhere (rep app AND ops dashboard). Cannot be undone.
-  if (!confirm('DELETE this sale for ' + sale.customer + '?\n\n' +
-    (sale.litres||0).toLocaleString() + ' L will be removed from all totals ' +
-    'and graphs permanently. This cannot be undone.')) return;
+  if (!confirm('Cancel this order for ' + sale.customer + '?\n\n' +
+    (sale.litres||0).toLocaleString() + ' L comes out of your totals and graphs.\n\n' +
+    'The order stays on record marked cancelled, and you can put it back.')) return;
+
+  const r = await writeSale(
+    sb.from('sales').update({ status: 'cancelled' }).eq('id', id),
+    'cancel this order');
+  if (!r.ok) { alert('Order NOT cancelled.\n\n' + r.why); return; }
+  await loadSales();
+}
+
+// Back to pending. Deliberately not available on a delivered sale - that
+// has its own route, "Undo - not delivered", which carries an audit trail.
+async function uncancelSale(id) {
+  const sale = allSales.find(s => String(s.id) === String(id));
+  if (!sale) return;
+  if (!confirm('Put this order back for ' + sale.customer + '?\n\n' +
+    (sale.litres||0).toLocaleString() + ' L returns to your totals.')) return;
+
+  const r = await writeSale(
+    sb.from('sales').update({ status: 'pending' }).eq('id', id),
+    'put this order back');
+  if (!r.ok) { alert('Order NOT put back.\n\n' + r.why); return; }
+  await loadSales();
+}
+
+// Admins only, because the database allows nobody else. Kept for the cases
+// cancelling is wrong for: a duplicate, or a row entered while testing.
+async function deleteSaleForever(id) {
+  const sale = allSales.find(s => String(s.id) === String(id));
+  if (!sale) return;
+  if (!confirm('DELETE this sale for ' + sale.customer + ' permanently?\n\n' +
+    (sale.litres||0).toLocaleString() + ' L is removed from every total and graph, ' +
+    'and the record is gone for good. This cannot be undone.\n\n' +
+    'To keep the record, cancel it instead.')) return;
+
   const r = await writeSale(sb.from('sales').delete().eq('id', id), 'delete this sale');
   if (!r.ok) { alert('Sale NOT deleted.\n\n' + r.why); return; }
   await loadSales();
@@ -2608,8 +2650,24 @@ function renderSales() {
       `<button class="del-btn" onclick="markDelivered(${s.id})">🚛 Mark as delivered</button>` : '';
     const editBtn = !delivered && !isCancelled ?
       `<button class="del-btn" style="background:#fff;color:var(--text2);border:1px solid var(--border);margin-top:6px;" onclick="openSaleForEdit(${s.id});event.stopPropagation()">✎ Edit sale</button>` : '';
+    // CANCEL, not delete. A rep has no permission to delete a sale and never
+    // has - the only DELETE policy on the table is admin_delete_sales - so
+    // this button quietly did nothing for them for as long as it existed.
+    // Cancelling needs only UPDATE, which every rep already has on their own
+    // sales, and it is the better outcome anyway: the order stays on record,
+    // comes out of every total and graph, and can be put back.
     const cancelBtn = !isCancelled && !delivered ?
-      `<button class="del-btn" style="background:transparent;color:var(--red);border:1px solid var(--red);margin-top:6px;" onclick="cancelSale(${s.id});event.stopPropagation()">🗑 Delete sale</button>` : '';
+      `<button class="del-btn" style="background:transparent;color:var(--red);border:1px solid var(--red);margin-top:6px;" onclick="cancelSale(${s.id});event.stopPropagation()">✗ Cancel order</button>` : '';
+    // The way back, which is the whole point of cancelling rather than
+    // deleting. A mis-tap must not be as final as a delete was.
+    const uncancelBtn = isCancelled ?
+      `<button class="del-btn" style="background:#fff;color:var(--text2);border:1px solid var(--border);margin-top:6px;" onclick="uncancelSale(${s.id});event.stopPropagation()">↩ Put this order back</button>` : '';
+    // Hard delete stays, for admins only, because that is exactly who the
+    // database lets do it. A genuine duplicate or a test row should leave no
+    // trace; a rep's change of mind should.
+    const isAdmin = !!(currentProfile && currentProfile.role === 'admin');
+    const purgeBtn = isAdmin && !delivered ?
+      `<button class="del-btn" style="background:transparent;color:var(--text3);border:1px dashed var(--border);margin-top:6px;font-size:12px;" onclick="deleteSaleForever(${s.id});event.stopPropagation()">🗑 Delete permanently (admin)</button>` : '';
     // Only for reps switched on for it, and only while the sale is still
     // unpaid and live. Outlined rather than solid so it does not compete
     // with "Mark as delivered", which is the one every rep uses daily.
@@ -2632,7 +2690,7 @@ function renderSales() {
       <div class="sale-meta">${escHtml(s.location || '—')} · ${fmtDate(s.sale_date)} · ${escHtml(s.payment_term)}</div>
       <div class="sale-meta">Del: ${fmtDate(s.delivery_date)} · Pay due: ${fmtDate(payDueDay(s))}</div>
       ${repRigBadge(s.id)}
-      ${delBtn}${undoBtn}${paidBtn}${editBtn}${cancelBtn}
+      ${delBtn}${undoBtn}${paidBtn}${editBtn}${cancelBtn}${uncancelBtn}${purgeBtn}
     </div>`;
   }).join('');
 
